@@ -40,6 +40,35 @@ const WMO_CODES = {
   99: { description: 'Thunderstorm with heavy hail', icon: '⛈️' },
 };
 
+// ---------------------------------------------------------------------------
+// IMS condition → WMO code mapping
+// ---------------------------------------------------------------------------
+const IMS_TO_WMO = {
+  'clear-night':    0,
+  'sunny':          0,
+  'clear':          0,
+  'partlycloudy':   2,
+  'partly-cloudy':  2,
+  'cloudy':         3,
+  'overcast':       3,
+  'fog':            45,
+  'hail':           99,
+  'lightning':      95,
+  'lightning-rainy': 96,
+  'pouring':        65,
+  'rainy':          61,
+  'snowy':          73,
+  'snowy-rainy':    67,
+  'windy':          1,
+  'windy-variant':  1,
+  'exceptional':    3,
+};
+
+function imsConditionToWmo(condition) {
+  if (!condition) return null;
+  return IMS_TO_WMO[condition.toLowerCase()] ?? 2;
+}
+
 function wmoDescription(code) {
   return WMO_CODES[code]?.description ?? 'Unknown';
 }
@@ -240,6 +269,123 @@ router.get('/', async (req, res) => {
     }
 
     return res.status(502).json({ error: 'Failed to fetch weather data and no cached data available' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/weather/ims — fetch weather from HA IMS entity
+// ---------------------------------------------------------------------------
+router.get('/ims', async (req, res) => {
+  const db     = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  const units = (req.query.units || 'C').toUpperCase() === 'F' ? 'fahrenheit' : 'celsius';
+  const cacheKey = `weather:ims:${units}`;
+
+  // Check cache
+  const { data: cached, isStale } = getCacheRow(db, cacheKey);
+
+  if (cached && !isStale) {
+    return res.json({ ...cached, source: 'cache' });
+  }
+
+  try {
+    // Fetch from HA entity weather.ims_weather
+    const haHost = process.env.HA_HOST || 'http://homeassistant.local:8123';
+    const haToken = process.env.HA_TOKEN;
+
+    if (!haToken) {
+      throw new Error('HA_TOKEN not configured');
+    }
+
+    const entityId = 'weather.ims_weather';
+    const response = await fetch(
+      `${haHost.replace(/\/+$/, '')}/api/states/${entityId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${haToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HA API ${response.status}`);
+    }
+
+    const state = await response.json();
+    const attrs = state.attributes || {};
+    const condition = state.state; // e.g. "sunny", "partlycloudy", "rainy"
+    const wmoCode = imsConditionToWmo(condition);
+
+    let temp = attrs.temperature ?? null;
+    let feelsLike = attrs.apparent_temperature ?? attrs.temperature ?? null;
+
+    // Convert C → F if needed
+    if (units === 'fahrenheit' && temp != null) {
+      temp = Math.round(temp * 9 / 5 + 32);
+      if (feelsLike != null) feelsLike = Math.round(feelsLike * 9 / 5 + 32);
+    }
+
+    // Build forecast from HA forecast attribute if available
+    const forecast = (attrs.forecast || []).slice(0, 5).map((day, i) => {
+      const dayCode = imsConditionToWmo(day.condition);
+      let high = day.temperature ?? null;
+      let low = day.templow ?? null;
+      if (units === 'fahrenheit') {
+        if (high != null) high = Math.round(high * 9 / 5 + 32);
+        if (low != null) low = Math.round(low * 9 / 5 + 32);
+      }
+      const dateStr = day.datetime ? day.datetime.split('T')[0] : '';
+      const dayName = dateStr
+        ? new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
+        : '';
+      return {
+        date: dateStr,
+        dayName,
+        code: dayCode,
+        high,
+        low,
+        description: wmoDescription(dayCode),
+        icon: wmoIcon(dayCode),
+        precipitation: day.precipitation ?? null,
+        precipitationProbability: day.precipitation_probability ?? null,
+        windSpeedMax: day.wind_speed ?? null,
+      };
+    });
+
+    const shaped = {
+      location: { lat: attrs.latitude ?? null, lon: attrs.longitude ?? null, timezone: 'Asia/Jerusalem' },
+      units: units === 'fahrenheit' ? 'F' : 'C',
+      current: {
+        temp,
+        feelsLike,
+        humidity: attrs.humidity ?? null,
+        wind: attrs.wind_speed ?? null,
+        code: wmoCode,
+        description: wmoDescription(wmoCode),
+        icon: wmoIcon(wmoCode),
+        windDirection: attrs.wind_bearing ?? null,
+        pressure: attrs.pressure ?? null,
+        cloudCover: null,
+        isDay: true,
+      },
+      daily: forecast,
+      lastUpdated: Date.now(),
+    };
+
+    setCache(db, cacheKey, shaped);
+    return res.json({ ...shaped, source: 'ims' });
+
+  } catch (err) {
+    logger.error('IMS weather fetch error: %s', err.message);
+
+    // Fall back to cached data
+    if (cached) {
+      return res.json({ ...cached, source: 'stale-cache', warning: 'IMS unavailable; showing cached data' });
+    }
+
+    return res.status(502).json({ error: 'Failed to fetch IMS weather data' });
   }
 });
 

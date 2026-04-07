@@ -127,6 +127,8 @@
     height: 1080px;
     overflow: hidden;
     position: relative;
+    transform: scale(var(--app-scale, 1));
+    transform-origin: top right;
   }
 
   /* Scrollbar styling for touch */
@@ -413,6 +415,120 @@
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+/* ========================================================================
+   Tasks Page Animations
+   ======================================================================== */
+
+/* Checkbox fill animation */
+@keyframes taskCheckboxPop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.task-checkbox-animate {
+  animation: taskCheckboxPop 400ms var(--ease) forwards;
+}
+
+/* Celebration column flash */
+@keyframes celebrationFlash {
+  0% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Celebration banner slide down */
+@keyframes celebrationBannerIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes celebrationBannerOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+/* Avatar pulse glow when 100% */
+@keyframes avatarPulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px var(--acc2), 0 0 16px rgba(42, 157, 127, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px var(--acc2), 0 0 32px rgba(42, 157, 127, 0.4);
+  }
+}
+
+.avatar-pulse-glow {
+  animation: avatarPulseGlow 2s ease-in-out infinite;
+}
+
+/* Progress ring pulse when complete */
+@keyframes ringPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.celebration-ring-pulse {
+  animation: ringPulse 1.5s ease-in-out infinite;
+}
+
+/* Bottom sheet slide up */
+@keyframes sheetSlideUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.celebration-sheet-slide-up {
+  animation: sheetSlideUp 300ms var(--ease-out) forwards;
+}
+
+/* Reduced motion: skip particles and intensive animations */
+@media (prefers-reduced-motion: reduce) {
+  .task-checkbox-animate,
+  .avatar-pulse-glow,
+  .celebration-ring-pulse {
+    animation: none;
+  }
+
+  .celebration-sheet-slide-up {
+    animation-duration: 0ms;
   }
 }
 

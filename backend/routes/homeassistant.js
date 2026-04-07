@@ -137,6 +137,205 @@ router.post('/services/:domain/:service', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/ha/todo/:entity_id — fetch todo list items
+// ---------------------------------------------------------------------------
+router.get('/todo/:entity_id', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const entityId = req.params.entity_id;
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(
+      `${host}/api/services/todo/get_items`,
+      {
+        method: 'POST',
+        headers: haHeaders(),
+        body: JSON.stringify({ entity_id: entityId }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA API ${response.status}: ${text}`);
+    }
+
+    const result = await response.json();
+    // HA returns array of state objects; the items are within the response
+    // The todo.get_items response is an array with entity states containing items attribute
+    const entity = Array.isArray(result) ? result.find(e => e.entity_id === entityId) : null;
+    const items = entity?.attributes?.items || result?.items || [];
+
+    res.json({ items });
+  } catch (err) {
+    logger.error('HA todo fetch error: %s', err.message);
+    // Fallback: try fetching from entity state directly
+    try {
+      const { host } = getHAConfig();
+      const stateRes = await fetch(`${host}/api/states/${encodeURIComponent(entityId)}`, {
+        headers: haHeaders(),
+      });
+      if (stateRes.ok) {
+        const state = await stateRes.json();
+        res.json({ items: state.attributes?.items || [], state: state.state });
+      } else {
+        res.status(502).json({ error: err.message });
+      }
+    } catch (err2) {
+      res.status(502).json({ error: err2.message });
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/ha/todo/:entity_id/add — add item to todo list
+// ---------------------------------------------------------------------------
+router.post('/todo/:entity_id/add', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const entityId = req.params.entity_id;
+  const { item } = req.body;
+
+  if (!item) {
+    return res.status(400).json({ error: 'Missing "item" field' });
+  }
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(
+      `${host}/api/services/todo/add_item`,
+      {
+        method: 'POST',
+        headers: haHeaders(),
+        body: JSON.stringify({ entity_id: entityId, item }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA API ${response.status}: ${text}`);
+    }
+
+    logger.info('Todo item added to %s: %s', entityId, item);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('HA todo add error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/ha/todo/:entity_id/update — update item in todo list (complete/rename)
+// ---------------------------------------------------------------------------
+router.post('/todo/:entity_id/update', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const entityId = req.params.entity_id;
+  const { item, rename, status } = req.body;
+
+  if (!item) {
+    return res.status(400).json({ error: 'Missing "item" field' });
+  }
+
+  try {
+    const { host } = getHAConfig();
+    const body = { entity_id: entityId, item };
+    if (rename) body.rename = rename;
+    if (status) body.status = status;
+
+    const response = await fetch(
+      `${host}/api/services/todo/update_item`,
+      {
+        method: 'POST',
+        headers: haHeaders(),
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA API ${response.status}: ${text}`);
+    }
+
+    logger.info('Todo item updated in %s: %s -> status=%s', entityId, item, status || 'unchanged');
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('HA todo update error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ha/weather/:entity_id — fetch weather entity state (for IMS)
+// ---------------------------------------------------------------------------
+router.get('/weather/:entity_id', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const entityId = req.params.entity_id;
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(
+      `${host}/api/states/${encodeURIComponent(entityId)}`,
+      { headers: haHeaders() }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA API ${response.status}: ${text}`);
+    }
+
+    const state = await response.json();
+    res.json({ state });
+  } catch (err) {
+    logger.error('HA weather entity error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/ha/remote/:entity_id/command — send IR remote command
+// ---------------------------------------------------------------------------
+router.post('/remote/:entity_id/command', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+
+  const { entity_id } = req.params;
+  const { command } = req.body;
+
+  if (!command) {
+    return res.status(400).json({ error: 'Missing "command" in request body' });
+  }
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(
+      `${host}/api/services/remote/send_command`,
+      {
+        method: 'POST',
+        headers: haHeaders(),
+        body: JSON.stringify({
+          entity_id: entity_id,
+          command: command,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA remote command ${response.status}: ${text}`);
+    }
+
+    const result = await response.json();
+    logger.info('HA IR remote command: %s -> %s', entity_id, command);
+    res.json({ result });
+  } catch (err) {
+    logger.error('HA remote command error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // WebSocket relay setup — subscribe to HA events and forward via Socket.io
 // ---------------------------------------------------------------------------
 let haWebSocket = null;

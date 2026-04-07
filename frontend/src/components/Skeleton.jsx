@@ -58,25 +58,44 @@ export function CalendarSkeleton() {
 
 export function TasksSkeleton() {
   return (
-    <div className="flex h-full p-6 gap-5">
-      {Array.from({ length: 3 }).map((_, col) => (
-        <div key={col} className="flex-1 flex flex-col gap-3">
-          {/* Column header */}
-          <div className="flex items-center gap-2 mb-2">
-            <SkeletonBlock width="100px" height="28px" borderRadius="8px" />
-            <SkeletonBlock width="32px" height="28px" borderRadius="50%" />
+    <div className="flex flex-col h-full p-4 gap-3">
+      {/* Top bar skeleton */}
+      <div className="flex items-center justify-between px-2">
+        <SkeletonBlock width="80px" height="28px" borderRadius="8px" />
+        <SkeletonBlock width="140px" height="36px" borderRadius="12px" />
+      </div>
+      {/* Person columns */}
+      <div className="flex-1 flex gap-4">
+        {Array.from({ length: 3 }).map((_, col) => (
+          <div
+            key={col}
+            className="flex-1 flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden"
+            style={{ minWidth: 220 }}
+          >
+            {/* Avatar + name */}
+            <div className="flex flex-col items-center gap-2 pt-5 pb-3 px-4">
+              <SkeletonBlock width="68px" height="68px" borderRadius="50%" />
+              <SkeletonBlock width="60px" height="20px" borderRadius="6px" />
+              <SkeletonBlock width="100px" height="14px" borderRadius="4px" />
+            </div>
+            {/* Progress bar */}
+            <div className="mx-4 mb-3">
+              <SkeletonBlock width="100%" height="6px" borderRadius="3px" />
+            </div>
+            {/* Task cards */}
+            <div className="flex-1 px-3 pb-2 flex flex-col gap-2">
+              {Array.from({ length: 3 }).map((_, row) => (
+                <SkeletonBlock
+                  key={row}
+                  width="100%"
+                  height="56px"
+                  borderRadius="12px"
+                />
+              ))}
+            </div>
           </div>
-          {/* Task cards */}
-          {Array.from({ length: 2 }).map((_, row) => (
-            <SkeletonBlock
-              key={row}
-              width="100%"
-              height="100px"
-              borderRadius="14px"
-            />
-          ))}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

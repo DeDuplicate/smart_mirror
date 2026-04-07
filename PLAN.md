@@ -220,25 +220,41 @@ On first boot (no config in SQLite yet), the app enters a full-screen setup wiza
 - **API:** Google Calendar v3, OAuth 2.0 `calendar.readonly`
 - **Sync:** poll every 5 min
 
-### Tab 2 — משימות (Tasks)
-- 3-column Kanban: לביצוע / בביצוע / הושלם
-- Priority dots, star (★) for important, due date
-- **Due date overdue:** tasks past due date show red text + overdue badge
-- Tap to expand/edit → **task detail overlay:**
-  - Title (editable, on-screen keyboard)
-  - Description / notes (editable text area)
-  - Due date picker (scrollable date wheel or calendar mini-picker)
-  - Priority selector (none / low / medium / high — color dots)
-  - Star toggle (important)
-  - Google Tasks list badge (which list it belongs to)
-  - "Delete" button (with confirmation dialog)
-  - "Save" syncs to Google Tasks immediately
-- Add task via floating "+" button → opens same overlay with empty fields + on-screen Hebrew keyboard
-- **Task list selection:** Google Tasks has multiple lists; in Settings → Tasks, user maps which Google Tasks list(s) feed each kanban column, or merges all lists into one board with a list-name badge on each card; default: first list → all 3 columns
-- **Completed task cleanup:** tasks in "הושלם" auto-archive after 7 days (configurable in Settings); "Clear Completed" button at bottom of הושלם column; archived tasks removed from kanban but kept in Google Tasks as completed
-- **API:** Google Tasks API, bidirectional
-- **Column state:** stored in SQLite, mapped to Tasks list IDs
-- **Sync:** poll every 2 min
+### Tab 2 — משימות (Tasks) — Person-Based Columns with Celebration
+**Layout:** Person-based columns (one per family member), NOT kanban. Each column shows one person's task list for today.
+
+**Person Column Header:**
+- Large avatar circle (60×60px) with initials + unique pastel color
+- Circular SVG progress ring around avatar (fills clockwise as tasks complete, 600ms ease)
+- Person's Hebrew name (bold) + progress text: "3 מתוך 5 הושלמו"
+- Full-width progress bar (6px, person's color fill, animates on change)
+
+**Task Cards:**
+- Checkbox (44×44px touch target) + emoji icon + title + recurrence label
+- Left accent bar (3px) in person's color
+- States: incomplete (white), complete (mint bg + strikethrough), overdue (coral bg)
+- Tap anywhere on card → toggle complete (optimistic UI update)
+- Checkbox animates: circle → checkmark (300ms scale + color)
+
+**Celebration Animation (ALL tasks complete):**
+1. Particle burst: 40-60 stars/sparkles/confetti from avatar (Canvas, 1200ms)
+2. Firework rockets: 3-5 upward, explode in upper half (200-1800ms)
+3. Screen flash: white overlay 30% opacity (300ms)
+4. Banner: "כל הכבוד [Name]! 🎉" + "השלמת את כל המטלות!" slides down (400-3000ms)
+5. Avatar pulse glow (ongoing until reset)
+6. Sound: celebration jingle via Web Audio API (2s, configurable)
+
+**Add Task:** "＋ הוסף מטלה" at bottom of each column → bottom sheet with title input, recurrence picker (יומי/שבועי/חד פעמי), save/cancel
+
+**Hide Completed Toggle:** "🙈 הסתר שהושלם" button, hides done tasks per column
+
+**Data Model:**
+- One Google Tasks List = One Person Column
+- Config: `tasks.people: [{ name, color, listId }]`
+- Settings: hideCompleted, celebrationSound, celebrationVolume
+
+**API:** Google Tasks API, bidirectional
+**Sync:** poll every 2 min, optimistic UI on tap
 
 ### Tab 3 — בית חכם (Home)
 - Device tile grid (configurable count, default 10); scrollable if >10 entities
@@ -447,6 +463,90 @@ Relevant for Israeli household daily awareness.
 - **API:** [Hebcal API](https://www.hebcal.com/home/developer-apis) — free, no key, supports location-based zmanim
 - **Data:** Shabbat times, major/minor holidays, Rosh Chodesh, fast days
 - **Settings:** toggle which holiday types to show (major only vs. all)
+
+### AC Control (IR-based via Scripts)
+User's AC is controlled via 38 `script.aircon_*` HA entities (IR blaster). NOT a climate entity.
+
+- **AC Widget on Home tab:** dedicated large tile (spans 2 columns) with:
+  - Current state: on/off, temperature, mode (cool/heat), fan speed (low/mid/high)
+  - Quick buttons: common presets (24°C cool low, 24°C cool mid, 30°C heat low)
+  - Tap → expanded AC control panel: temp slider (16-30), mode toggle (cool/heat/auto/fan), speed selector (low/mid/high)
+  - Maps user selections to the correct `script.aircon_*` entity and calls it
+- **Script naming convention:** `script.aircon_{mode}_{temp}_{speed}` e.g. `script.aircon_24_low_on`, `script.aircon_heat_30_mid`
+- **Off script:** `script.aircon_off` (or similar) to turn off
+
+### Shopping List Widget
+HA `todo.shopping_list` entity with active items. Display on dashboard.
+
+- **TopBar badge** or **dedicated section** on Home tab showing item count
+- **Tap → Shopping List overlay:** scrollable list of items, tap to check off, add new item via keyboard
+- **Backend:** `GET /api/ha/services/todo/get_items` + `POST /api/ha/services/todo/add_item` + `POST /api/ha/services/todo/update_item`
+- **Real-time:** listen for `ha:state_changed` on `todo.shopping_list`
+
+### Person Presence Indicators
+HA `person.yossef` and `person.maayan` entities track home/away status.
+
+- **TopBar:** small avatar dots showing who's home (green dot = home, grey = away)
+- **Home tab header:** "חיים בבית 🏠" / "מעיין לא בבית" status line
+- **Backend:** already receives person state via HA WebSocket
+- **Design:** 2 small circles (24px) with initials in TopBar utility area, colored border (green=home, grey=away)
+
+### IMS Weather Integration
+Use Israel Meteorological Service via HA `weather.ims_weather` entity for more accurate local weather.
+
+- **Settings toggle:** "מקור מזג אוויר" — Open-Meteo (default) or IMS (via Home Assistant)
+- **When IMS selected:** backend fetches weather from `GET /api/ha/states/weather.ims_weather` instead of Open-Meteo
+- **Maps IMS conditions** to the same WeatherIcon component codes
+- **Fallback:** if HA disconnected, fall back to Open-Meteo automatically
+
+### Electricity Monitor Widget
+Shelly EM power meter (`sensor.2_power_meter`) — show real-time power consumption.
+
+- **Small widget** on Home tab (or TopBar): current watts display (DM Mono, live updating)
+- **Home tab tile:** power consumption with mini sparkline chart (last 1 hour)
+- **Backend:** fetch sensor value from HA state, push updates via Socket.io
+- **Design:** lightning bolt icon + "350W" value, green (low) / amber (moderate) / red (high) color coding
+
+### Smart Curtain Control
+`cover.smart_curtain_robot_curtain` — dedicated curtain tile with position slider.
+
+- **Home tab tile:** curtain icon, open/close status, position percentage
+- **Long-press → slider popup:** vertical slider 0-100% position
+- **Quick actions:** "Open" / "Close" / "50%" buttons
+- Already partially supported by generic cover handling; enhance with curtain-specific icon and labels
+
+### IR Remote Widget
+WiFi IR blasters (`remote.wifi_ir_master_bedroom`, `remote.wifi_ir_childrens_room`).
+
+- **Home tab:** IR remote tiles for each room
+- **Tap → Remote control overlay:** grid of IR command buttons (power, volume+/-, channel+/-, mute, input)
+- **Backend:** `POST /api/ha/services/remote/send_command` with device + command
+- **Room-specific:** different button layouts per room (bedroom TV vs children's room)
+
+### Multi-Resolution Support
+Currently locked to 1920x1080. Make responsive for development and different displays.
+
+- **CSS:** replace fixed `width: 1920px; height: 1080px` on `#root` with `width: 100vw; height: 100vh`
+- **Tailwind:** add responsive breakpoints for common display sizes
+- **Scale:** use CSS `scale()` transform to fit content if viewport differs from 1920x1080
+- **Dev mode:** works in any browser window size
+- **Pi kiosk:** still renders at native 1920x1080
+
+### PWA Manifest
+Enable installation as a web app on mobile devices for remote access.
+
+- **`frontend/public/manifest.json`:** name, short_name, icons, display: standalone, theme_color, background_color
+- **`index.html`:** `<link rel="manifest">` reference
+- **Icons:** generate from app logo (multiple sizes: 192, 512)
+- **Service worker:** basic offline caching of app shell (optional)
+
+### Automation Controls
+HA automations (`automation.sunrise`, `automation.sunset`, `automation.boiler_max_temp`).
+
+- **Home tab section** or **Settings:** list of automations with enable/disable toggles
+- **Backend:** `POST /api/ha/services/automation/turn_on` / `turn_off`
+- **Status indicator:** green dot when enabled, grey when disabled
+- **Trigger button:** manually run an automation
 
 ---
 

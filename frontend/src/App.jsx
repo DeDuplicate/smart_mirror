@@ -10,6 +10,7 @@ import ConfirmDialog from './components/ConfirmDialog.jsx';
 import OAuthOverlay from './components/OAuthOverlay.jsx';
 import CalendarPage from './components/pages/CalendarPage.jsx';
 import TasksPage from './components/pages/TasksPage.jsx';
+import ChoresPage from './components/pages/ChoresPage.jsx';
 import HomePage from './components/pages/HomePage.jsx';
 import MusicPage from './components/pages/MusicPage.jsx';
 import NewsPage from './components/pages/NewsPage.jsx';
@@ -42,6 +43,7 @@ function getSocket() {
 const PAGES = [
   CalendarPage,
   TasksPage,
+  ChoresPage,
   HomePage,
   MusicPage,
   NewsPage,
@@ -725,6 +727,19 @@ export default function App() {
   const firstRun = useStore((s) => s.settings.firstRun);
   const screensaverStyle = useStore((s) => s.settings.screensaverStyle) || 'clock';
   const [showWizard, setShowWizard] = useState(false);
+
+  // ── Multi-resolution scale ──
+  useEffect(() => {
+    function updateScale() {
+      const sx = window.innerWidth / 1920;
+      const sy = window.innerHeight / 1080;
+      const scale = Math.min(sx, sy);
+      document.getElementById('root')?.style.setProperty('--app-scale', String(scale));
+    }
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, []);
 
   // ── Health polling ──
   useHealth();
