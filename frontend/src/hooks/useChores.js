@@ -7,52 +7,52 @@ const isDev =
   import.meta.env &&
   import.meta.env.DEV;
 
-// ─── Mock Data (person-based) ──────────────────────────────────────────────
+// ─── Load people from localStorage (configured in Settings → Family) ───────
 
-const MOCK_PEOPLE = [
-  {
-    id: 'p1',
-    name: 'חיים',
-    color: '#2a9d7f',
-    listId: 'list-chaim',
-    avatar: null,
-    tasks: [
+function getConfiguredPeople() {
+  try {
+    const stored = JSON.parse(localStorage.getItem('chores_people') || '[]');
+    if (stored.length > 0) {
+      return stored.map(p => ({ ...p, listId: null, avatar: null, tasks: [] }));
+    }
+  } catch { /* ignore */ }
+  // Fallback mock data if no people configured
+  return [
+    { id: 'p1', name: 'חיים', color: '#2a9d7f', listId: null, avatar: null, tasks: [] },
+    { id: 'p2', name: 'מעיין', color: '#5b52cc', listId: null, avatar: null, tasks: [] },
+    { id: 'p3', name: 'רון', color: '#c95454', listId: null, avatar: null, tasks: [] },
+  ];
+}
+
+// Sample tasks for dev mode (assigned to configured people)
+function getMockTasks(personIndex) {
+  const taskSets = [
+    [
       { id: 't1', title: 'לקנות חלב ולחם', emoji: '🛒', completed: true, recurrence: 'once', dueDate: '2026-04-06' },
-      { id: 't2', title: 'לשלם חשבון ארנונה', emoji: '💳', completed: true, recurrence: 'monthly', dueDate: '2026-04-05' },
+      { id: 't2', title: 'לשלם חשבון ארנונה', emoji: '💳', completed: true, recurrence: 'once', dueDate: '2026-04-05' },
       { id: 't3', title: 'להוציא את הכלב', emoji: '🐕', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
       { id: 't4', title: 'לתקן ברז במטבח', emoji: '🔧', completed: false, recurrence: 'once', dueDate: null },
       { id: 't5', title: 'לנקות את המחסן', emoji: '🧹', completed: false, recurrence: 'weekly', dueDate: '2026-04-10' },
     ],
-  },
-  {
-    id: 'p2',
-    name: 'מעיין',
-    color: '#5b52cc',
-    listId: 'list-maayan',
-    avatar: null,
-    tasks: [
+    [
       { id: 't6', title: 'להכין שיעורי בית', emoji: '📚', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
       { id: 't7', title: 'לסדר את החדר', emoji: '🛏️', completed: true, recurrence: 'weekly', dueDate: '2026-04-07' },
       { id: 't8', title: 'לתרגל פסנתר', emoji: '🎹', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
       { id: 't9', title: 'לקרוא ספר', emoji: '📖', completed: true, recurrence: 'once', dueDate: '2026-04-09' },
     ],
-  },
-  {
-    id: 'p3',
-    name: 'רון',
-    color: '#c95454',
-    listId: 'list-ron',
-    avatar: null,
-    tasks: [
+    [
       { id: 't10', title: 'להכין מצגת לעבודה', emoji: '💼', completed: false, recurrence: 'once', dueDate: '2026-04-08' },
       { id: 't11', title: 'לרוץ 5 ק"מ', emoji: '🏃', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't12', title: 'לקנות מתנה ליום הולדת', emoji: '🎁', completed: false, recurrence: 'once', dueDate: '2026-04-03' },
-      { id: 't13', title: 'לעדכן קורות חיים', emoji: '📝', completed: false, recurrence: 'once', dueDate: '2026-04-12' },
-      { id: 't14', title: 'לתאם פגישה עם רו"ח', emoji: '📞', completed: false, recurrence: 'once', dueDate: '2026-04-10' },
-      { id: 't15', title: 'להחליף שמן ברכב', emoji: '🚗', completed: false, recurrence: 'once', dueDate: '2026-04-15' },
+      { id: 't12', title: 'לעדכן קורות חיים', emoji: '📝', completed: false, recurrence: 'once', dueDate: '2026-04-12' },
+      { id: 't13', title: 'לתאם פגישה עם רו"ח', emoji: '📞', completed: false, recurrence: 'once', dueDate: '2026-04-10' },
+      { id: 't14', title: 'להחליף שמן ברכב', emoji: '🚗', completed: false, recurrence: 'once', dueDate: '2026-04-15' },
+      { id: 't15', title: 'לקנות מתנה ליום הולדת', emoji: '🎁', completed: false, recurrence: 'once', dueDate: '2026-04-03' },
     ],
-  },
-];
+  ];
+  return taskSets[personIndex % taskSets.length] || [];
+}
+
+const MOCK_PEOPLE = getConfiguredPeople().map((p, i) => ({ ...p, tasks: getMockTasks(i) }));
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 
