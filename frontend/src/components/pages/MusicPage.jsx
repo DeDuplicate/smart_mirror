@@ -364,7 +364,7 @@ export default function MusicPage() {
         <MusicIllustration />
         <p className="text-tm text-lg">{t.music.configureInSettings}</p>
         <button
-          onClick={() => setActiveTab(5)}
+          onClick={() => setActiveTab(6)}
           className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
                      font-medium hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
         >

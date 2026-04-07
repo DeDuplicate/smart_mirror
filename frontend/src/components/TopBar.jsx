@@ -485,7 +485,7 @@ function SettingsButton() {
 
   return (
     <button
-      onClick={() => setActiveTab(5)}
+      onClick={() => setActiveTab(6)}
       className="flex items-center justify-center w-[56px] h-[56px] rounded-xl
                  hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                  text-ts hover:text-tp"

@@ -3,7 +3,7 @@ import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import { TasksSkeleton } from '../Skeleton.jsx';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
-import useTasks from '../../hooks/useChores.js';
+import useChores from "../../hooks/useChores.js";
 import CelebrationAnimation from '../CelebrationAnimation.jsx';
 
 // ─── Recurrence config ─────────────────────────────────────────────────────
@@ -524,7 +524,7 @@ export default function TasksPage() {
     toggleTask,
     addTask,
     deleteTask,
-  } = useTasks();
+  } = useChores();
 
   const addToast = useStore((s) => s.addToast);
 
