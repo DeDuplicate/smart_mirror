@@ -100,24 +100,25 @@ export default function CelebrationAnimation({
       });
     }
 
-    // ── Create firework rockets ────────────────────────────────────────
-    const rocketCount = Math.floor(randomRange(10, 15));
+    // ── Continuous firework rockets (spawn in waves) ─────────────────
     const rockets = [];
-    for (let i = 0; i < rocketCount; i++) {
-      const startX = randomRange(rect.width * 0.2, rect.width * 0.8);
-      const targetY = randomRange(rect.height * 0.15, rect.height * 0.35);
+    let nextRocketTime = 200;
+    function spawnRocket() {
+      const startX = randomRange(rect.width * 0.05, rect.width * 0.95);
+      const targetY = randomRange(rect.height * 0.08, rect.height * 0.45);
       rockets.push({
         x: startX,
         y: rect.height,
         targetY,
         startY: rect.height,
-        speed: randomRange(300, 500),
-        launchDelay: randomRange(200, 4000),
-        launched: false,
+        speed: randomRange(300, 600),
+        launched: true,
+        launchTime: 0,
         exploded: false,
         explodeTime: 0,
         burstParticles: [],
         color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        burstColor2: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
       });
     }
 
@@ -191,72 +192,99 @@ export default function CelebrationAnimation({
         }
       }
 
-      // Draw rockets (200-6000ms)
-      if (elapsed > 200 && elapsed < 6000) {
+      // Spawn new rockets continuously (every 300-500ms for 6 seconds)
+      if (elapsed > nextRocketTime && elapsed < 6500) {
+        spawnRocket();
+        // Spawn 1-3 rockets at a time for cluster effect
+        if (Math.random() > 0.5) spawnRocket();
+        if (Math.random() > 0.7) spawnRocket();
+        nextRocketTime = elapsed + randomRange(250, 500);
+        // Set launch time for new rockets
         for (const r of rockets) {
-          if (elapsed < r.launchDelay + 200) continue;
+          if (r.launchTime === 0) r.launchTime = elapsed;
+        }
+      }
 
-          if (!r.launched) {
-            r.launched = true;
-            r.launchTime = elapsed;
-          }
+      // Draw all rockets
+      for (const r of rockets) {
+        if (r.launchTime === 0) continue;
+        const rocketAge = elapsed - r.launchTime;
 
-          const rocketAge = elapsed - r.launchTime;
+        if (!r.exploded) {
+          // Rising
+          const progress = Math.min(rocketAge / 500, 1);
+          r.y = r.startY - (r.startY - r.targetY) * progress;
 
-          if (!r.exploded) {
-            // Rising
-            const progress = Math.min(rocketAge / 600, 1);
-            r.y = r.startY - (r.startY - r.targetY) * progress;
+          // Draw rocket trail (glowing)
+          ctx.globalAlpha = 0.9;
+          ctx.strokeStyle = r.color;
+          ctx.lineWidth = 3;
+          ctx.shadowColor = r.color;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.moveTo(r.x, r.y);
+          ctx.lineTo(r.x, r.y + 30);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
 
-            // Draw rocket trail
-            ctx.globalAlpha = 0.8;
-            ctx.strokeStyle = r.color;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(r.x, r.y);
-            ctx.lineTo(r.x, r.y + 20);
-            ctx.stroke();
+          // Rocket head (bright white)
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, 4, 0, Math.PI * 2);
+          ctx.fill();
 
-            // Draw rocket head
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(r.x, r.y, 3, 0, Math.PI * 2);
-            ctx.fill();
-
-            if (progress >= 1) {
-              r.exploded = true;
-              r.explodeTime = elapsed;
-              // Create burst
-              const burstCount = Math.floor(randomRange(20, 35));
-              for (let i = 0; i < burstCount; i++) {
-                const angle = (i / burstCount) * Math.PI * 2;
-                const vel = randomRange(60, 200);
-                r.burstParticles.push({
-                  x: r.x,
-                  y: r.y,
-                  vx: Math.cos(angle) * vel,
-                  vy: Math.sin(angle) * vel,
-                  life: randomRange(600, 1200),
-                  born: elapsed,
-                  color: r.color,
-                  size: randomRange(3, 8),
-                });
-              }
+          if (progress >= 1) {
+            r.exploded = true;
+            r.explodeTime = elapsed;
+            // Multi-color burst with ring + sparkle pattern
+            const burstCount = Math.floor(randomRange(25, 45));
+            const colors = [r.color, r.burstColor2, '#FFD700', '#fff'];
+            for (let i = 0; i < burstCount; i++) {
+              const angle = (i / burstCount) * Math.PI * 2 + randomRange(-0.2, 0.2);
+              const vel = randomRange(80, 250);
+              r.burstParticles.push({
+                x: r.x,
+                y: r.y,
+                vx: Math.cos(angle) * vel,
+                vy: Math.sin(angle) * vel,
+                life: randomRange(800, 1500),
+                born: elapsed,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: randomRange(3, 9),
+                isSparkle: Math.random() > 0.6,
+              });
             }
-          } else {
-            // Draw burst particles
-            for (const bp of r.burstParticles) {
-              const bAge = elapsed - bp.born;
-              if (bAge > bp.life) continue;
-              const bt = bAge / 1000;
-              const bx = bp.x + bp.vx * bt;
-              const by = bp.y + bp.vy * bt + 0.5 * 80 * bt * bt;
-              const alpha = 1 - bAge / bp.life;
-              ctx.globalAlpha = alpha;
+          }
+        } else {
+          // Draw burst particles
+          for (const bp of r.burstParticles) {
+            const bAge = elapsed - bp.born;
+            if (bAge > bp.life) continue;
+            const bt = bAge / 1000;
+            const bx = bp.x + bp.vx * bt;
+            const by = bp.y + bp.vy * bt + 0.5 * 60 * bt * bt;
+            const alpha = Math.max(0, 1 - bAge / bp.life);
+            ctx.globalAlpha = alpha;
+
+            if (bp.isSparkle) {
+              // Sparkle: draw a small star/cross
+              ctx.strokeStyle = bp.color;
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(bx - bp.size, by);
+              ctx.lineTo(bx + bp.size, by);
+              ctx.moveTo(bx, by - bp.size);
+              ctx.lineTo(bx, by + bp.size);
+              ctx.stroke();
+            } else {
+              // Circle
               ctx.fillStyle = bp.color;
+              ctx.shadowColor = bp.color;
+              ctx.shadowBlur = 4;
               ctx.beginPath();
               ctx.arc(bx, by, bp.size, 0, Math.PI * 2);
               ctx.fill();
+              ctx.shadowBlur = 0;
             }
           }
         }
