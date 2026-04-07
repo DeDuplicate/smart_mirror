@@ -20,6 +20,12 @@ const NUMBER_ROWS = [
   ['!', '"', '*', "'", ':', ';', ',', '.', '?'],
 ];
 
+const EMOJI_ROWS = [
+  ['😀', '😂', '❤️', '👍', '🎉', '🔥', '✨', '💪', '🙏', '😊'],
+  ['🏠', '🛒', '🧹', '🍽️', '👕', '🚿', '📚', '💊', '🐕', '🌿'],
+  ['⭐', '✅', '❌', '⏰', '📅', '🎵', '📱', '💡', '🔑', '🚗'],
+];
+
 // ─── Key Component ──────────────────────────────────────────────────────────
 
 function Key({ label, onPress, flex = 1, variant = 'default', icon }) {
@@ -148,6 +154,7 @@ export default function OnScreenKeyboard({
   const [lang, setLang] = useState('he'); // 'he' | 'en'
   const [shifted, setShifted] = useState(false);
   const [numberMode, setNumberMode] = useState(false);
+  const [emojiMode, setEmojiMode] = useState(false);
 
   // Toggle language
   const toggleLang = useCallback(() => {
@@ -173,7 +180,9 @@ export default function OnScreenKeyboard({
 
   // Determine which rows to show
   let rows;
-  if (numberMode) {
+  if (emojiMode) {
+    rows = EMOJI_ROWS;
+  } else if (numberMode) {
     rows = NUMBER_ROWS;
   } else if (lang === 'he') {
     rows = HEBREW_ROWS;
@@ -279,12 +288,20 @@ export default function OnScreenKeyboard({
               variant="special"
             />
 
-            {/* Number mode toggle (shown for English and Hebrew) */}
+            {/* Number mode toggle */}
             <Key
               label={numberMode ? (lang === 'he' ? 'אב' : 'ABC') : '123'}
-              onPress={() => setNumberMode((m) => !m)}
+              onPress={() => { setNumberMode((m) => !m); setEmojiMode(false); }}
               flex={1.2}
               variant="special"
+            />
+
+            {/* Emoji toggle */}
+            <Key
+              label={emojiMode ? (lang === 'he' ? 'אב' : 'ABC') : '😀'}
+              onPress={() => { setEmojiMode((m) => !m); setNumberMode(false); }}
+              flex={1.2}
+              variant={emojiMode ? 'accent' : 'special'}
             />
 
             {/* Space bar */}
