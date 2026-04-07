@@ -95,27 +95,81 @@ function ProgressRing({ progress, color, size = 68, strokeWidth = 4 }) {
 
 // ─── Avatar with initials ──────────────────────────────────────────────────
 
-function PersonAvatar({ name, color, progress }) {
+function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange }) {
   const initials = name.charAt(0);
   const isComplete = progress >= 1;
+  const fileInputRef = useRef(null);
+
+  const handlePhotoClick = useCallback(() => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  }, []);
+
+  const handleFileChange = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Resize and convert to base64
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize to 120x120 for performance
+        const canvas = document.createElement('canvas');
+        canvas.width = 120;
+        canvas.height = 120;
+        const ctx = canvas.getContext('2d');
+        // Crop to square center
+        const size = Math.min(img.width, img.height);
+        const sx = (img.width - size) / 2;
+        const sy = (img.height - size) / 2;
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, 120, 120);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        if (onPhotoChange) onPhotoChange(personId, dataUrl);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }, [personId, onPhotoChange]);
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: 68, height: 68 }}>
       <ProgressRing progress={progress} color={color} />
       <div
+        onClick={handlePhotoClick}
         className={`
           w-[60px] h-[60px] rounded-full flex items-center justify-center
-          text-white text-xl font-bold select-none
-          transition-shadow duration-500
+          text-white text-xl font-bold select-none cursor-pointer
+          transition-shadow duration-500 overflow-hidden
           ${isComplete ? 'avatar-pulse-glow' : ''}
         `}
         style={{
           backgroundColor: color,
           boxShadow: isComplete ? `0 0 16px ${color}66, 0 0 32px ${color}33` : 'none',
         }}
+        title="לחץ להעלאת תמונה"
       >
-        {initials}
+        {photo ? (
+          <img src={photo} alt={name} className="w-full h-full object-cover" />
+        ) : (
+          initials
+        )}
       </div>
+      {/* Small camera badge */}
+      {!photo && (
+        <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 rounded-full bg-[var(--acc)] flex items-center justify-center shadow-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChange}
+      />
     </div>
   );
 }
@@ -291,6 +345,7 @@ function PersonColumn({
   onToggleTask,
   onAddTask,
   onDeleteTask,
+  onPhotoChange,
 }) {
   const columnRef = useRef(null);
   const [celebration, setCelebration] = useState(null);
@@ -369,9 +424,12 @@ function PersonColumn({
       {/* Header */}
       <div className="flex flex-col items-center gap-2 pt-5 pb-3 px-4">
         <PersonAvatar
+          personId={person.id}
           name={person.name}
           color={person.color}
           progress={progress}
+          photo={person.avatar}
+          onPhotoChange={onPhotoChange}
         />
         <span className="text-base font-bold text-[var(--tp)]" style={{ fontWeight: 700 }}>
           {person.name}
@@ -653,6 +711,27 @@ export default function TasksPage() {
 
   const addToast = useStore((s) => s.addToast);
 
+  // Photo upload — persist to localStorage
+  const [photos, setPhotos] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('chores_avatars') || '{}');
+    } catch { return {}; }
+  });
+
+  const handlePhotoChange = useCallback((personId, dataUrl) => {
+    setPhotos(prev => {
+      const next = { ...prev, [personId]: dataUrl };
+      localStorage.setItem('chores_avatars', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Merge photos into people data
+  const peopleWithPhotos = useMemo(() => {
+    if (!people) return [];
+    return people.map(p => ({ ...p, avatar: photos[p.id] || p.avatar }));
+  }, [people, photos]);
+
   // Loading state
   if (loading) {
     return <TasksSkeleton />;
@@ -671,7 +750,7 @@ export default function TasksPage() {
   }
 
   // Empty state
-  if (!people || people.length === 0) {
+  if (!peopleWithPhotos || peopleWithPhotos.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -712,7 +791,7 @@ export default function TasksPage() {
         className="flex-1 flex gap-4 overflow-x-auto pb-1"
         style={{ minHeight: 0 }}
       >
-        {people.map((person) => (
+        {peopleWithPhotos.map((person) => (
           <PersonColumn
             key={person.id}
             person={person}
@@ -720,6 +799,7 @@ export default function TasksPage() {
             onToggleTask={toggleTask}
             onAddTask={addTask}
             onDeleteTask={deleteTask}
+            onPhotoChange={handlePhotoChange}
           />
         ))}
       </div>
