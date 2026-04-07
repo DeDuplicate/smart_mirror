@@ -151,7 +151,8 @@
     "day": "יום",
     "month": "חודש",
     "year": "שנה",
-    "noDueDate": "ללא תאריך"
+    "noDueDate": "ללא תאריך",
+    "taskMoved": "המשימה הועברה"
   },
   "home": {
     "scenes": "סצנות",
@@ -250,6 +251,8 @@
     "spotify": "ספוטיפיי",
     "news": "חדשות",
     "tasks": "משימות",
+    "darkMode": "מצב כהה",
+    "lightMode": "מצב בהיר",
     "display": "תצוגה",
     "system": "מערכת",
     "about": "אודות",

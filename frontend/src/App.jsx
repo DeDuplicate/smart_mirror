@@ -750,6 +750,12 @@ export default function App() {
       })
       .then((data) => {
         setSettings({ ...data, loaded: true });
+        // Apply dark mode theme before first paint
+        if (data.darkMode) {
+          document.documentElement.dataset.theme = 'dark';
+        } else {
+          delete document.documentElement.dataset.theme;
+        }
         if (data.firstRun !== false) {
           setShowWizard(true);
         }

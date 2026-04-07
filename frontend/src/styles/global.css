@@ -40,6 +40,28 @@
 }
 
 /* ========================================================================
+   Dark Mode Overrides
+   ======================================================================== */
+
+:root[data-theme="dark"] {
+  --bg:    #0f1019;
+  --surf:  #1a1b2e;
+  --s2:    #22243a;
+  --bd:    #2d2f4a;
+  --tp:    #e8e9f0;
+  --ts:    #9b9fc0;
+  --tm:    #5d6080;
+  --acc:   #8b82f0;
+  --acc2:  #3dd9a0;
+
+  /* Pastels — slightly muted for dark backgrounds */
+  --mint-bg: #1a3d35;  --mint-d: #3dd9a0;
+  --lav-bg:  #252046;  --lav-d:  #8b82f0;
+  --coral-bg: #3d1a1a; --coral-d: #ff8888;
+  --gold-bg:  #3d2d0a; --gold-d:  #ffc040;
+}
+
+/* ========================================================================
    @font-face Declarations
    ======================================================================== */
 
@@ -97,6 +119,7 @@
     overflow: hidden;
     line-height: 1.5;
     direction: rtl;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
   }
 
   #root {
@@ -171,6 +194,7 @@
     border: 1px solid var(--bd);
     border-radius: 16px;
     padding: 16px;
+    transition: background-color 0.3s, border-color 0.3s, color 0.3s;
   }
 
   /* Tab content transition wrapper */

@@ -621,7 +621,7 @@ function TasksSection() {
 
 function DisplaySection() {
   const { settings, updateSettings } = useSettings();
-  const { setSettings } = useStore();
+  const { setSettings, toggleDarkMode } = useStore();
 
   const idleMin = settings.idleTimeout || 10;
   const brightness = settings.brightnessDefault || 80;
@@ -704,6 +704,14 @@ function DisplaySection() {
             onChange={(val) => {
               setSettings({ hebrewCalendar: val });
               updateSettings({ hebrewCalendar: val });
+            }}
+          />
+          <ToggleRow
+            label={t.settings.darkMode}
+            checked={settings.darkMode === true}
+            onChange={() => {
+              toggleDarkMode();
+              updateSettings({ darkMode: !settings.darkMode });
             }}
           />
         </div>
