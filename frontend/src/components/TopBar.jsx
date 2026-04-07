@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 import WeatherPopup from './WeatherPopup.jsx';
+import BrightnessPopup from './BrightnessPopup.jsx';
+import WifiPopup from './WifiPopup.jsx';
+import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -94,16 +97,15 @@ function getHebrewDate() {
   // Extract Hebrew calendar parts using Intl
   const parts = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {
     day: 'numeric',
-    month: 'numeric',
+    month: 'long',
     year: 'numeric',
   }).formatToParts(now);
 
   const dayNum = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
-  const monthNum = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10);
+  const hebrewMonth = parts.find(p => p.type === 'month')?.value || '';
   const yearNum = parseInt(parts.find(p => p.type === 'year')?.value || '5786', 10);
 
   const hebrewDay = toHebrewNumeral(dayNum);
-  const hebrewMonth = HEBREW_MONTHS[monthNum - 1] || '';
   const hebrewYear = toHebrewYear(yearNum);
 
   const hebrewDate = `${hebrewDay} ${hebrewMonth} ${hebrewYear}`;
@@ -177,9 +179,10 @@ function WeatherSection() {
   );
 }
 
-/** Hebrew date + day name */
+/** Hebrew date + day name + holiday badge + candle lighting */
 function HebrewDateSection() {
   const [dateInfo, setDateInfo] = useState(getHebrewDate);
+  const { todayHoliday, shabbatCandles } = useHebrewCalendar();
 
   // Update once per minute (date only changes at midnight, but minute is safe)
   useEffect(() => {
@@ -187,10 +190,25 @@ function HebrewDateSection() {
     return () => clearInterval(id);
   }, []);
 
+  const isFriday = new Date().getDay() === 5;
+
   return (
-    <div className="flex flex-col items-center select-none leading-tight">
+    <div className="flex flex-col items-center select-none leading-tight gap-0.5">
       <span className="text-sm font-medium text-tp">{dateInfo.dayName}</span>
       <span className="text-xs text-ts">{dateInfo.hebrewDate}</span>
+      {todayHoliday && (
+        <span
+          className="mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold"
+          style={{ background: 'var(--lav-bg)', color: 'var(--lav-d)' }}
+        >
+          {todayHoliday}
+        </span>
+      )}
+      {isFriday && shabbatCandles && (
+        <span className="font-mono text-[10px] text-ts mt-0.5">
+          {t.holidays.candleLighting} {shabbatCandles}
+        </span>
+      )}
     </div>
   );
 }
@@ -215,42 +233,56 @@ function GreetingSection() {
   );
 }
 
-/** Brightness button placeholder */
+/** Brightness button + popup */
 function BrightnessButton() {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const close = useCallback(() => setOpen(false), []);
+
   return (
-    <button
-      className="flex items-center justify-center w-[56px] h-[56px] rounded-xl
-                 hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
-                 text-ts hover:text-tp"
-      aria-label="Brightness"
-    >
-      {/* Sun icon */}
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-6 h-6"
+    <div className="relative">
+      <button
+        ref={anchorRef}
+        onClick={toggle}
+        className="flex items-center justify-center w-[56px] h-[56px] rounded-xl
+                   hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
+                   text-ts hover:text-tp"
+        aria-label="Brightness"
       >
-        <circle cx="12" cy="12" r="5" />
-        <line x1="12" y1="1" x2="12" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="23" />
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-        <line x1="1" y1="12" x2="3" y2="12" />
-        <line x1="21" y1="12" x2="23" y2="12" />
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-      </svg>
-    </button>
+        {/* Sun icon */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-6 h-6"
+        >
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      </button>
+      <BrightnessPopup visible={open} onClose={close} anchorRef={anchorRef} />
+    </div>
   );
 }
 
-/** WiFi indicator with status dot */
+/** WiFi indicator with status dot + popup */
 function WifiIndicator() {
   const wifiStatus = useStore((s) => s.connections.wifi);
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const close = useCallback(() => setOpen(false), []);
 
   // Hide entirely when not configured
   if (wifiStatus === 'not_configured') return null;
@@ -261,33 +293,38 @@ function WifiIndicator() {
       : 'bg-gold-d'; // amber for degraded
 
   return (
-    <button
-      className="relative flex items-center justify-center w-[56px] h-[56px] rounded-xl
-                 hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
-                 text-ts hover:text-tp"
-      aria-label="WiFi"
-    >
-      {/* WiFi icon */}
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-6 h-6"
+    <div className="relative">
+      <button
+        ref={anchorRef}
+        onClick={toggle}
+        className="relative flex items-center justify-center w-[56px] h-[56px] rounded-xl
+                   hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
+                   text-ts hover:text-tp"
+        aria-label="WiFi"
       >
-        <path d="M5 12.55a11 11 0 0 1 14.08 0" />
-        <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-        <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-        <line x1="12" y1="20" x2="12.01" y2="20" />
-      </svg>
+        {/* WiFi icon */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-6 h-6"
+        >
+          <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+          <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+          <line x1="12" y1="20" x2="12.01" y2="20" />
+        </svg>
 
-      {/* Status dot */}
-      <span
-        className={`absolute top-2.5 left-2.5 w-2.5 h-2.5 rounded-full border-2 border-surf ${dotColor}`}
-      />
-    </button>
+        {/* Status dot */}
+        <span
+          className={`absolute top-2.5 left-2.5 w-2.5 h-2.5 rounded-full border-2 border-surf ${dotColor}`}
+        />
+      </button>
+      <WifiPopup visible={open} onClose={close} anchorRef={anchorRef} />
+    </div>
   );
 }
 

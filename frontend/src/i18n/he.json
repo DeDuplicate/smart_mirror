@@ -85,7 +85,18 @@
     "password": "סיסמה",
     "connected": "מחובר",
     "connecting": "מתחבר...",
-    "noNetworks": "לא נמצאו רשתות"
+    "noNetworks": "לא נמצאו רשתות",
+    "scan": "סרוק רשתות",
+    "connectionFailed": "החיבור נכשל",
+    "networkForgotten": "הרשת נשכחה",
+    "forgetFailed": "שכחת הרשת נכשלה",
+    "scanFailed": "סריקת רשתות נכשלה",
+    "savedNetworks": "רשתות שמורות",
+    "secured": "מאובטחת",
+    "open": "פתוחה",
+    "signalStrength": "עוצמת אות",
+    "ipAddress": "כתובת IP",
+    "disconnected": "מנותק"
   },
   "weather": {
     "humidity": "לחות",
@@ -145,14 +156,64 @@
   "home": {
     "scenes": "סצנות",
     "devices": "מכשירים",
-    "configureInSettings": "הגדר בהגדרות"
+    "configureInSettings": "הגדר בהגדרות",
+    "notConnected": "לא מחובר",
+    "offline": "לא מקוון",
+    "on": "דולק",
+    "off": "כבוי",
+    "active": "פועל",
+    "inactive": "כבוי",
+    "open": "פתוח",
+    "closed": "סגור",
+    "locked": "נעול",
+    "unlocked": "פתוח",
+    "cooling": "קירור",
+    "heating": "חימום",
+    "auto": "אוטומטי",
+    "fanOnly": "מאוורר",
+    "idle": "המתנה",
+    "playing": "מופעל",
+    "brightness": "בהירות",
+    "colorTemp": "טמפרטורת צבע",
+    "warm": "חם",
+    "cool": "קר",
+    "targetTemp": "טמפרטורה",
+    "mode": "מצב",
+    "volume": "עוצמה",
+    "position": "מיקום",
+    "sceneMorning": "בוקר טוב",
+    "sceneMovie": "מצב סרט",
+    "sceneNight": "לילה טוב",
+    "sceneLeaving": "יציאה מהבית",
+    "sceneActivated": "סצנה הופעלה",
+    "confirmLock": "שינוי מנעול",
+    "confirmLockMessage": "האם לשנות את מצב המנעול?",
+    "confirmLeaving": "יציאה מהבית",
+    "confirmLeavingMessage": "הפעלת סצנת יציאה תכבה את כל המכשירים. להמשיך?",
+    "climateOff": "כבוי",
+    "climateCool": "קירור",
+    "climateHeat": "חימום",
+    "climateAuto": "אוטומטי",
+    "climateFan": "מאוורר"
   },
   "music": {
     "nowPlaying": "מתנגן כעת",
-    "queue": "תור",
+    "queue": "תור השמעה",
     "volume": "עוצמה",
-    "connect": "חבר ספוטיפיי",
-    "configureInSettings": "הגדר בהגדרות"
+    "connect": "חבר את ספוטיפיי",
+    "configureInSettings": "חבר את ספוטיפיי כדי להאזין למוזיקה",
+    "play": "נגן",
+    "pause": "השהה",
+    "next": "הבא",
+    "prev": "הקודם",
+    "shuffle": "ערבוב",
+    "repeat": "חזרה",
+    "repeatOne": "חזרה על שיר",
+    "repeatAll": "חזרה על הכל",
+    "noActiveMusic": "אין מוזיקה פעילה",
+    "comingSoon": "בקרוב",
+    "connectSpotify": "חבר ספוטיפיי",
+    "goToSettings": "עבור להגדרות"
   },
   "news": {
     "featured": "כתבה ראשית",
@@ -160,7 +221,26 @@
     "category": "קטגוריה",
     "minutesAgo": "דקות",
     "hoursAgo": "שעות",
-    "justNow": "עכשיו"
+    "justNow": "עכשיו",
+    "categories": {
+      "news": "חדשות",
+      "sport": "ספורט",
+      "tech": "טכנולוגיה",
+      "finance": "כלכלה",
+      "entertainment": "בידור"
+    },
+    "relativeTime": {
+      "minutesAgo": "לפני {n} דקות",
+      "hourAgo": "לפני שעה",
+      "hoursAgo": "לפני {n} שעות",
+      "yesterday": "אתמול",
+      "daysAgo": "לפני {n} ימים"
+    },
+    "overlay": {
+      "close": "סגור",
+      "readMore": "קרא עוד",
+      "loading": "טוען כתבה..."
+    }
   },
   "settings": {
     "profile": "פרופיל",
@@ -272,5 +352,12 @@
     "lavender": "לבנדר",
     "coral": "קורל",
     "gold": "זהב"
+  },
+  "holidays": {
+    "candleLighting": "הדלקת נרות",
+    "havdalah": "הבדלה",
+    "erevShabbat": "ערב שבת",
+    "shabbat": "שבת",
+    "upcoming": "חגים קרובים"
   }
 }

@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
+import useSettings from '../../hooks/useSettings.js';
+import useAuth from '../../hooks/useAuth.js';
+import { fetchApi } from '../../hooks/useApi.js';
+import WifiPopup from '../WifiPopup.jsx';
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -76,6 +80,16 @@ function SaveIcon({ className = 'w-4 h-4' }) {
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
       <polyline points="17 21 17 13 7 13 7 21" />
       <polyline points="7 3 7 8 15 8" />
+    </svg>
+  );
+}
+
+function Spinner({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={`${className} animate-spin`}>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3"
+        strokeLinecap="round" />
     </svg>
   );
 }
@@ -194,7 +208,7 @@ function SliderRow({ label, min, max, step = 1, value, onChange, unit = '' }) {
 }
 
 /** Generic action button */
-function Btn({ onClick, children, variant = 'default', icon, className = '' }) {
+function Btn({ onClick, children, variant = 'default', icon, className = '', disabled = false }) {
   const variants = {
     default:  'bg-s2 text-ts border border-bd hover:bg-bd',
     primary:  'bg-acc text-white hover:bg-acc/90',
@@ -204,8 +218,10 @@ function Btn({ onClick, children, variant = 'default', icon, className = '' }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`ripple inline-flex items-center gap-2 px-4 min-h-[44px] rounded-xl
                   font-medium text-sm active:scale-95 transition-all duration-[var(--dur-fast)]
+                  disabled:opacity-50 disabled:active:scale-100
                   ${variants[variant]} ${className}`}
     >
       {icon}
@@ -214,11 +230,30 @@ function Btn({ onClick, children, variant = 'default', icon, className = '' }) {
   );
 }
 
+// ─── Debounce helper for settings saves ─────────────────────────────────────
+
+function useDebouncedSave(updateSettings, delay = 800) {
+  const timerRef = useRef(null);
+
+  return useCallback(
+    (obj) => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        updateSettings(obj);
+      }, delay);
+    },
+    [updateSettings, delay]
+  );
+}
+
 // ─── Section: Profile ────────────────────────────────────────────────────────
 
 function ProfileSection() {
-  const { settings, setSettings } = useStore();
-  const [greetingStyle, setGreetingStyle] = useState('casual');
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const debouncedSave = useDebouncedSave(updateSettings);
+
+  const greetingStyle = settings.greetingStyle || 'casual';
 
   return (
     <Section title={t.settings.profile}>
@@ -226,13 +261,19 @@ function ProfileSection() {
         <InputRow
           label={t.settings.name}
           placeholder={t.settings.namePlaceholder}
-          value={settings.userName}
-          onChange={(e) => setSettings({ userName: e.target.value })}
+          value={settings.userName || ''}
+          onChange={(e) => {
+            setSettings({ userName: e.target.value });
+            debouncedSave({ userName: e.target.value });
+          }}
         />
         <SelectRow
           label={t.settings.greetingStyle}
           value={greetingStyle}
-          onChange={(e) => setGreetingStyle(e.target.value)}
+          onChange={(e) => {
+            setSettings({ greetingStyle: e.target.value });
+            updateSettings({ greetingStyle: e.target.value });
+          }}
           options={[
             { value: 'casual',  label: t.settings.greetingCasual },
             { value: 'formal',  label: t.settings.greetingFormal },
@@ -246,9 +287,9 @@ function ProfileSection() {
 // ─── Section: Location ───────────────────────────────────────────────────────
 
 function LocationSection() {
-  const { settings, setSettings } = useStore();
-  const [lat, setLat] = useState('');
-  const [lon, setLon] = useState('');
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const debouncedSave = useDebouncedSave(updateSettings);
 
   return (
     <Section title={t.settings.location}>
@@ -256,22 +297,31 @@ function LocationSection() {
         <InputRow
           label={t.settings.city}
           placeholder={t.settings.cityPlaceholder}
-          value={settings.location}
-          onChange={(e) => setSettings({ location: e.target.value })}
+          value={settings.location || ''}
+          onChange={(e) => {
+            setSettings({ location: e.target.value });
+            debouncedSave({ location: e.target.value });
+          }}
         />
         <div className="flex gap-3">
           <InputRow
             label={t.settings.latitude}
             placeholder="31.7683"
-            value={lat}
-            onChange={(e) => setLat(e.target.value)}
+            value={settings.latitude || ''}
+            onChange={(e) => {
+              setSettings({ latitude: e.target.value });
+              debouncedSave({ latitude: e.target.value });
+            }}
             className="flex-1"
           />
           <InputRow
             label={t.settings.longitude}
             placeholder="35.2137"
-            value={lon}
-            onChange={(e) => setLon(e.target.value)}
+            value={settings.longitude || ''}
+            onChange={(e) => {
+              setSettings({ longitude: e.target.value });
+              debouncedSave({ longitude: e.target.value });
+            }}
             className="flex-1"
           />
         </div>
@@ -283,24 +333,80 @@ function LocationSection() {
 // ─── Section: Google Accounts ────────────────────────────────────────────────
 
 function GoogleSection() {
-  const [accounts] = useState([]);
+  const {
+    startGoogleAuth,
+    getGoogleAccounts,
+    removeGoogleAccount,
+    isAuthenticating,
+    provider,
+  } = useAuth();
+  const [accounts, setAccounts] = useState([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const addToast = useStore((s) => s.addToast);
+
+  // Load accounts on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoadingAccounts(true);
+      const list = await getGoogleAccounts();
+      if (!cancelled) {
+        setAccounts(list);
+        setLoadingAccounts(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [getGoogleAccounts]);
+
+  const handleAdd = useCallback(() => {
+    startGoogleAuth(async () => {
+      // Refresh accounts list after successful auth
+      const list = await getGoogleAccounts();
+      setAccounts(list);
+      addToast('success', t.settings.accountAdded);
+    });
+  }, [startGoogleAuth, getGoogleAccounts, addToast]);
+
+  const handleRemove = useCallback(
+    async (email) => {
+      const ok = await removeGoogleAccount(email);
+      if (ok) {
+        setAccounts((prev) => prev.filter((a) => a.email !== email));
+        addToast('success', t.settings.accountRemoved);
+      } else {
+        addToast('error', t.settings.accountRemoveFailed);
+      }
+    },
+    [removeGoogleAccount, addToast]
+  );
 
   return (
     <Section title={t.settings.googleAccounts}>
       <div className="flex flex-col gap-4">
-        <Btn variant="primary" icon={<PlusIcon />}>
+        <Btn
+          variant="primary"
+          icon={isAuthenticating && provider === 'google' ? <Spinner /> : <PlusIcon />}
+          onClick={handleAdd}
+          disabled={isAuthenticating}
+        >
           {t.settings.addAccount}
         </Btn>
 
-        {accounts.length === 0 ? (
-          <p className="text-sm text-tm">{t.settings.linkedAccounts}: —</p>
+        {loadingAccounts ? (
+          <div className="flex items-center gap-2 text-sm text-tm">
+            <Spinner className="w-4 h-4" />
+            {t.common.loading}
+          </div>
+        ) : accounts.length === 0 ? (
+          <p className="text-sm text-tm">{t.settings.linkedAccounts}: &mdash;</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {accounts.map((acc, i) => (
-              <li key={i}
+            {accounts.map((acc) => (
+              <li key={acc.email}
                 className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
                 <span className="text-sm text-tp">{acc.email}</span>
-                <Btn variant="danger" icon={<TrashIcon />}>
+                <Btn variant="danger" icon={<TrashIcon />} onClick={() => handleRemove(acc.email)}>
                   {t.settings.removeAccount}
                 </Btn>
               </li>
@@ -315,8 +421,23 @@ function GoogleSection() {
 // ─── Section: Home Assistant ─────────────────────────────────────────────────
 
 function HomeAssistantSection() {
-  const [haUrl, setHaUrl]     = useState('');
-  const [haToken, setHaToken] = useState('');
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const addToast = useStore((s) => s.addToast);
+  const [testing, setTesting] = useState(false);
+  const debouncedSave = useDebouncedSave(updateSettings);
+
+  const handleTest = useCallback(async () => {
+    setTesting(true);
+    try {
+      await fetchApi('/api/ha/states');
+      addToast('success', t.settings.haConnectionOk);
+    } catch {
+      addToast('error', t.settings.haConnectionFail);
+    } finally {
+      setTesting(false);
+    }
+  }, [addToast]);
 
   return (
     <Section title={t.settings.smartHome}>
@@ -324,17 +445,23 @@ function HomeAssistantSection() {
         <InputRow
           label={t.settings.haUrl}
           placeholder="http://homeassistant.local:8123"
-          value={haUrl}
-          onChange={(e) => setHaUrl(e.target.value)}
+          value={settings.haHost || ''}
+          onChange={(e) => {
+            setSettings({ haHost: e.target.value });
+            debouncedSave({ haHost: e.target.value });
+          }}
         />
         <InputRow
           label={t.settings.haToken}
           type="password"
           placeholder="eyJ..."
-          value={haToken}
-          onChange={(e) => setHaToken(e.target.value)}
+          value={settings.haToken || ''}
+          onChange={(e) => {
+            setSettings({ haToken: e.target.value });
+            debouncedSave({ haToken: e.target.value });
+          }}
         />
-        <Btn icon={<LinkIcon />}>
+        <Btn icon={testing ? <Spinner /> : <LinkIcon />} onClick={handleTest} disabled={testing}>
           {t.settings.testConnection}
         </Btn>
       </div>
@@ -346,7 +473,29 @@ function HomeAssistantSection() {
 
 function SpotifySection() {
   const connections = useStore((s) => s.connections);
+  const {
+    startSpotifyAuth,
+    removeSpotifyAccount,
+    isAuthenticating,
+    provider,
+  } = useAuth();
+  const addToast = useStore((s) => s.addToast);
   const isConnected = connections.spotify === 'connected';
+
+  const handleConnect = useCallback(() => {
+    startSpotifyAuth(() => {
+      addToast('success', t.settings.spotifyConnected);
+    });
+  }, [startSpotifyAuth, addToast]);
+
+  const handleDisconnect = useCallback(async () => {
+    const ok = await removeSpotifyAccount();
+    if (ok) {
+      addToast('success', t.settings.spotifyDisconnected);
+    } else {
+      addToast('error', t.settings.spotifyDisconnectFailed);
+    }
+  }, [removeSpotifyAccount, addToast]);
 
   return (
     <Section title={t.settings.spotify}>
@@ -354,12 +503,17 @@ function SpotifySection() {
         <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium text-tp">{t.settings.connectedAs}</span>
-            <span className="text-xs text-ts">@username</span>
+            <span className="text-xs text-ts">Spotify</span>
           </div>
-          <Btn variant="danger">{t.settings.disconnectSpotify}</Btn>
+          <Btn variant="danger" onClick={handleDisconnect}>{t.settings.disconnectSpotify}</Btn>
         </div>
       ) : (
-        <Btn variant="primary" icon={<LinkIcon />}>
+        <Btn
+          variant="primary"
+          icon={isAuthenticating && provider === 'spotify' ? <Spinner /> : <LinkIcon />}
+          onClick={handleConnect}
+          disabled={isAuthenticating}
+        >
           {t.settings.connectSpotify}
         </Btn>
       )}
@@ -370,14 +524,31 @@ function SpotifySection() {
 // ─── Section: News ───────────────────────────────────────────────────────────
 
 function NewsSection() {
-  const [ynet, setYnet]         = useState(true);
-  const [now14, setNow14]       = useState(false);
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+
+  const ynet = settings.newsYnet !== false; // default true
+  const now14 = settings.newsNow14 === true; // default false
 
   return (
     <Section title={t.settings.news}>
       <div className="flex flex-col divide-y divide-bd">
-        <ToggleRow label={t.settings.sourceYnet}    checked={ynet}    onChange={setYnet} />
-        <ToggleRow label={t.settings.sourceNow14}   checked={now14}   onChange={setNow14} />
+        <ToggleRow
+          label={t.settings.sourceYnet}
+          checked={ynet}
+          onChange={(val) => {
+            setSettings({ newsYnet: val });
+            updateSettings({ newsYnet: val });
+          }}
+        />
+        <ToggleRow
+          label={t.settings.sourceNow14}
+          checked={now14}
+          onChange={(val) => {
+            setSettings({ newsNow14: val });
+            updateSettings({ newsNow14: val });
+          }}
+        />
       </div>
     </Section>
   );
@@ -386,24 +557,55 @@ function NewsSection() {
 // ─── Section: Tasks ──────────────────────────────────────────────────────────
 
 function TasksSection() {
-  const [col1, setCol1]       = useState(t.tasks.todo);
-  const [col2, setCol2]       = useState(t.tasks.inProgress);
-  const [col3, setCol3]       = useState(t.tasks.done);
-  const [cleanup, setCleanup] = useState('7');
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const debouncedSave = useDebouncedSave(updateSettings);
+
+  const col1 = settings.taskCol1 || t.tasks.todo;
+  const col2 = settings.taskCol2 || t.tasks.inProgress;
+  const col3 = settings.taskCol3 || t.tasks.done;
+  const cleanup = settings.taskCleanupInterval || '7';
 
   return (
     <Section title={t.settings.tasks}>
       <div className="flex flex-col gap-4">
         <p className="text-sm font-medium text-ts -mb-1">{t.settings.columnNames}</p>
         <div className="flex gap-3">
-          <InputRow label="1" value={col1} onChange={(e) => setCol1(e.target.value)} className="flex-1" />
-          <InputRow label="2" value={col2} onChange={(e) => setCol2(e.target.value)} className="flex-1" />
-          <InputRow label="3" value={col3} onChange={(e) => setCol3(e.target.value)} className="flex-1" />
+          <InputRow
+            label="1"
+            value={col1}
+            onChange={(e) => {
+              setSettings({ taskCol1: e.target.value });
+              debouncedSave({ taskCol1: e.target.value });
+            }}
+            className="flex-1"
+          />
+          <InputRow
+            label="2"
+            value={col2}
+            onChange={(e) => {
+              setSettings({ taskCol2: e.target.value });
+              debouncedSave({ taskCol2: e.target.value });
+            }}
+            className="flex-1"
+          />
+          <InputRow
+            label="3"
+            value={col3}
+            onChange={(e) => {
+              setSettings({ taskCol3: e.target.value });
+              debouncedSave({ taskCol3: e.target.value });
+            }}
+            className="flex-1"
+          />
         </div>
         <SelectRow
           label={t.settings.cleanupInterval}
           value={cleanup}
-          onChange={(e) => setCleanup(e.target.value)}
+          onChange={(e) => {
+            setSettings({ taskCleanupInterval: e.target.value });
+            updateSettings({ taskCleanupInterval: e.target.value });
+          }}
           options={[
             { value: 'never', label: t.settings.cleanupNever },
             { value: '7',     label: t.settings.cleanup7 },
@@ -418,11 +620,13 @@ function TasksSection() {
 // ─── Section: Display ────────────────────────────────────────────────────────
 
 function DisplaySection() {
-  const { settings, setSettings } = useStore();
-  const [idleMin, setIdleMin]       = useState(10);
-  const [brightness, setBrightness] = useState(80);
-  const [screensaver, setScreensaver] = useState('clock');
-  const [hebrewCal, setHebrewCal]   = useState(false);
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+
+  const idleMin = settings.idleTimeout || 10;
+  const brightness = settings.brightnessDefault || 80;
+  const screensaver = settings.screensaverStyle || 'clock';
+  const hebrewCal = settings.hebrewCalendar === true;
 
   return (
     <Section title={t.settings.display}>
@@ -431,20 +635,31 @@ function DisplaySection() {
           label={t.settings.idleTimeout}
           min={1} max={30}
           value={idleMin}
-          onChange={(e) => setIdleMin(Number(e.target.value))}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            setSettings({ idleTimeout: val });
+            updateSettings({ idleTimeout: val });
+          }}
           unit={` ${t.settings.idleTimeoutMin}`}
         />
         <SliderRow
           label={t.settings.brightness}
           min={10} max={100} step={5}
           value={brightness}
-          onChange={(e) => setBrightness(Number(e.target.value))}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            setSettings({ brightnessDefault: val });
+            updateSettings({ brightnessDefault: val });
+          }}
           unit="%"
         />
         <SelectRow
           label={t.settings.screensaverStyle}
           value={screensaver}
-          onChange={(e) => setScreensaver(e.target.value)}
+          onChange={(e) => {
+            setSettings({ screensaverStyle: e.target.value });
+            updateSettings({ screensaverStyle: e.target.value });
+          }}
           options={[
             { value: 'clock',     label: t.settings.screensaverClock },
             { value: 'slideshow', label: t.settings.screensaverSlideshow },
@@ -459,7 +674,10 @@ function DisplaySection() {
               {['celsius', 'fahrenheit'].map((unit) => (
                 <button
                   key={unit}
-                  onClick={() => setSettings({ temperatureUnit: unit })}
+                  onClick={() => {
+                    setSettings({ temperatureUnit: unit });
+                    updateSettings({ temperatureUnit: unit });
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all
                                duration-[var(--dur-fast)]
                                ${settings.temperatureUnit === unit
@@ -474,13 +692,19 @@ function DisplaySection() {
 
           <ToggleRow
             label={t.settings.showWeekend}
-            checked={settings.showWeekend}
-            onChange={(val) => setSettings({ showWeekend: val })}
+            checked={settings.showWeekend !== false}
+            onChange={(val) => {
+              setSettings({ showWeekend: val });
+              updateSettings({ showWeekend: val });
+            }}
           />
           <ToggleRow
             label={t.settings.hebrewCalendar}
             checked={hebrewCal}
-            onChange={setHebrewCal}
+            onChange={(val) => {
+              setSettings({ hebrewCalendar: val });
+              updateSettings({ hebrewCalendar: val });
+            }}
           />
         </div>
       </div>
@@ -491,7 +715,88 @@ function DisplaySection() {
 // ─── Section: System ─────────────────────────────────────────────────────────
 
 function SystemSection() {
-  const lastBackup = null;
+  const addToast = useStore((s) => s.addToast);
+  const showConfirm = useStore((s) => s.showConfirm);
+  const [version, setVersion] = useState('...');
+  const [lastBackup, setLastBackup] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+
+  // Fetch version on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi('/api/system/version')
+      .then((data) => {
+        if (!cancelled && data?.version) setVersion(data.version);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleCheckUpdates = useCallback(async () => {
+    setChecking(true);
+    try {
+      const data = await fetchApi('/api/system/check-update');
+      if (data?.updateAvailable) {
+        addToast('info', `${t.settings.updateAvailable}: v${data.latestVersion}`);
+      } else {
+        addToast('success', t.settings.upToDate);
+      }
+    } catch {
+      addToast('error', t.settings.updateCheckFailed);
+    } finally {
+      setChecking(false);
+    }
+  }, [addToast]);
+
+  const handleRestart = useCallback(() => {
+    showConfirm({
+      title: t.settings.restartApp,
+      message: t.settings.restartConfirm,
+      onConfirm: async () => {
+        setRestarting(true);
+        try {
+          await fetchApi('/api/system/restart', { method: 'POST' });
+          addToast('info', t.settings.restartingApp);
+        } catch {
+          addToast('error', t.settings.restartFailed);
+        } finally {
+          setRestarting(false);
+        }
+      },
+    });
+  }, [showConfirm, addToast]);
+
+  const handleRestartPi = useCallback(() => {
+    showConfirm({
+      title: t.settings.restartPi,
+      message: t.settings.restartPiConfirm,
+      onConfirm: async () => {
+        try {
+          await fetchApi('/api/system/reboot', { method: 'POST' });
+          addToast('info', t.settings.restartingPi);
+        } catch {
+          addToast('error', t.settings.restartFailed);
+        }
+      },
+    });
+  }, [showConfirm, addToast]);
+
+  const handleBackup = useCallback(async () => {
+    setBackingUp(true);
+    try {
+      const data = await fetchApi('/api/system/backup', { method: 'POST' });
+      if (data?.timestamp) {
+        setLastBackup(new Date(data.timestamp).toLocaleString('he-IL'));
+      }
+      addToast('success', t.settings.backupSuccess);
+    } catch {
+      addToast('error', t.settings.backupFailed);
+    } finally {
+      setBackingUp(false);
+    }
+  }, [addToast]);
 
   return (
     <Section title={t.settings.system}>
@@ -499,15 +804,36 @@ function SystemSection() {
         {/* Version display */}
         <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
           <span className="text-sm text-ts">{t.settings.version}</span>
-          <span className="text-sm font-semibold text-tp font-mono">1.0.0</span>
+          <span className="text-sm font-semibold text-tp font-mono">{version}</span>
         </div>
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
-          <Btn icon={<RefreshIcon />}>{t.settings.checkUpdates}</Btn>
-          <Btn icon={<PowerIcon />}>{t.settings.restartApp}</Btn>
-          <Btn icon={<PowerIcon />} variant="danger">{t.settings.restartPi}</Btn>
-          <Btn icon={<SaveIcon />}  variant="success">{t.settings.backupNow}</Btn>
+          <Btn
+            icon={checking ? <Spinner /> : <RefreshIcon />}
+            onClick={handleCheckUpdates}
+            disabled={checking}
+          >
+            {t.settings.checkUpdates}
+          </Btn>
+          <Btn
+            icon={restarting ? <Spinner /> : <PowerIcon />}
+            onClick={handleRestart}
+            disabled={restarting}
+          >
+            {t.settings.restartApp}
+          </Btn>
+          <Btn icon={<PowerIcon />} variant="danger" onClick={handleRestartPi}>
+            {t.settings.restartPi}
+          </Btn>
+          <Btn
+            icon={backingUp ? <Spinner /> : <SaveIcon />}
+            variant="success"
+            onClick={handleBackup}
+            disabled={backingUp}
+          >
+            {t.settings.backupNow}
+          </Btn>
         </div>
 
         {/* Last backup timestamp */}
@@ -522,9 +848,23 @@ function SystemSection() {
 // ─── Section: Wi-Fi ──────────────────────────────────────────────────────────
 
 function WifiSection() {
+  const [wifiOpen, setWifiOpen] = useState(false);
+  const btnRef = useRef(null);
+
   return (
     <Section title={t.settings.wifi}>
-      <Btn icon={<WifiIcon />}>{t.settings.openWifi}</Btn>
+      <div className="relative">
+        <div ref={btnRef}>
+          <Btn icon={<WifiIcon />} onClick={() => setWifiOpen(true)}>
+            {t.settings.openWifi}
+          </Btn>
+        </div>
+        <WifiPopup
+          visible={wifiOpen}
+          onClose={() => setWifiOpen(false)}
+          anchorRef={btnRef}
+        />
+      </div>
     </Section>
   );
 }
@@ -532,11 +872,55 @@ function WifiSection() {
 // ─── Section: About ──────────────────────────────────────────────────────────
 
 function AboutSection() {
+  const [info, setInfo] = useState({
+    version: '...',
+    ip: '...',
+    uptime: '...',
+    buildDate: '...',
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [versionData, healthData] = await Promise.all([
+          fetchApi('/api/system/version').catch(() => null),
+          fetchApi('/api/system/health').catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        const uptimeSec = healthData?.uptime || 0;
+        const days = Math.floor(uptimeSec / 86400);
+        const hours = Math.floor((uptimeSec % 86400) / 3600);
+        const uptimeStr = days > 0
+          ? `${days} ${t.settings.days}, ${hours} ${t.settings.hours}`
+          : `${hours} ${t.settings.hours}`;
+
+        // Extract IP from health or use fallback
+        const ip = healthData?.ip || healthData?.network?.ip || '---';
+
+        setInfo({
+          version: versionData?.version || '---',
+          ip,
+          uptime: uptimeStr,
+          buildDate: versionData?.buildDate || new Date().toLocaleDateString('he-IL'),
+        });
+      } catch {
+        // Silently fail, keep placeholders
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
   const rows = [
-    { label: t.settings.version,   value: '1.0.0' },
-    { label: t.settings.ipAddress, value: '192.168.1.100' },
-    { label: t.settings.uptime,    value: '3 ימים, 4 שעות' },
-    { label: t.settings.buildDate, value: '07/04/2026' },
+    { label: t.settings.version,   value: info.version },
+    { label: t.settings.ipAddress, value: info.ip },
+    { label: t.settings.uptime,    value: info.uptime },
+    { label: t.settings.buildDate, value: info.buildDate },
   ];
 
   return (

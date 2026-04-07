@@ -185,6 +185,24 @@ router.post('/volume', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/music/seek — seek to position { position_ms: number }
+// ---------------------------------------------------------------------------
+router.post('/seek', async (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    const positionMs = Math.max(0, parseInt(req.body.position_ms, 10) || 0);
+    await spotifyFetch(db, logger, `/seek?position_ms=${positionMs}`, { method: 'PUT' });
+    logger.info('Music: seek to %dms', positionMs);
+    res.json({ ok: true, position_ms: positionMs });
+  } catch (err) {
+    logger.error('Music seek error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/music/queue — current queue
 // ---------------------------------------------------------------------------
 router.get('/queue', async (req, res) => {

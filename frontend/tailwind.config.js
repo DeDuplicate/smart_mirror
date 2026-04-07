@@ -41,6 +41,7 @@ export default {
         'banner-slide-up': 'bannerSlideUp var(--dur-fast) var(--ease) forwards',
         spin: 'spin 0.8s linear infinite',
         'popup-in': 'popupIn var(--dur-normal) var(--ease-out) forwards',
+        'scene-pulse': 'scenePulse 600ms var(--ease-out) forwards',
       },
       keyframes: {
         fadeIn: {
@@ -98,6 +99,11 @@ export default {
         popupIn: {
           '0%': { transform: 'scale(0.9)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        scenePulse: {
+          '0%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(42,181,138,0.4)' },
+          '50%': { transform: 'scale(1.03)', boxShadow: '0 0 0 8px rgba(42,181,138,0)' },
+          '100%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(42,181,138,0)' },
         },
       },
     },
