@@ -412,7 +412,7 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
   }, [keyboardTarget]);
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col justify-end">
+    <div className="fixed inset-0 z-40 flex flex-col">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-tp/40"
@@ -420,12 +420,16 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
         style={{ animation: 'fadeIn var(--dur-fast) var(--ease) forwards' }}
       />
 
-      {/* Panel */}
+      {/* Panel — when keyboard open, panel sits in the top 55% leaving bottom 40% for keyboard + 5% gap */}
       <div
-        className="relative bg-surf rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative bg-surf shadow-2xl flex flex-col overflow-hidden"
         style={{
+          marginTop: 'auto',
+          marginBottom: keyboardTarget ? '40%' : '0',
           height: keyboardTarget ? '55%' : '80%',
+          borderRadius: keyboardTarget ? '24px' : '24px 24px 0 0',
           animation: 'taskOverlayUp var(--dur-normal) var(--ease-out) forwards',
+          transition: 'height 0.25s ease, margin-bottom 0.25s ease, border-radius 0.25s ease',
         }}
       >
         {/* Header */}
