@@ -157,11 +157,18 @@ export default function CelebrationAnimation({
       const elapsed = now - startTimeRef.current;
       if (elapsed > 8000) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.opacity = '0';
         if (onComplete) onComplete();
         return;
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Fade out everything in the last 1.5 seconds
+      if (elapsed > 6500) {
+        const fadeAlpha = 1 - (elapsed - 6500) / 1500;
+        ctx.globalAlpha = Math.max(0, fadeAlpha);
+      }
 
       // Draw particles (0-5000ms)
       if (elapsed < 5000) {
