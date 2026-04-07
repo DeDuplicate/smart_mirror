@@ -28,6 +28,9 @@ cd backend && npm install && node server.js
 # Production (PM2)
 pm2 start ecosystem.config.js
 
+# Generate PWA icons (SVG; run once after clone)
+node scripts/generate-icons.js
+
 # Fresh Pi setup
 ./scripts/setup.sh
 
@@ -108,3 +111,15 @@ TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiP
 - **Socket.io events:** `auth:*`, `ha:*`, `music:*`, `calendar:*`, `tasks:*`, `system:*`, `heartbeat`
 - **i18n:** `frontend/src/i18n/he.json` — all Hebrew strings centralized
 - **Dev mode:** mock data for all integrations, Pi-specific deps gracefully no-op
+
+## PWA
+
+- **Manifest:** `frontend/public/manifest.json` — `display: standalone`, `theme_color: #6b62e0`, `orientation: landscape`
+- **Icons:** `frontend/public/icons/icon.svg` (any-size SVG, primary), `favicon.svg` (32px browser tab icon). PNG fallbacks (`icon-192.png`, `icon-512.png`) can be generated with `sharp` or Inkscape — see `scripts/generate-icons.js` for instructions
+- **Favicon:** `frontend/public/favicon.svg` referenced in `index.html` via `<link rel="icon">`
+
+## Project Stats (April 2026)
+
+- **60 source files** (`.js`, `.jsx`, `.json`, `.css`) across frontend + backend
+- **~21,000 lines of code** total
+- **Build:** `npx vite build` — 114 modules, 0 warnings, 1.88s, 453 kB JS bundle (128 kB gzip)
