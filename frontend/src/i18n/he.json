@@ -393,7 +393,20 @@
     "settingsSaveFailed": "שמירת ההגדרות נכשלה",
     "weatherSource": "מקור מזג אוויר",
     "weatherOpenMeteo": "Open-Meteo",
-    "weatherIMS": "IMS (שירות מטאורולוגי)"
+    "weatherIMS": "IMS (שירות מטאורולוגי)",
+    "calendarUrls": "יומנים (כתובת iCal)",
+    "addCalendarUrl": "הוסף יומן",
+    "removeCalendar": "הסר",
+    "calendarUrl": "כתובת URL",
+    "calendarUrlPlaceholder": "https://calendar.google.com/calendar/ical/.../basic.ics",
+    "calendarName": "שם היומן",
+    "calendarNamePlaceholder": "למשל: עבודה, אישי",
+    "calendarColor": "צבע",
+    "calendarIcsInstructions": "עבור להגדרות של Google Calendar \u2190 בחר יומן \u2190 כתובת סודית בפורמט iCal \u2190 הדבק כאן",
+    "calendarAdded": "היומן נוסף בהצלחה",
+    "calendarRemoved": "היומן הוסר",
+    "calendarUrlRequired": "יש להזין כתובת URL",
+    "noCalendarsConfigured": "לא הוגדרו יומנים"
   },
   "setup": {
     "welcome": "ברוך הבא",
