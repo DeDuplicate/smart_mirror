@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Smart Mirror Display — a touch-enabled family dashboard running on Raspberry Pi (1920x1080, landscape). Hebrew RTL interface built for a 27" IR touch frame (minimum touch target: 56x56px).
+Smart Mirror Display — a touch-enabled family dashboard running on Raspberry Pi (1920x1080, landscape). Hebrew RTL interface built for a 27" IR touch frame (minimum touch target: 56x56px). Features 7 tabs, dark mode, celebration animations, and real Home Assistant integration.
 
 ## Tech Stack
 
 - **Frontend:** React 18 + Vite, Tailwind CSS v3 (logical properties), Zustand for state, Socket.io for real-time
 - **Backend:** Node.js + Express, SQLite (better-sqlite3), PM2 for process management
 - **Kiosk:** Chromium `--kiosk` on Raspberry Pi OS Bookworm 64-bit
-- **External APIs:** Google Calendar/Tasks (OAuth 2.0), Home Assistant (REST + WebSocket), Open-Meteo (weather, free), Spotify or MPD (TBD), NewsAPI or Israeli RSS (TBD)
+- **External APIs:** Google Calendar/Tasks (OAuth 2.0), Home Assistant (REST + WebSocket), Open-Meteo + IMS weather, Spotify, Hebcal (Jewish holidays), Ynet/Channel 14 RSS
 
 ## Build & Run Commands
 
@@ -37,37 +37,74 @@ pm2 start ecosystem.config.js
 
 ## Architecture
 
-Frontend talks to backend via HTTP + WebSocket (Socket.io). Backend proxies all external APIs and manages OAuth tokens. SQLite stores config and kanban column state. Google OAuth callback: `http://localhost:3001/auth/callback`.
+Frontend talks to backend via HTTP + WebSocket (Socket.io). Backend proxies all external APIs and manages OAuth tokens. SQLite stores config and kanban column state. Multi-resolution scaling via CSS transform.
 
-**Pages:** Calendar (weekly grid) | Tasks (3-column kanban) | Home (HA device tiles) | Music (playback controls) | News (headline cards) | Settings (full config UI)
+**7 Tabs:** Calendar (weekly grid) | Tasks (kanban drag-drop) | Chores (person columns + celebrations) | Home (HA tiles + AC + IR) | Music (Spotify player) | News (RSS headlines) | Settings (full config)
 
-**TopBar** is always visible: live clock, weather, Hebrew date, greeting, brightness control, Wi-Fi manager.
+**TopBar** is always visible: live clock, animated weather icon, Hebrew date (gematria), holiday badge, Shabbat times, greeting, dark mode toggle, brightness, shopping list, person presence, WiFi manager.
 
-**First-Run Setup Wizard** launches on fresh install — walks through name, location, Google OAuth, HA, Spotify, news sources. All OAuth flows use iframe overlay (kiosk-compatible).
+**First-Run Setup Wizard** (7 steps): name, location, Google OAuth, HA connection + entity discovery, Spotify, news sources, finish.
 
 ## Critical Design Constraints (LOCKED)
 
-- **RTL throughout:** `<html lang="he" dir="rtl">`, CSS logical properties (`ms-`, `me-`, `text-start`)
-- **Fonts:** Heebo + DM Mono bundled locally in `frontend/src/assets/fonts/` (no CDN dependency)
-- **Hebrew line-height:** minimum 1.45
-- **Color tokens:** see `PLAN.md` section 2 for the full palette (bg #f4f5f7, accent purple #6b62e0, teal #2ab58a, pastel event colors mint/lav/coral/gold)
-- **Animation tokens:** consistent easing (`--ease`, `--ease-out`, `--ease-in`) + durations (`--dur-fast` 150ms, `--dur-normal` 250ms, `--dur-slow` 400ms); GPU-only transforms
-- **No body scroll:** full-height content area per tab
-- **Israeli week:** calendar grid runs Sun-Thu (Fri/Sat toggleable in Settings)
-- **Skeleton loading states** for all tabs; empty states when data is loaded but empty
+- **RTL throughout:** `<html lang="he" dir="rtl">`, CSS logical properties
+- **Fonts:** Heebo variable + DM Mono bundled locally (no CDN)
+- **Dark mode:** CSS variables via `data-theme="dark"`, toggle in TopBar + Settings
+- **Color tokens:** bg #f4f5f7, accent purple #6b62e0, teal #2ab58a, pastels mint/lav/coral/gold
+- **Animation tokens:** `--ease`, `--ease-out`, `--ease-in`, durations fast/normal/slow; GPU-only transforms
+- **Israeli week:** calendar Sun-Thu (Fri/Sat toggleable)
+- **Skeleton loading + empty states** for all tabs
 - **SQLite WAL mode** for crash safety; migration system in `backend/db/migrations/`
+- **Multi-resolution:** CSS transform scaling, works at any window size
+
+## Frontend Hooks (15)
+
+| Hook | Purpose |
+|------|---------|
+| `useCalendar` | Google Calendar events, week navigation, mock data |
+| `useTasks` | Kanban tasks CRUD, drag-drop state |
+| `useChores` | Person-based chores, reads family from localStorage |
+| `useHomeAssistant` | HA entity states, toggles, services, WebSocket |
+| `useMusic` | Spotify playback state, controls, queue |
+| `useNews` | RSS articles, full article extraction |
+| `useHebrewCalendar` | Hebcal API, holidays, Shabbat times |
+| `useAuth` | Google/Spotify OAuth flow, account management |
+| `useApi` | Generic fetch with stale-while-revalidate cache |
+| `useHealth` | Health polling, connection status updates |
+| `useSettings` | Settings CRUD to backend |
+| `useWifi` | WiFi scan/connect/forget via nmcli |
+| `useIdleDetection` | Idle timeout → screensaver trigger |
+| `useDisplaySchedule` | Wake/sleep schedule, temporary wake |
+| `usePullToRefresh` | Touch pull-down gesture on Calendar/Tasks/News |
+
+## Frontend Components (Key)
+
+TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiPopup, ShoppingListPopup, ACControlPopup, IRRemoteOverlay, OAuthOverlay, ConnectionBanner, OnScreenKeyboard (Hebrew/English/emoji), ConfirmDialog, ToastContainer, TouchRipple, Screensaver (clock/slideshow), CelebrationAnimation (Canvas fireworks), ErrorBoundary, Skeleton loaders
 
 ## Backend Routes
 
-`/auth` (Google + Spotify OAuth) | `/calendar` | `/tasks` | `/weather` | `/ha` (Home Assistant) | `/music` | `/news` | `/wifi` (nmcli) | `/settings` (config CRUD) | `/system` (brightness, version, update, health)
+| Route | Purpose |
+|-------|---------|
+| `/api/auth/*` | Google + Spotify OAuth flows |
+| `/api/calendar/*` | Google Calendar events |
+| `/api/tasks/*` | Google Tasks CRUD |
+| `/api/weather` | Open-Meteo + IMS weather |
+| `/api/ha/*` | HA states, services, todo, remote, weather entity |
+| `/api/music/*` | Spotify playback controls |
+| `/api/news/*` | RSS feeds + readability extraction |
+| `/api/wifi/*` | Network scan/connect/forget (nmcli) |
+| `/api/settings/*` | Config CRUD in SQLite |
+| `/api/system/*` | Health, brightness, logs, update, backup, schedule |
 
 ## Key Integration Details
 
-- **Google OAuth:** scopes `calendar.readonly` + `tasks`, refresh tokens encrypted in SQLite
-- **Home Assistant:** long-lived token in `.env`, WebSocket for real-time state push
-- **Weather:** Open-Meteo, no API key, cached 10 min, location Netanya (32.33, 34.86)
-- **Hebrew Calendar:** Hebcal API, free, no key — Shabbat times + Jewish holidays
-- **Sync intervals:** Calendar 5 min, Tasks 2 min, News 30 min
-- **Socket.io events:** namespaced pattern `category:action` (e.g., `auth:google:success`, `ha:state_changed`)
-- **i18n:** all Hebrew strings in `frontend/src/i18n/he.json`; `useTranslation()` hook; numbers wrapped in `<span dir="ltr">`
-- **Dev mode:** `NODE_ENV=development` enables mock data, relaxed CORS, verbose logging; Pi-specific deps (`ddcutil`, `nmcli`) gracefully no-op on non-Pi systems
+- **Home Assistant:** `https://nadav7.duckdns.org:8123`, token in `.env` (gitignored)
+- **HA Entities:** 383 entities including lights, covers, scripts (AC via IR), media players, remotes, power meter, todo list
+- **AC Control:** 38 `script.aircon_*` entities mapped by temp/mode/speed in ACControlPopup
+- **Weather:** Open-Meteo default, IMS via HA toggle in Settings
+- **Hebrew Calendar:** Hebcal API, holidays in TopBar + Calendar grid
+- **Sync intervals:** Calendar 5 min, Tasks/Chores 2 min, News 30 min, Weather 10 min, Health 30s
+- **Chores:** Person-based columns, family configured in Settings, photos in localStorage, clap + fireworks celebrations with sound
+- **Socket.io events:** `auth:*`, `ha:*`, `music:*`, `calendar:*`, `tasks:*`, `system:*`, `heartbeat`
+- **i18n:** `frontend/src/i18n/he.json` — all Hebrew strings centralized
+- **Dev mode:** mock data for all integrations, Pi-specific deps gracefully no-op
