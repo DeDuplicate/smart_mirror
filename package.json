@@ -1,0 +1,14 @@
+{
+  "name": "smart-mirror",
+  "version": "1.0.0",
+  "description": "Smart Mirror Display project root",
+  "scripts": {
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npx vite --host\"",
+    "build": "cd frontend && npx vite build",
+    "start": "pm2 start ecosystem.config.js",
+    "setup": "bash scripts/setup.sh"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

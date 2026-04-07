@@ -1,0 +1,358 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================================================
+   Design System - CSS Custom Properties
+   ======================================================================== */
+
+:root {
+  /* Color tokens */
+  --bg: #f4f5f7;
+  --surf: #ffffff;
+  --s2: #f0f1f5;
+  --bd: #e8e9f0;
+  --tp: #1a1c2e;
+  --ts: #7b7f9e;
+  --tm: #b0b4cc;
+
+  /* Accent */
+  --acc: #6b62e0;
+  --acc2: #2ab58a;
+
+  /* Pastels */
+  --mint-bg: #b8ede0;
+  --mint-d: #2a9d7f;
+  --lav-bg: #d4cfff;
+  --lav-d: #5b52cc;
+  --coral-bg: #ffc8c8;
+  --coral-d: #c95454;
+  --gold-bg: #ffe4a0;
+  --gold-d: #b07c10;
+
+  /* Animation tokens */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-fast: 150ms;
+  --dur-normal: 250ms;
+  --dur-slow: 400ms;
+}
+
+/* ========================================================================
+   @font-face Declarations
+   ======================================================================== */
+
+/* Heebo - Hebrew-optimized variable sans-serif (weight 100-900) */
+@font-face {
+  font-family: 'Heebo';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/Heebo-Variable.woff2') format('woff2');
+}
+
+/* DM Mono - monospace for clocks/numbers */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../assets/fonts/DMMono-Light.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/DMMono-Regular.woff2') format('woff2');
+}
+
+/* ========================================================================
+   Base Styles
+   ======================================================================== */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--tp);
+    font-family: 'Heebo', sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+    line-height: 1.5;
+    direction: rtl;
+  }
+
+  #root {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Scrollbar styling for touch */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--tm);
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ts);
+  }
+}
+
+/* ========================================================================
+   Component Utilities
+   ======================================================================== */
+
+@layer components {
+  /* Ripple touch effect */
+  .ripple {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ripple::after {
+    content: '';
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    background: var(--acc);
+    opacity: 0;
+    border-radius: 50%;
+    transform: scale(0);
+    pointer-events: none;
+  }
+
+  .ripple.active::after {
+    animation: ripple var(--dur-slow) var(--ease-out) forwards;
+  }
+
+  /* Skeleton loading shimmer */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--s2) 25%,
+      var(--bd) 50%,
+      var(--s2) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: 8px;
+  }
+
+  /* Glass card surface */
+  .card {
+    background: var(--surf);
+    border: 1px solid var(--bd);
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  /* Tab content transition wrapper */
+  .tab-enter {
+    animation: fadeIn var(--dur-normal) var(--ease) forwards,
+      slideInRight var(--dur-normal) var(--ease) forwards;
+  }
+
+  .tab-exit {
+    animation: fadeOut var(--dur-fast) var(--ease) forwards,
+      slideOutLeft var(--dur-fast) var(--ease) forwards;
+  }
+
+  /* RTL-aware slide for tab navigation going backward */
+  .tab-enter-reverse {
+    animation: fadeIn var(--dur-normal) var(--ease) forwards,
+      slideInLeft var(--dur-normal) var(--ease) forwards;
+  }
+
+  .tab-exit-reverse {
+    animation: fadeOut var(--dur-fast) var(--ease) forwards,
+      slideOutRight var(--dur-fast) var(--ease) forwards;
+  }
+}
+
+/* ========================================================================
+   Keyframe Animations
+   ======================================================================== */
+
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInRight {
+  0% {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  0% {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+@keyframes slideOutLeft {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+}
+
+@keyframes toastIn {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastOut {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes popupIn {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes confirmCardIn {
+  0% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes keyboardSlideUp {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes touchRippleExpand {
+  0% {
+    transform: scale(0);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes brightnessPopupIn {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

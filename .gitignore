@@ -1,0 +1,7 @@
+node_modules/
+.env
+!.env.example
+backend/db/*.db
+logs/
+dist/
+.DS_Store
