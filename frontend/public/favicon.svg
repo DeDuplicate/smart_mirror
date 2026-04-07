@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Mirror frame background -->
+  <rect x="1" y="1" width="30" height="30" rx="5" ry="5" fill="#6b62e0"/>
+
+  <!-- Mirror glass -->
+  <rect x="4" y="4" width="24" height="24" rx="3" ry="3" fill="#1a1830"/>
+
+  <!-- Clock circle -->
+  <circle cx="16" cy="15" r="8" fill="none" stroke="#6b62e0" stroke-width="1.5"/>
+  <circle cx="16" cy="15" r="6.5" fill="#221f3d"/>
+
+  <!-- Clock hands -->
+  <line x1="16" y1="15" x2="13.5" y2="12.5" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="15" x2="18.5" y2="12" stroke="#ffffff" stroke-width="1" stroke-linecap="round"/>
+  <circle cx="16" cy="15" r="1" fill="#6b62e0"/>
+
+  <!-- Status bar -->
+  <rect x="6" y="25" width="20" height="2" rx="1" fill="#6b62e0" opacity="0.8"/>
+</svg>
