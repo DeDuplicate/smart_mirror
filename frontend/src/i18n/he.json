@@ -101,14 +101,46 @@
   "calendar": {
     "today": "היום",
     "weekNav": "ניווט שבועי",
-    "upcoming": "קרוב",
-    "allDay": "כל היום"
+    "upcoming": "אירועים קרובים",
+    "allDay": "כל היום",
+    "noUpcoming": "אין אירועים קרובים",
+    "nextWeek": "שבוע הבא",
+    "prevWeek": "שבוע קודם",
+    "location": "מיקום",
+    "description": "תיאור",
+    "calendar": "יומן",
+    "attendees": "משתתפים",
+    "close": "סגור",
+    "moreEvents": "עוד"
   },
   "tasks": {
     "todo": "לביצוע",
     "inProgress": "בביצוע",
     "done": "הושלם",
-    "addTask": "הוסף משימה"
+    "addTask": "הוסף משימה",
+    "editTask": "עריכת משימה",
+    "newTask": "משימה חדשה",
+    "title": "כותרת",
+    "titlePlaceholder": "הזן כותרת משימה",
+    "description": "תיאור",
+    "descriptionPlaceholder": "הוסף תיאור או הערות...",
+    "dueDate": "תאריך יעד",
+    "priority": "עדיפות",
+    "priorityNone": "ללא",
+    "priorityLow": "נמוכה",
+    "priorityMedium": "בינונית",
+    "priorityHigh": "גבוהה",
+    "important": "חשוב",
+    "taskList": "רשימה",
+    "clearCompleted": "נקה הושלמו",
+    "deleteTask": "מחק משימה",
+    "deleteConfirmTitle": "מחיקת משימה",
+    "deleteConfirmMessage": "האם למחוק את המשימה? לא ניתן לשחזר.",
+    "overdue": "באיחור",
+    "day": "יום",
+    "month": "חודש",
+    "year": "שנה",
+    "noDueDate": "ללא תאריך"
   },
   "home": {
     "scenes": "סצנות",
@@ -177,7 +209,7 @@
     "disconnectSpotify": "נתק ספוטיפיי",
     "connectedAs": "מחובר כ",
     "sourceYnet": "ynet",
-    "sourceHaaretz": "הארץ",
+    "sourceNow14": "ערוץ 14",
     "columnNames": "שמות עמודות",
     "cleanupInterval": "ניקוי אוטומטי",
     "cleanupNever": "לעולם לא",
@@ -216,8 +248,29 @@
     "finish": "סיום",
     "finishDesc": "הכל מוכן! אפשר להתחיל",
     "connect": "חבר",
+    "connectGoogle": "חבר חשבון גוגל",
     "connected": "מחובר",
     "skip": "דלג",
-    "letsStart": "בואו נתחיל"
+    "letsStart": "בואו נתחיל",
+    "addAnotherAccount": "הוסף חשבון נוסף",
+    "linkedAs": "מקושר כ",
+    "calendarColor": "צבע יומן",
+    "selectCalendars": "בחר יומנים לתצוגה",
+    "loadingCalendars": "טוען יומנים...",
+    "authError": "שגיאה בהתחברות"
+  },
+  "connection": {
+    "degraded": "חיבור לקוי",
+    "reconnect": "התחבר מחדש",
+    "googleDegraded": "אין גישה לחשבון גוגל. יש צורך בהתחברות מחדש.",
+    "spotifyDegraded": "אין גישה לספוטיפיי. יש צורך בהתחברות מחדש.",
+    "haDegraded": "אין חיבור ל-Home Assistant. בדוק את הכתובת והטוקן.",
+    "wifiDegraded": "אין חיבור לאינטרנט."
+  },
+  "calendarColors": {
+    "mint": "מנטה",
+    "lavender": "לבנדר",
+    "coral": "קורל",
+    "gold": "זהב"
   }
 }

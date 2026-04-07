@@ -8,15 +8,15 @@ const NEWS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 // Default RSS / JSON feed sources (can be overridden via settings)
 const DEFAULT_SOURCES = [
   {
-    id: 'bbc',
-    name: 'BBC News',
-    url: 'https://feeds.bbci.co.uk/news/rss.xml',
+    id: 'ynet',
+    name: 'Ynet',
+    url: 'https://www.ynet.co.il/Integration/StoryRss2.xml',
     type: 'rss',
   },
   {
-    id: 'reuters',
-    name: 'Reuters',
-    url: 'https://feeds.reuters.com/reuters/topNews',
+    id: 'now14',
+    name: 'ערוץ 14',
+    url: 'https://www.now14.co.il/feed/',
     type: 'rss',
   },
 ];

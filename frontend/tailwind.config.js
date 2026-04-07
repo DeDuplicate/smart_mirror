@@ -37,6 +37,10 @@ export default {
         shimmer: 'shimmer 1.5s infinite linear',
         'toast-in': 'toastIn var(--dur-normal) var(--ease-out) forwards',
         'toast-out': 'toastOut var(--dur-fast) var(--ease-in) forwards',
+        'banner-slide-down': 'bannerSlideDown var(--dur-normal) var(--ease-out) forwards',
+        'banner-slide-up': 'bannerSlideUp var(--dur-fast) var(--ease) forwards',
+        spin: 'spin 0.8s linear infinite',
+        'popup-in': 'popupIn var(--dur-normal) var(--ease-out) forwards',
       },
       keyframes: {
         fadeIn: {
@@ -78,6 +82,22 @@ export default {
         toastOut: {
           '0%': { transform: 'translateY(0)', opacity: '1' },
           '100%': { transform: 'translateY(-100%)', opacity: '0' },
+        },
+        bannerSlideDown: {
+          '0%': { maxHeight: '0', opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { maxHeight: '120px', opacity: '1', transform: 'translateY(0)' },
+        },
+        bannerSlideUp: {
+          '0%': { maxHeight: '120px', opacity: '1', transform: 'translateY(0)' },
+          '100%': { maxHeight: '0', opacity: '0', transform: 'translateY(-8px)' },
+        },
+        spin: {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        popupIn: {
+          '0%': { transform: 'scale(0.9)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
         },
       },
     },

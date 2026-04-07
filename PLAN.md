@@ -176,7 +176,7 @@ On first boot (no config in SQLite yet), the app enters a full-screen setup wiza
 3. **Google Account** — "Connect Google" button triggers OAuth flow (see below); after auth, user picks which calendars to display and assigns a color to each
 4. **Home Assistant** — host URL input + long-lived token paste field; "Test Connection" button with success/fail feedback; entity auto-discovery list with checkboxes + Hebrew label editor
 5. **Spotify** (optional) — "Connect Spotify" button triggers OAuth; skip button if not using
-6. **News sources** — toggle switches for available sources (Ynet, Haaretz, etc.)
+6. **News sources** — toggle switches for available sources (Ynet, Channel 14, etc.)
 7. **Done** — summary screen, "Start" button → saves everything to SQLite + `.env`, enters normal app
 
 - Wizard can be re-entered from Settings at any time
@@ -273,7 +273,7 @@ On first boot (no config in SQLite yet), the app enters a full-screen setup wiza
 - Tap → **full story overlay:** slides up from bottom; shows headline, source, timestamp, article image (if available), and article body text; "Close" button at top
   - **Content source:** RSS provides summary/description (1–3 paragraphs typically); NewsAPI provides partial content; for full text, backend can optionally fetch + parse the original article URL (using `readability`/`mozilla-readability` library to extract clean text from HTML)
   - **Fallback:** if full text extraction fails → show available summary + "Open in browser" link (though kiosk mode limits this — may open in a new Chromium window)
-- **API:** NewsAPI.org or Israeli RSS (Ynet/Haaretz)
+- **API:** NewsAPI.org or Israeli RSS (Ynet/Channel 14)
 - **Refresh:** every 30 min
 
 ### Settings Page (gear icon in TopBar or 6th tab — TBD)
@@ -592,7 +592,7 @@ smart-mirror/
     "photosPath": "~/photos/"
   },
   "music": { "provider": "spotify" },
-  "news": { "sources": ["ynet", "haaretz"], "refreshMin": 30 },
+  "news": { "sources": ["ynet", "now14"], "refreshMin": 30 },
   "homeAssistant": {
     "host": "http://homeassistant.local:8123",
     "entities": [

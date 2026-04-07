@@ -371,13 +371,13 @@ function SpotifySection() {
 
 function NewsSection() {
   const [ynet, setYnet]         = useState(true);
-  const [haaretz, setHaaretz]   = useState(false);
+  const [now14, setNow14]       = useState(false);
 
   return (
     <Section title={t.settings.news}>
       <div className="flex flex-col divide-y divide-bd">
         <ToggleRow label={t.settings.sourceYnet}    checked={ynet}    onChange={setYnet} />
-        <ToggleRow label={t.settings.sourceHaaretz} checked={haaretz} onChange={setHaaretz} />
+        <ToggleRow label={t.settings.sourceNow14}   checked={now14}   onChange={setNow14} />
       </div>
     </Section>
   );

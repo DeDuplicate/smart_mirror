@@ -2,6 +2,9 @@ node_modules/
 .env
 !.env.example
 backend/db/*.db
+backend/db/*.db-shm
+backend/db/*.db-wal
 logs/
 dist/
 .DS_Store
+home assistant connection details
