@@ -1,7 +1,88 @@
 'use strict';
 
+const crypto = require('crypto');
 const { Router } = require('express');
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Token encryption (AES-256-GCM)
+// ---------------------------------------------------------------------------
+const ALGO = 'aes-256-gcm';
+const IV_LEN = 12; // 96-bit IV recommended for GCM
+
+/**
+ * Derive (or retrieve) the 256-bit encryption key used for token storage.
+ * Priority: TOKEN_SECRET env var > config table > auto-generate and persist.
+ * The key is derived via SHA-256 so any-length secret becomes 32 bytes.
+ */
+let _encKeyCache = null;
+function getEncryptionKey(db) {
+  if (_encKeyCache) return _encKeyCache;
+
+  let secret = process.env.TOKEN_SECRET;
+
+  if (!secret) {
+    // Try config table
+    const row = db
+      .prepare("SELECT value FROM config WHERE key = 'token_secret'")
+      .get();
+    if (row) {
+      secret = row.value;
+    } else {
+      // Auto-generate and persist
+      secret = crypto.randomBytes(32).toString('hex');
+      db.prepare(
+        "INSERT INTO config (key, value) VALUES ('token_secret', ?)"
+      ).run(secret);
+    }
+  }
+
+  _encKeyCache = crypto.createHash('sha256').update(secret).digest();
+  return _encKeyCache;
+}
+
+/**
+ * Encrypt a plaintext string.
+ * Returns "iv:authTag:ciphertext" as hex-encoded segments.
+ */
+function encryptToken(db, plaintext) {
+  if (!plaintext) return plaintext;
+  const key = getEncryptionKey(db);
+  const iv = crypto.randomBytes(IV_LEN);
+  const cipher = crypto.createCipheriv(ALGO, key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
+}
+
+/**
+ * Decrypt a token previously encrypted by encryptToken().
+ * Backward compatible: if the value has no ":" separators, return as-is (plaintext).
+ */
+function decryptToken(db, encrypted) {
+  if (!encrypted) return encrypted;
+  // Backward compat: plaintext tokens won't contain ":"
+  if (!encrypted.includes(':')) return encrypted;
+
+  const parts = encrypted.split(':');
+  if (parts.length !== 3) return encrypted; // not our format, treat as plaintext
+
+  const [ivHex, tagHex, cipherHex] = parts;
+  try {
+    const key = getEncryptionKey(db);
+    const iv = Buffer.from(ivHex, 'hex');
+    const tag = Buffer.from(tagHex, 'hex');
+    const ciphertext = Buffer.from(cipherHex, 'hex');
+    const decipher = crypto.createDecipheriv(ALGO, key, iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return decrypted.toString('utf8');
+  } catch {
+    // Decryption failed — value may actually be plaintext that coincidentally
+    // contained colons (very unlikely for OAuth tokens, but safe fallback).
+    return encrypted;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,8 +121,8 @@ function storeTokens(db, provider, email, tokens) {
   ).run(
     provider,
     email,
-    tokens.access_token,
-    tokens.refresh_token || null,
+    encryptToken(db, tokens.access_token),
+    tokens.refresh_token ? encryptToken(db, tokens.refresh_token) : null,
     tokens.expires_at || null
   );
 }
@@ -50,16 +131,26 @@ function storeTokens(db, provider, email, tokens) {
  * Retrieve tokens for a given provider + email.
  */
 function getTokens(db, provider, email) {
-  return db
+  const row = db
     .prepare('SELECT * FROM tokens WHERE provider = ? AND email = ?')
     .get(provider, email);
+  if (row) {
+    row.access_token = decryptToken(db, row.access_token);
+    row.refresh_token = decryptToken(db, row.refresh_token);
+  }
+  return row;
 }
 
 /**
  * Retrieve all accounts for a given provider.
  */
 function getAccountsByProvider(db, provider) {
-  return db.prepare('SELECT * FROM tokens WHERE provider = ?').all(provider);
+  const rows = db.prepare('SELECT * FROM tokens WHERE provider = ?').all(provider);
+  for (const row of rows) {
+    row.access_token = decryptToken(db, row.access_token);
+    row.refresh_token = decryptToken(db, row.refresh_token);
+  }
+  return rows;
 }
 
 /**
@@ -414,6 +505,19 @@ router.get('/spotify/callback', async (req, res) => {
     logger.error('Spotify OAuth callback error: %s', err.message);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// DELETE /api/auth/spotify — disconnect all Spotify accounts
+router.delete('/spotify', (req, res) => {
+  const db = req.app.locals.db;
+  const io = req.app.locals.io;
+
+  db.prepare("DELETE FROM tokens WHERE provider = 'spotify'").run();
+
+  if (io) io.emit('auth:spotify:unlinked');
+
+  req.app.locals.logger.info('All Spotify accounts disconnected');
+  res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------
