@@ -182,11 +182,10 @@ function ClapBurst({ onDone }) {
   );
 }
 
-function TaskCard({ task, personColor, onToggle, onDelete }) {
+function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
   const isComplete = task.completed;
   const overdue = !isComplete && isOverdue(task.dueDate);
   const [justToggled, setJustToggled] = useState(false);
-  const [showClap, setShowClap] = useState(false);
 
   const recurrenceLabel = useMemo(() => {
     const found = RECURRENCE_OPTIONS.find((r) => r.value === task.recurrence);
@@ -197,13 +196,12 @@ function TaskCard({ task, personColor, onToggle, onDelete }) {
     const wasIncomplete = !task.completed;
     setJustToggled(true);
     setTimeout(() => setJustToggled(false), 500);
-    // Play clap + show burst when marking COMPLETE (not when unchecking)
     if (wasIncomplete) {
       playClap();
-      setShowClap(true);
+      if (onClap) onClap();
     }
     onToggle(task.id);
-  }, [onToggle, task.id, task.completed]);
+  }, [onToggle, onClap, task.id, task.completed]);
 
   const handleDelete = useCallback(
     (e) => {
@@ -281,8 +279,6 @@ function TaskCard({ task, personColor, onToggle, onDelete }) {
         <TrashIcon />
       </div>
 
-      {/* Clap hands burst animation on completion */}
-      {showClap && <ClapBurst onDone={() => setShowClap(false)} />}
     </button>
   );
 }
@@ -298,6 +294,7 @@ function PersonColumn({
 }) {
   const columnRef = useRef(null);
   const [celebration, setCelebration] = useState(null);
+  const [showClap, setShowClap] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
 
   const totalTasks = person.tasks.length;
@@ -356,6 +353,9 @@ function PersonColumn({
       className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden"
       style={{ minWidth: 220, flex: '1 1 0%' }}
     >
+      {/* Clap burst overlay — full column */}
+      {showClap && <ClapBurst onDone={() => setShowClap(false)} />}
+
       {/* Celebration overlay */}
       {celebration && (
         <CelebrationAnimation
@@ -405,6 +405,7 @@ function PersonColumn({
             personColor={person.color}
             onToggle={handleToggle}
             onDelete={handleDelete}
+            onClap={() => setShowClap(true)}
           />
         ))}
         {sortedTasks.length === 0 && (
