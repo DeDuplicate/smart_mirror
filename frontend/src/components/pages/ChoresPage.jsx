@@ -128,8 +128,8 @@ if (clapSound) {
   // Use a short clap — data URI for a tiny click/clap sound
   clapSound.preload = 'auto';
   clapSound.volume = 0.5;
-  // Will try /sounds/clap.wav, fallback silently
-  clapSound.src = '/sounds/clap.wav';
+  // Will try /sounds/clap.mp3, fallback silently
+  clapSound.src = '/sounds/clap.mp3';
 }
 
 function playClap() {
