@@ -809,9 +809,16 @@ export default function App() {
         return res.json();
       })
       .then((data) => {
+        // If darkMode has never been set, auto-detect from system preference
+        let { darkMode } = data;
+        if (darkMode == null) {
+          darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          data = { ...data, darkMode };
+        }
+
         setSettings({ ...data, loaded: true });
         // Apply dark mode theme before first paint
-        if (data.darkMode) {
+        if (darkMode) {
           document.documentElement.dataset.theme = 'dark';
         } else {
           delete document.documentElement.dataset.theme;
