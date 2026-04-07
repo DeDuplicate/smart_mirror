@@ -732,6 +732,19 @@ export default function App() {
   const firstRun = useStore((s) => s.settings.firstRun);
   const screensaverStyle = useStore((s) => s.settings.screensaverStyle) || 'clock';
   const [showWizard, setShowWizard] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // ── Offline / online detection ──
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline  = () => setIsOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online',  goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online',  goOnline);
+    };
+  }, []);
 
   // ── Multi-resolution scale ──
   useEffect(() => {
@@ -957,6 +970,21 @@ export default function App() {
     <div className="w-[1920px] h-[1080px] flex flex-col bg-bg overflow-hidden">
       {/* Setup Wizard overlay */}
       {showWizard && <SetupWizard onComplete={handleWizardComplete} />}
+
+      {/* Offline indicator */}
+      {isOffline && (
+        <div
+          className="absolute top-0 left-0 right-0 z-50 flex items-center justify-center gap-2
+                     bg-red-600/90 text-white text-sm font-semibold py-1 px-4"
+          style={{ height: '28px' }}
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full bg-white shrink-0"
+            style={{ boxShadow: '0 0 6px 2px rgba(255,255,255,0.7)' }}
+          />
+          {t.errors?.noConnection ?? 'אין חיבור לרשת'}
+        </div>
+      )}
 
       {/* Main layout */}
       <TopBar />
