@@ -327,11 +327,20 @@ export default function CelebrationAnimation({
 
     runAnimation();
 
+    // Safety cleanup — must match the animation total duration (8s) + buffer
     const cleanup = setTimeout(() => {
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
       }
-    }, 3200);
+      // Force clear canvas
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.opacity = '0';
+      }
+      if (onComplete) onComplete();
+    }, 8500);
 
     return () => {
       clearTimeout(cleanup);
