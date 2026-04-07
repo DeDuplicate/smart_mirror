@@ -554,6 +554,90 @@ function NewsSection() {
   );
 }
 
+// ─── Section: Family / Chores People ────────────────────────────────────────
+
+const PERSON_COLORS = ['#2a9d7f', '#5b52cc', '#c95454', '#b07c10', '#e06262', '#4a90d9', '#7b61ff', '#d4a017'];
+
+function FamilySection() {
+  const [people, setPeople] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('chores_people') || '[]');
+    } catch { return []; }
+  });
+  const [newName, setNewName] = useState('');
+  const addToast = useStore((s) => s.addToast);
+
+  const savePeople = useCallback((updated) => {
+    setPeople(updated);
+    localStorage.setItem('chores_people', JSON.stringify(updated));
+  }, []);
+
+  const addPerson = useCallback(() => {
+    if (!newName.trim()) return;
+    const color = PERSON_COLORS[people.length % PERSON_COLORS.length];
+    const id = 'p_' + Date.now();
+    savePeople([...people, { id, name: newName.trim(), color }]);
+    setNewName('');
+    addToast('success', `${newName.trim()} נוסף/ה`);
+  }, [newName, people, savePeople, addToast]);
+
+  const removePerson = useCallback((id) => {
+    savePeople(people.filter(p => p.id !== id));
+  }, [people, savePeople]);
+
+  return (
+    <Section title="בני המשפחה (מטלות)">
+      <p className="text-xs text-[var(--tm)] mb-3">הוסף את בני המשפחה שיופיעו בלשונית מטלות</p>
+
+      {/* Current people list */}
+      <div className="flex flex-col gap-2 mb-4">
+        {people.map((p) => (
+          <div key={p.id} className="flex items-center gap-3 p-2 rounded-xl bg-[var(--s2)]">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+              style={{ backgroundColor: p.color }}
+            >
+              {p.name.charAt(0)}
+            </div>
+            <span className="flex-1 text-sm font-medium text-[var(--tp)]">{p.name}</span>
+            <div
+              className="w-4 h-4 rounded-full"
+              style={{ backgroundColor: p.color }}
+              title={p.color}
+            />
+            <button
+              onClick={() => removePerson(p.id)}
+              className="text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors p-1"
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        ))}
+        {people.length === 0 && (
+          <p className="text-sm text-[var(--tm)] text-center py-3">אין בני משפחה — הוסף אחד למטה</p>
+        )}
+      </div>
+
+      {/* Add new person */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addPerson()}
+          placeholder="שם..."
+          className="flex-1 h-11 px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-sm placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
+          dir="rtl"
+        />
+        <Btn variant="primary" onClick={addPerson} disabled={!newName.trim()}>
+          <PlusIcon className="w-4 h-4" />
+          הוסף
+        </Btn>
+      </div>
+    </Section>
+  );
+}
+
 // ─── Section: Tasks ──────────────────────────────────────────────────────────
 
 function TasksSection() {
@@ -1075,6 +1159,7 @@ export default function SettingsPage() {
         <div>
           <GoogleSection />
           <SpotifySection />
+          <FamilySection />
           <TasksSection />
           <SystemSection />
           <LogViewerSection />
