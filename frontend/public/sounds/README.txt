@@ -1,8 +1,12 @@
-Place celebrate.mp3 in this directory.
+Place these sound files in this directory:
 
-This sound file is played when a person completes all their tasks
-in the Tasks page celebration animation.
+1. celebrate.mp3 — Fireworks/celebration jingle (2-3 seconds)
+   Played when a person completes ALL their tasks.
+   Volume: 60%
 
-Recommended: a short (1-2 second) cheerful celebration sound effect.
-Volume is set to 60% in CelebrationAnimation.jsx.
-Autoplay errors are caught silently for browsers that block it.
+2. clap.mp3 — Short clap/applause sound (0.5-1 second)
+   Played when any single chore is marked complete.
+   Volume: 50%
+
+Both sounds are loaded on app mount. Autoplay errors caught silently.
+Download free sounds from https://freesound.org or https://pixabay.com/sound-effects/

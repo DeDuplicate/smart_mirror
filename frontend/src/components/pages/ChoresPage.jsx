@@ -122,10 +122,71 @@ function PersonAvatar({ name, color, progress }) {
 
 // ─── TaskCard component ────────────────────────────────────────────────────
 
+// Preload clap sound
+const clapSound = typeof Audio !== 'undefined' ? new Audio() : null;
+if (clapSound) {
+  // Use a short clap — data URI for a tiny click/clap sound
+  clapSound.preload = 'auto';
+  clapSound.volume = 0.5;
+  // Will try /sounds/clap.mp3, fallback silently
+  clapSound.src = '/sounds/clap.mp3';
+}
+
+function playClap() {
+  if (!clapSound) return;
+  clapSound.currentTime = 0;
+  clapSound.play().catch(() => {});
+}
+
+// Clap hands emoji burst on single task completion
+function ClapBurst({ onDone }) {
+  const [particles, setParticles] = useState([]);
+
+  useEffect(() => {
+    const emojis = ['👏', '👏🏻', '👏🏽', '⭐', '✨', '🎉'];
+    const newParticles = Array.from({ length: 12 }, (_, i) => ({
+      id: i,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+      x: (Math.random() - 0.5) * 120,
+      y: -(Math.random() * 80 + 30),
+      rotation: (Math.random() - 0.5) * 60,
+      scale: 0.6 + Math.random() * 0.6,
+      delay: Math.random() * 200,
+    }));
+    setParticles(newParticles);
+    const timer = setTimeout(() => { if (onDone) onDone(); }, 1200);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="absolute"
+          style={{
+            left: '50%',
+            top: '50%',
+            fontSize: `${p.scale * 24}px`,
+            transform: `translate(-50%, -50%)`,
+            animation: `clapParticle 1s ease-out ${p.delay}ms forwards`,
+            '--clap-x': `${p.x}px`,
+            '--clap-y': `${p.y}px`,
+            '--clap-rot': `${p.rotation}deg`,
+          }}
+        >
+          {p.emoji}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TaskCard({ task, personColor, onToggle, onDelete }) {
   const isComplete = task.completed;
   const overdue = !isComplete && isOverdue(task.dueDate);
   const [justToggled, setJustToggled] = useState(false);
+  const [showClap, setShowClap] = useState(false);
 
   const recurrenceLabel = useMemo(() => {
     const found = RECURRENCE_OPTIONS.find((r) => r.value === task.recurrence);
@@ -133,10 +194,16 @@ function TaskCard({ task, personColor, onToggle, onDelete }) {
   }, [task.recurrence]);
 
   const handleToggle = useCallback(() => {
+    const wasIncomplete = !task.completed;
     setJustToggled(true);
     setTimeout(() => setJustToggled(false), 500);
+    // Play clap + show burst when marking COMPLETE (not when unchecking)
+    if (wasIncomplete) {
+      playClap();
+      setShowClap(true);
+    }
     onToggle(task.id);
-  }, [onToggle, task.id]);
+  }, [onToggle, task.id, task.completed]);
 
   const handleDelete = useCallback(
     (e) => {
@@ -155,6 +222,7 @@ function TaskCard({ task, personColor, onToggle, onDelete }) {
   return (
     <button
       onClick={handleToggle}
+      data-clap-target
       className={`
         relative w-full flex items-center gap-3 p-3 rounded-xl
         border border-[var(--bd)]
@@ -212,6 +280,9 @@ function TaskCard({ task, personColor, onToggle, onDelete }) {
       >
         <TrashIcon />
       </div>
+
+      {/* Clap hands burst animation on completion */}
+      {showClap && <ClapBurst onDone={() => setShowClap(false)} />}
     </button>
   );
 }
