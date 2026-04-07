@@ -144,14 +144,14 @@ function ClapBurst({ onDone }) {
 
   useEffect(() => {
     const emojis = ['👏', '👏🏻', '👏🏽', '⭐', '✨', '🎉', '💪', '🌟', '👍'];
-    const newParticles = Array.from({ length: 20 }, (_, i) => ({
+    const newParticles = Array.from({ length: 30 }, (_, i) => ({
       id: i,
       emoji: emojis[Math.floor(Math.random() * emojis.length)],
-      x: (Math.random() - 0.5) * 200,
-      y: -(Math.random() * 140 + 40),
-      rotation: (Math.random() - 0.5) * 90,
-      scale: 0.7 + Math.random() * 0.8,
-      delay: Math.random() * 500,
+      x: (Math.random() - 0.5) * 400,
+      y: -(Math.random() * 250 + 60),
+      rotation: (Math.random() - 0.5) * 120,
+      scale: 1.0 + Math.random() * 1.2,
+      delay: Math.random() * 600,
     }));
     setParticles(newParticles);
     const timer = setTimeout(() => { if (onDone) onDone(); }, 2500);
@@ -159,7 +159,7 @@ function ClapBurst({ onDone }) {
   }, [onDone]);
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+    <div className="absolute inset-0 pointer-events-none overflow-visible z-10">
       {particles.map((p) => (
         <div
           key={p.id}
@@ -167,7 +167,7 @@ function ClapBurst({ onDone }) {
           style={{
             left: '50%',
             top: '50%',
-            fontSize: `${p.scale * 24}px`,
+            fontSize: `${p.scale * 36}px`,
             transform: `translate(-50%, -50%)`,
             animation: `clapParticle 2s ease-out ${p.delay}ms forwards`,
             '--clap-x': `${p.x}px`,
