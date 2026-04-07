@@ -238,68 +238,17 @@ function DatePicker({ value, onChange }) {
 // ─── TaskCard ───────────────────────────────────────────────────────────────
 
 function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
-  const longPressTimer = useRef(null);
-  const isDragging = useRef(false);
-  const touchStartPos = useRef({ x: 0, y: 0 });
   const cardRef = useRef(null);
+  const wasDragged = useRef(false);
 
-  const handleTouchStart = useCallback(
-    (e) => {
-      isDragging.current = false;
-      const touch = e.touches[0];
-      const startX = touch.clientX;
-      const startY = touch.clientY;
-      touchStartPos.current = { x: startX, y: startY };
-      // Build a minimal synthetic touch object for onDragStart so it can
-      // compute the offset even after the original event is recycled.
-      const frozenEvent = {
-        touches: [{ clientX: startX, clientY: startY }],
-        preventDefault: () => {},
-      };
-      longPressTimer.current = setTimeout(() => {
-        isDragging.current = true;
-        onDragStart(task, frozenEvent, cardRef.current);
-      }, 300);
-    },
-    [task, onDragStart]
-  );
-
-  const handleTouchMove = useCallback(
-    (e) => {
-      // If already in drag mode, let the global handler deal with it
-      if (isDragging.current) return;
-      // If finger moved >10px before long-press fires, cancel (user is scrolling)
-      if (longPressTimer.current) {
-        const touch = e.touches[0];
-        const dx = touch.clientX - touchStartPos.current.x;
-        const dy = touch.clientY - touchStartPos.current.y;
-        if (Math.sqrt(dx * dx + dy * dy) > 10) {
-          clearTimeout(longPressTimer.current);
-          longPressTimer.current = null;
-        }
-      }
-    },
-    []
-  );
-
-  const handleTouchEnd = useCallback(
-    () => {
-      if (longPressTimer.current) {
-        clearTimeout(longPressTimer.current);
-        longPressTimer.current = null;
-      }
-      // Tap is handled by onClick — touchend just cleans up the timer.
-      // If dragging, the global drag system handles touchend.
-    },
-    []
-  );
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    };
-  }, []);
+  // Instant drag start from grip handle (mouse or touch)
+  const startDrag = useCallback((e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    wasDragged.current = true;
+    const point = e.touches ? e.touches[0] : e;
+    onDragStart(task, { clientX: point.clientX, clientY: point.clientY, preventDefault: () => {} }, cardRef.current);
+  }, [task, onDragStart]);
 
   const overdue = !isDone && isOverdue(task.dueDate);
 
@@ -308,7 +257,7 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
       ref={cardRef}
       className={`
         bg-surf border border-bd rounded-xl p-4 shadow-sm
-        cursor-pointer select-none touch-manipulation
+        cursor-pointer select-none
         transition-all duration-[var(--dur-fast)]
         hover:shadow-md active:scale-[0.98]
       `}
@@ -319,40 +268,9 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
           : `taskCardIn var(--dur-normal) var(--ease-out) ${index * 60}ms forwards`,
         ...(isBeingDragged ? { border: '2px dashed var(--acc)', background: 'var(--s2)' } : {}),
       }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return; // left click only
-        isDragging.current = false;
-        touchStartPos.current = { x: e.clientX, y: e.clientY };
-        const frozenEvent = { clientX: e.clientX, clientY: e.clientY, preventDefault: () => {} };
-        longPressTimer.current = setTimeout(() => {
-          isDragging.current = true;
-          onDragStart(task, frozenEvent, cardRef.current);
-        }, 300);
-        // Track mouse movement to cancel if >10px
-        const moveHandler = (me) => {
-          if (isDragging.current) return;
-          const dx = me.clientX - touchStartPos.current.x;
-          const dy = me.clientY - touchStartPos.current.y;
-          if (Math.sqrt(dx * dx + dy * dy) > 10 && longPressTimer.current) {
-            clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-          }
-        };
-        const upHandler = () => {
-          if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-          document.removeEventListener('mousemove', moveHandler);
-          document.removeEventListener('mouseup', upHandler);
-        };
-        document.addEventListener('mousemove', moveHandler);
-        document.addEventListener('mouseup', upHandler);
-      }}
       onClick={(e) => {
-        // Prevent tap when drag just ended
-        if (isDragging.current) {
-          e.preventDefault();
+        if (wasDragged.current) {
+          wasDragged.current = false;
           return;
         }
         onTap(task);
@@ -360,6 +278,16 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
       data-task-id={task.id}
     >
       <div className="flex items-start gap-3">
+        {/* Drag grip handle — INSTANT drag on mousedown/touchstart */}
+        <div
+          className="text-tm hover:text-ts mt-0.5 shrink-0 cursor-grab active:cursor-grabbing p-1 -m-1 rounded"
+          title="Drag to move"
+          onMouseDown={startDrag}
+          onTouchStart={startDrag}
+        >
+          <GripIcon className="w-5 h-5" />
+        </div>
+
         {/* Card content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -414,14 +342,6 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
               </span>
             )}
           </div>
-        </div>
-
-        {/* Drag grip handle (trailing edge) */}
-        <div
-          className="text-tm/40 mt-0.5 shrink-0 touch-manipulation"
-          aria-hidden="true"
-        >
-          <GripIcon className="w-4 h-4" />
         </div>
       </div>
     </div>
