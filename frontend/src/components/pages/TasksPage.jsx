@@ -4,6 +4,7 @@ import useStore from '../../store/index.js';
 import { TasksSkeleton } from '../Skeleton.jsx';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import useTasks from '../../hooks/useTasks.js';
+import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 
 // ─── Column definitions ─────────────────────────────────────────────────────
 
@@ -658,7 +659,11 @@ export default function TasksPage() {
     updateTask,
     deleteTask,
     clearCompleted,
+    refetch,
   } = useTasks();
+
+  // Pull to refresh
+  const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
 
   // Overlay state
   const [overlayTask, setOverlayTask] = useState(null); // task object or 'new'
@@ -810,9 +815,22 @@ export default function TasksPage() {
   if (loading) return <TasksSkeleton />;
 
   return (
-    <div className="relative flex h-full overflow-hidden">
+    <div className="relative flex flex-col h-full overflow-hidden">
+      {/* Pull-to-refresh indicator */}
+      {isPulling && (
+        <div
+          className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)]"
+          style={{ height: `${pullDistance}px` }}
+        >
+          <div
+            className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+              ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+          />
+        </div>
+      )}
+
       {/* Kanban columns */}
-      <div className="flex flex-1 gap-5 p-6 overflow-x-auto">
+      <div className="flex flex-1 gap-5 p-6 overflow-x-auto" {...pullBind}>
         {COLUMNS.map((col) => {
           const items = columns[col.key] || [];
           const isDone = col.key === 'done';

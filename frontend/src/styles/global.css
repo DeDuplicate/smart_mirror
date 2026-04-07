@@ -391,3 +391,109 @@
     transform: rotate(360deg);
   }
 }
+
+/* ========================================================================
+   Screensaver Animations
+   ======================================================================== */
+
+/* Breathing animation for clock mode (opacity 0.8 ↔ 1.0, 4s cycle) */
+@keyframes screensaverBreathe {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.screensaver-clock-breathing {
+  animation: screensaverBreathe 4s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* Ken Burns variations — slow zoom + pan, GPU-composited */
+@keyframes kenburns1 {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.15) translate(-2%, -1%);
+  }
+}
+
+@keyframes kenburns2 {
+  0% {
+    transform: scale(1.05) translate(1%, 0);
+  }
+  100% {
+    transform: scale(1.2) translate(-1%, -2%);
+  }
+}
+
+@keyframes kenburns3 {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.12) translate(2%, 1%);
+  }
+}
+
+.kenburns-1 {
+  animation: kenburns1 15s linear infinite alternate;
+  will-change: transform;
+}
+
+.kenburns-2 {
+  animation: kenburns2 15s linear infinite alternate;
+  will-change: transform;
+}
+
+.kenburns-3 {
+  animation: kenburns3 15s linear infinite alternate;
+  will-change: transform;
+}
+
+/* ========================================================================
+   Pull-to-Refresh Indicator
+   ======================================================================== */
+
+@keyframes pullSpinnerRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.pull-refresh-spinner {
+  animation: pullSpinnerRotate 0.8s linear infinite;
+  will-change: transform;
+}
+
+/* ========================================================================
+   Smooth Scroll & Focus Styles
+   ======================================================================== */
+
+@layer base {
+  /* Smooth scroll for all scrollable containers */
+  .overflow-y-auto,
+  .overflow-x-auto,
+  .overflow-auto {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Focus-visible for accessibility — keyboard navigation only */
+  *:focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Remove default outline for mouse/touch users */
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+}

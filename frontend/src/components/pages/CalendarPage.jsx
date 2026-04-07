@@ -6,6 +6,7 @@ import useCalendar, {
   getWeekEnd,
   CALENDAR_COLORS,
 } from '../../hooks/useCalendar.js';
+import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 import { CalendarSkeleton } from '../Skeleton.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -416,7 +417,10 @@ export default function CalendarPage() {
   const [animating, setAnimating] = useState(false);
 
   // ── Data ──
-  const { events, loading } = useCalendar(currentWeekStart);
+  const { events, loading, refetch } = useCalendar(currentWeekStart);
+
+  // ── Pull to refresh ──
+  const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
 
   // ── Popup state ──
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -716,8 +720,21 @@ export default function CalendarPage() {
             </div>
           )}
 
+          {/* ── Pull-to-refresh indicator ── */}
+          {isPulling && (
+            <div
+              className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)]"
+              style={{ height: `${pullDistance}px` }}
+            >
+              <div
+                className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+                  ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+              />
+            </div>
+          )}
+
           {/* ── Scrollable Time Grid ── */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden" {...pullBind}>
             <div
               className="grid relative"
               style={{

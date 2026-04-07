@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import t from '../../i18n/he.json';
 import { NewsSkeleton } from '../Skeleton.jsx';
 import useNews from '../../hooks/useNews.js';
+import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -300,6 +301,9 @@ export default function NewsPage() {
 
   const [selectedArticle, setSelectedArticle] = useState(null);
 
+  // Pull to refresh
+  const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refresh);
+
   const handleArticleClick = useCallback(
     (article) => {
       setSelectedArticle(article);
@@ -344,7 +348,20 @@ export default function NewsPage() {
       <div
         className="flex flex-col h-full overflow-y-auto p-6 gap-5"
         style={{ scrollbarWidth: 'thin' }}
+        {...pullBind}
       >
+        {/* Pull-to-refresh indicator */}
+        {isPulling && (
+          <div
+            className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)]"
+            style={{ height: `${pullDistance}px`, marginTop: `-${pullDistance}px`, transform: `translateY(${pullDistance}px)` }}
+          >
+            <div
+              className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+                ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+            />
+          </div>
+        )}
         {/* Featured headline card */}
         <FeaturedCard article={featured} onClick={handleArticleClick} />
 

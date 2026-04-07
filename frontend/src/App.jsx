@@ -16,6 +16,9 @@ import NewsPage from './components/pages/NewsPage.jsx';
 import SettingsPage from './components/pages/SettingsPage.jsx';
 import useAuth from './hooks/useAuth.js';
 import useHealth from './hooks/useHealth.js';
+import useIdleDetection from './hooks/useIdleDetection.js';
+import useDisplaySchedule from './hooks/useDisplaySchedule.js';
+import Screensaver from './components/Screensaver.jsx';
 
 // ─── Socket.io singleton ─────────────────────────────────────────────────────
 
@@ -466,10 +469,23 @@ export default function App() {
   const addToast = useStore((s) => s.addToast);
   const settingsLoaded = useStore((s) => s.settings.loaded);
   const firstRun = useStore((s) => s.settings.firstRun);
+  const screensaverStyle = useStore((s) => s.settings.screensaverStyle) || 'clock';
   const [showWizard, setShowWizard] = useState(false);
 
   // ── Health polling ──
   useHealth();
+
+  // ── Idle detection & display schedule ──
+  const { isIdle, resetIdle } = useIdleDetection();
+  const { isSleeping, wakeTemporarily } = useDisplaySchedule();
+
+  // Show screensaver when idle or sleeping (but not during wizard)
+  const showScreensaver = !showWizard && (isIdle || isSleeping);
+
+  const handleScreensaverDismiss = useCallback(() => {
+    resetIdle();
+    if (isSleeping) wakeTemporarily();
+  }, [resetIdle, isSleeping, wakeTemporarily]);
 
   // ── Fetch initial settings from backend ──
   useEffect(() => {
@@ -561,6 +577,14 @@ export default function App() {
       <TopBar />
       <TabBar />
       <TabContent />
+
+      {/* Screensaver */}
+      {showScreensaver && (
+        <Screensaver
+          style={screensaverStyle}
+          onDismiss={handleScreensaverDismiss}
+        />
+      )}
 
       {/* Overlays */}
       <ToastContainer />
