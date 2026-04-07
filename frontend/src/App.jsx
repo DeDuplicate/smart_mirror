@@ -829,6 +829,42 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // ── Weather polling (respects weatherSource setting) ──
+  const weatherSource = useStore((s) => s.settings.weatherSource) || 'openmeteo';
+  const temperatureUnit = useStore((s) => s.settings.temperatureUnit) || 'celsius';
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    let mounted = true;
+
+    async function fetchWeather() {
+      try {
+        const units = temperatureUnit === 'fahrenheit' ? 'F' : 'C';
+        let url;
+        if (weatherSource === 'ims') {
+          url = `/api/weather/ims?units=${units}`;
+        } else {
+          url = `/api/weather?units=${units}`;
+        }
+        const data = await fetchApi(url);
+        if (!mounted) return;
+        if (data?.current) {
+          setWeather(data);
+        }
+      } catch {
+        // Silently fail — weather will update on next poll
+      }
+    }
+
+    fetchWeather();
+    const interval = setInterval(fetchWeather, 10 * 60 * 1000); // 10 minutes
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [settingsLoaded, weatherSource, temperatureUnit, setWeather]);
+
   // ── Wizard complete handler ──
   const handleWizardComplete = useCallback(() => {
     setShowWizard(false);

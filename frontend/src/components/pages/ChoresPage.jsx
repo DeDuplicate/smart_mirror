@@ -394,30 +394,26 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
     setShowKeyboard(true);
   }, []);
 
-  const handleKeyboardChange = useCallback((value) => {
-    setTitle(value);
-  }, []);
-
-  const handleKeyboardClose = useCallback(() => {
-    setShowKeyboard(false);
-  }, []);
-
-  const handleKeyboardSubmit = useCallback(() => {
-    setShowKeyboard(false);
-  }, []);
-
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div className="fixed inset-0 z-50 flex flex-col">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Sheet */}
+      {/* Sheet — sits above keyboard when keyboard is open */}
       <div
         className="relative bg-[var(--surf)] rounded-t-2xl border-t border-[var(--bd)] p-5 pb-4 flex flex-col gap-4 celebration-sheet-slide-up"
-        style={{ zIndex: 51 }}
+        style={{
+          zIndex: 51,
+          position: showKeyboard ? 'absolute' : 'relative',
+          bottom: showKeyboard ? '40%' : '0',
+          left: 0,
+          right: 0,
+          marginTop: showKeyboard ? undefined : 'auto',
+          transition: 'bottom 0.25s ease',
+        }}
       >
         {/* Title input */}
         <div className="flex flex-col gap-2">
@@ -500,14 +496,13 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
       </div>
 
       {/* On-screen keyboard */}
-      {showKeyboard && (
-        <OnScreenKeyboard
-          value={title}
-          onChange={handleKeyboardChange}
-          onClose={handleKeyboardClose}
-          onSubmit={handleKeyboardSubmit}
-        />
-      )}
+      <OnScreenKeyboard
+        visible={showKeyboard}
+        onInput={(char) => setTitle(prev => prev + char)}
+        onBackspace={() => setTitle(prev => prev.slice(0, -1))}
+        onEnter={() => setShowKeyboard(false)}
+        onClose={() => setShowKeyboard(false)}
+      />
     </div>
   );
 }

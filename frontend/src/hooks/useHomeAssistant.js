@@ -122,6 +122,21 @@ const MOCK_ENTITIES = [
   },
 ];
 
+// ─── Mock Person Data ───────────────────────────────────────────────────────
+
+const MOCK_PERSONS = [
+  {
+    entity_id: 'person.yossef',
+    state: 'home',
+    attributes: { friendly_name: 'יוסף' },
+  },
+  {
+    entity_id: 'person.maayan',
+    state: 'not_home',
+    attributes: { friendly_name: 'מעיין' },
+  },
+];
+
 // ─── Scene Mock Data ────────────────────────────────────────────────────────
 
 export const MOCK_SCENES = [
@@ -193,6 +208,7 @@ export default function useHomeAssistant() {
     if (!isConfigured) {
       // Not configured: use mock data
       setEntities(MOCK_ENTITIES);
+      setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
       setLoading(false);
       setConnected(false);
       return;
