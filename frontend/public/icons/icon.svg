@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background: rounded rectangle (mirror frame) -->
+  <rect x="32" y="32" width="448" height="448" rx="72" ry="72" fill="#6b62e0"/>
+
+  <!-- Inner mirror glass surface -->
+  <rect x="72" y="72" width="368" height="368" rx="48" ry="48" fill="#1a1830"/>
+
+  <!-- Clock circle -->
+  <circle cx="256" cy="240" r="110" fill="none" stroke="#6b62e0" stroke-width="12"/>
+  <circle cx="256" cy="240" r="96" fill="#221f3d"/>
+
+  <!-- Clock tick marks (12, 3, 6, 9) -->
+  <line x1="256" y1="152" x2="256" y2="168" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+  <line x1="344" y1="240" x2="328" y2="240" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+  <line x1="256" y1="328" x2="256" y2="312" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+  <line x1="168" y1="240" x2="184" y2="240" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Hour hand (~10 o'clock) -->
+  <line x1="256" y1="240" x2="216" y2="198" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Minute hand (~2 o'clock) -->
+  <line x1="256" y1="240" x2="296" y2="190" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Center dot -->
+  <circle cx="256" cy="240" r="8" fill="#6b62e0"/>
+
+  <!-- Status bar at bottom (like mirror stand) -->
+  <rect x="96" y="392" width="320" height="16" rx="8" ry="8" fill="#6b62e0" opacity="0.7"/>
+</svg>
