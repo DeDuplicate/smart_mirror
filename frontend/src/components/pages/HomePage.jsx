@@ -4,6 +4,7 @@ import useStore from '../../store/index.js';
 import { HomeSkeleton } from '../Skeleton.jsx';
 import useHomeAssistant from '../../hooks/useHomeAssistant.js';
 import IRRemoteOverlay from '../IRRemoteOverlay.jsx';
+import ACControlPopup from '../ACControlPopup.jsx';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -1067,9 +1068,12 @@ export default function HomePage() {
   const showConfirm = useStore((s) => s.showConfirm);
 
   const ha = useHomeAssistant();
-  const { entities, loading, connected } = ha;
+  const { entities, allStates, loading, connected } = ha;
 
   const [popup, setPopup] = useState(null); // { entity, rect }
+  const [acPopupOpen, setAcPopupOpen] = useState(false);
+  const [curtainPopup, setCurtainPopup] = useState(null); // { entity, rect }
+  const [irOverlay, setIrOverlay] = useState(null); // { entityId, roomName }
 
   const isConfigured = haStatus === 'connected' || haStatus === 'degraded';
 
@@ -1081,7 +1085,7 @@ export default function HomePage() {
         <HomeIllustration />
         <p className="text-tm text-lg">{t.empty.notConfigured}</p>
         <button
-          onClick={() => setActiveTab(5)}
+          onClick={() => setActiveTab(6)}
           className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
                      font-medium hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
         >
@@ -1119,6 +1123,23 @@ export default function HomePage() {
     setPopup({ entity, rect });
   };
 
+  const handleCurtainLongPress = (entity) => {
+    const tileEl = document.querySelector(`[data-entity-id="curtain-tile"]`);
+    const rect = tileEl ? tileEl.getBoundingClientRect() : null;
+    setCurtainPopup({ entity, rect });
+  };
+
+  // ── IR Remote config ──
+  const IR_REMOTES = [
+    { entityId: 'remote.wifi_ir_master_bedroom', label: t.home.irRemoteMaster },
+    { entityId: 'remote.wifi_ir_childrens_room', label: t.home.irRemoteChildren },
+  ];
+
+  const handleIRTap = (entityId) => {
+    const remote = IR_REMOTES.find((r) => r.entityId === entityId);
+    setIrOverlay({ entityId, roomName: remote?.label || entityId });
+  };
+
   const handleSceneActivate = (config) => {
     if (config.confirm) {
       showConfirm({
@@ -1143,7 +1164,29 @@ export default function HomePage() {
     <div className="flex flex-col h-full overflow-hidden p-6 gap-5" dir="rtl">
       {/* Device tiles grid */}
       <div className="flex-1 grid grid-cols-5 grid-rows-2 gap-4 overflow-y-auto">
-        {entities.slice(0, 10).map((entity) => (
+        {/* AC Control tile — spans 2 columns */}
+        <div
+          className="col-span-2 card flex flex-col items-center justify-center gap-2.5
+                     rounded-[20px] cursor-pointer select-none overflow-hidden
+                     border-2 border-bd hover:shadow-md
+                     transition-all duration-[var(--dur-fast)]
+                     hover:border-acc2 active:scale-[0.97]"
+          style={{ minHeight: '140px' }}
+          onClick={() => setAcPopupOpen(true)}
+        >
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-s2 text-tm">
+            <SnowflakeIcon />
+          </div>
+          <span className="text-sm font-medium text-tp text-center leading-tight px-2">
+            {t.home.ac}
+          </span>
+          <span className="text-xs font-medium text-tm">
+            {t.home.acControl}
+          </span>
+        </div>
+
+        {/* Regular device tiles (up to 4, since AC=2cols + 4 special tiles = 10) */}
+        {entities.slice(0, 4).map((entity) => (
           <div key={entity.entity_id} data-entity-id={entity.entity_id}>
             <DeviceTile
               entity={entity}
@@ -1153,9 +1196,31 @@ export default function HomePage() {
             />
           </div>
         ))}
-        {/* Fill remaining tiles if fewer than 10 entities */}
-        {entities.length < 10 &&
-          Array.from({ length: 10 - entities.length }).map((_, i) => (
+
+        {/* Electricity Monitor tile */}
+        <div key="electricity-tile">
+          <ElectricityTile allStates={allStates || []} />
+        </div>
+
+        {/* Smart Curtain tile */}
+        <div key="curtain-tile" data-entity-id="curtain-tile">
+          <CurtainTile allStates={allStates || []} ha={ha} onLongPress={handleCurtainLongPress} />
+        </div>
+
+        {/* IR Remote tiles */}
+        {IR_REMOTES.map((remote) => (
+          <div key={remote.entityId}>
+            <IRRemoteTile
+              entityId={remote.entityId}
+              label={remote.label}
+              onTap={handleIRTap}
+            />
+          </div>
+        ))}
+
+        {/* Fill remaining tiles if fewer entities */}
+        {entities.length < 4 &&
+          Array.from({ length: 4 - entities.length }).map((_, i) => (
             <div
               key={`empty-${i}`}
               className="card flex flex-col items-center justify-center gap-2
@@ -1180,13 +1245,39 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* Control popup */}
+      {/* Control popup (lights, climate, media, cover) */}
       {popup && (
         <ControlPopup
           entity={popup.entity}
           anchorRect={popup.rect}
           onClose={() => setPopup(null)}
           ha={ha}
+        />
+      )}
+
+      {/* AC Control popup */}
+      <ACControlPopup
+        visible={acPopupOpen}
+        onClose={() => setAcPopupOpen(false)}
+        callService={ha.callService}
+      />
+
+      {/* Curtain popup */}
+      {curtainPopup && (
+        <CurtainPopup
+          entity={curtainPopup.entity}
+          anchorRect={curtainPopup.rect}
+          onClose={() => setCurtainPopup(null)}
+          ha={ha}
+        />
+      )}
+
+      {/* IR Remote overlay */}
+      {irOverlay && (
+        <IRRemoteOverlay
+          entityId={irOverlay.entityId}
+          roomName={irOverlay.roomName}
+          onClose={() => setIrOverlay(null)}
         />
       )}
     </div>

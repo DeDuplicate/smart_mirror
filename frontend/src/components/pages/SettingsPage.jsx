@@ -690,6 +690,32 @@ function DisplaySection() {
             </div>
           </div>
 
+          {/* Weather source toggle — segmented control */}
+          <div className="flex items-center justify-between py-2.5">
+            <span className="text-sm text-tp">{t.settings.weatherSource}</span>
+            <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
+              {[
+                { value: 'openmeteo', label: t.settings.weatherOpenMeteo },
+                { value: 'ims', label: t.settings.weatherIMS },
+              ].map((src) => (
+                <button
+                  key={src.value}
+                  onClick={() => {
+                    setSettings({ weatherSource: src.value });
+                    updateSettings({ weatherSource: src.value });
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                               duration-[var(--dur-fast)]
+                               ${(settings.weatherSource || 'openmeteo') === src.value
+                                 ? 'bg-acc text-white shadow-sm'
+                                 : 'text-ts hover:text-tp'}`}
+                >
+                  {src.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <ToggleRow
             label={t.settings.showWeekend}
             checked={settings.showWeekend !== false}
