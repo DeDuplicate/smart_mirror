@@ -7,7 +7,7 @@ let cachedAudio = null;
 function preloadSound() {
   if (cachedAudio) return cachedAudio;
   try {
-    cachedAudio = new Audio('/sounds/celebrate.mp3');
+    cachedAudio = new Audio('/sounds/celebrate.wav');
     cachedAudio.volume = 0.6;
     cachedAudio.preload = 'auto';
   } catch {
