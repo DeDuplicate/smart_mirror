@@ -32,8 +32,8 @@ function playSound() {
 
 // ─── Particle types ────────────────────────────────────────────────────────
 
-const PARTICLE_CHARS = ['⭐', '✨'];
-const CONFETTI_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+const PARTICLE_CHARS = ['⭐', '✨', '🎉', '🎊', '🏆', '💪', '👏', '🌟', '🔥', '💥'];
+const CONFETTI_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#FF69B4', '#00FF7F'];
 
 function randomRange(min, max) {
   return min + Math.random() * (max - min);
@@ -77,31 +77,31 @@ export default function CelebrationAnimation({
     const cy = 60;
 
     // ── Create particles ───────────────────────────────────────────────
-    const particleCount = Math.floor(randomRange(40, 60));
+    const particleCount = Math.floor(randomRange(80, 120));
     const particles = [];
     for (let i = 0; i < particleCount; i++) {
       const angle = randomRange(0, Math.PI * 2);
-      const velocity = randomRange(80, 200);
-      const isEmoji = Math.random() > 0.5;
+      const velocity = randomRange(120, 350);
+      const isEmoji = Math.random() > 0.4;
       particles.push({
         x: cx,
         y: cy,
         vx: Math.cos(angle) * velocity,
         vy: Math.sin(angle) * velocity,
-        gravity: 120,
-        life: randomRange(800, 1200),
+        gravity: 100,
+        life: randomRange(1200, 2500),
         born: 0,
         type: isEmoji ? 'emoji' : 'confetti',
         char: isEmoji ? PARTICLE_CHARS[Math.floor(Math.random() * PARTICLE_CHARS.length)] : null,
         color: isEmoji ? null : CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-        size: isEmoji ? randomRange(12, 20) : randomRange(4, 8),
+        size: isEmoji ? randomRange(20, 36) : randomRange(6, 14),
         rotation: randomRange(0, Math.PI * 2),
         rotSpeed: randomRange(-5, 5),
       });
     }
 
     // ── Create firework rockets ────────────────────────────────────────
-    const rocketCount = Math.floor(randomRange(3, 5));
+    const rocketCount = Math.floor(randomRange(5, 8));
     const rockets = [];
     for (let i = 0; i < rocketCount; i++) {
       const startX = randomRange(rect.width * 0.2, rect.width * 0.8);
@@ -143,7 +143,7 @@ export default function CelebrationAnimation({
       setTimeout(() => {
         banner.style.opacity = '0';
         banner.style.transform = 'translateY(-20px)';
-      }, 2800);
+      }, 4500);
     }
 
     // ── Play sound ─────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export default function CelebrationAnimation({
 
     function animate(now) {
       const elapsed = now - startTimeRef.current;
-      if (elapsed > 3000) {
+      if (elapsed > 5000) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (onComplete) onComplete();
         return;
@@ -162,8 +162,8 @@ export default function CelebrationAnimation({
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw particles (0-1200ms)
-      if (elapsed < 1200) {
+      // Draw particles (0-2500ms)
+      if (elapsed < 2500) {
         for (const p of particles) {
           if (p.born === 0) p.born = elapsed;
           const age = elapsed - p.born;
@@ -191,8 +191,8 @@ export default function CelebrationAnimation({
         }
       }
 
-      // Draw rockets (200-1800ms)
-      if (elapsed > 200 && elapsed < 1800) {
+      // Draw rockets (200-3000ms)
+      if (elapsed > 200 && elapsed < 3000) {
         for (const r of rockets) {
           if (elapsed < r.launchDelay + 200) continue;
 
@@ -227,19 +227,19 @@ export default function CelebrationAnimation({
               r.exploded = true;
               r.explodeTime = elapsed;
               // Create burst
-              const burstCount = Math.floor(randomRange(12, 20));
+              const burstCount = Math.floor(randomRange(20, 35));
               for (let i = 0; i < burstCount; i++) {
                 const angle = (i / burstCount) * Math.PI * 2;
-                const vel = randomRange(40, 120);
+                const vel = randomRange(60, 200);
                 r.burstParticles.push({
                   x: r.x,
                   y: r.y,
                   vx: Math.cos(angle) * vel,
                   vy: Math.sin(angle) * vel,
-                  life: randomRange(400, 800),
+                  life: randomRange(600, 1200),
                   born: elapsed,
                   color: r.color,
-                  size: randomRange(2, 5),
+                  size: randomRange(3, 8),
                 });
               }
             }
@@ -286,7 +286,7 @@ export default function CelebrationAnimation({
       playSound();
       const timeout = setTimeout(() => {
         if (onComplete) onComplete();
-      }, 3000);
+      }, 5000);
       return () => clearTimeout(timeout);
     }
 
