@@ -339,6 +339,7 @@ function GoogleSection() {
     removeGoogleAccount,
     isAuthenticating,
     provider,
+    error,
   } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -384,6 +385,15 @@ function GoogleSection() {
   return (
     <Section title={t.settings.googleAccounts}>
       <div className="flex flex-col gap-4">
+        {/* Show error if auth not configured */}
+        {error && provider === 'google' && (
+          <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm">
+            <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
+            <p className="text-[var(--ts)] text-xs">
+              הגדר GOOGLE_CLIENT_ID ו-GOOGLE_CLIENT_SECRET בקובץ .env בשרת
+            </p>
+          </div>
+        )}
         <Btn
           variant="primary"
           icon={isAuthenticating && provider === 'google' ? <Spinner /> : <PlusIcon />}
@@ -478,6 +488,7 @@ function SpotifySection() {
     removeSpotifyAccount,
     isAuthenticating,
     provider,
+    error,
   } = useAuth();
   const addToast = useStore((s) => s.addToast);
   const isConnected = connections.spotify === 'connected';
@@ -499,6 +510,15 @@ function SpotifySection() {
 
   return (
     <Section title={t.settings.spotify}>
+      {/* Show error if auth not configured */}
+      {error && provider === 'spotify' && (
+        <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm mb-3">
+          <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
+          <p className="text-[var(--ts)] text-xs">
+            הגדר SPOTIFY_CLIENT_ID ו-SPOTIFY_CLIENT_SECRET בקובץ .env בשרת
+          </p>
+        </div>
+      )}
       {isConnected ? (
         <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
           <div className="flex flex-col gap-0.5">
