@@ -378,17 +378,27 @@ function PersonColumn({
 
 // ─── AddTaskSheet (bottom-sheet overlay) ───────────────────────────────────
 
+// Common chore emojis for the picker
+const CHORE_EMOJIS = [
+  '🧹', '🧽', '🍽️', '🧺', '🛏️', '🚿', '🧸', '📚',
+  '🐕', '🐈', '🌿', '🚗', '🛒', '👕', '🗑️', '💊',
+  '🍳', '🥗', '🧃', '🏠', '✏️', '🎒', '🦷', '🧴',
+  '🪣', '🧼', '🫧', '🪥', '👶', '🎮', '📱', '⚽',
+];
+
 function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
   const [title, setTitle] = useState('');
+  const [emoji, setEmoji] = useState('');
   const [recurrence, setRecurrence] = useState('once');
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const inputRef = useRef(null);
 
   const handleSave = useCallback(() => {
     if (!title.trim()) return;
-    onAdd(personId, { title: title.trim(), recurrence });
+    onAdd(personId, { title: title.trim(), emoji, recurrence });
     onClose();
-  }, [title, recurrence, personId, onAdd, onClose]);
+  }, [title, emoji, recurrence, personId, onAdd, onClose]);
 
   const handleInputFocus = useCallback(() => {
     setShowKeyboard(true);
@@ -415,6 +425,54 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
           transition: 'bottom 0.25s ease',
         }}
       >
+        {/* Emoji picker */}
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-[var(--tp)]">
+            סמל מטלה
+          </label>
+          <div className="flex items-center gap-3">
+            {/* Selected emoji display / toggle button */}
+            <button
+              onClick={() => setShowEmojiPicker(v => !v)}
+              className="
+                w-16 h-16 rounded-2xl border-2 flex items-center justify-center
+                text-3xl transition-all duration-200 active:scale-95 shrink-0
+              "
+              style={{
+                borderColor: emoji ? personColor : 'var(--bd)',
+                backgroundColor: emoji ? `${personColor}15` : 'var(--s2)',
+              }}
+            >
+              {emoji || '➕'}
+            </button>
+            {emoji && (
+              <button
+                onClick={() => setEmoji('')}
+                className="text-xs text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
+              >
+                הסר
+              </button>
+            )}
+          </div>
+          {showEmojiPicker && (
+            <div className="grid grid-cols-8 gap-1.5 p-3 bg-[var(--s2)] rounded-xl border border-[var(--bd)] max-h-[140px] overflow-y-auto">
+              {CHORE_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                  className={`
+                    w-11 h-11 rounded-xl flex items-center justify-center text-xl
+                    transition-all duration-150 active:scale-90
+                    ${emoji === e ? 'bg-[var(--acc)]/20 ring-2 ring-[var(--acc)]' : 'hover:bg-[var(--bd)]'}
+                  `}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Title input */}
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold text-[var(--tp)]">
@@ -425,7 +483,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onFocus={handleInputFocus}
+            onFocus={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
             placeholder={t.tasks.titlePlaceholder}
             className="
               w-full py-3 px-4 rounded-xl text-sm
