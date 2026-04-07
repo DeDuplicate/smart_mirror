@@ -1,7 +1,7 @@
 {
-  "location": { "city": "\u05e0\u05ea\u05e0\u05d9\u05d4", "lat": 32.33, "lon": 34.86 },
+  "location": { "city": "נתניה", "lat": 32.33, "lon": 34.86 },
   "language": "he",
-  "userName": "\u05d7\u05d9\u05d9\u05dd",
+  "userName": "חיים",
   "idleTimeoutMin": 5,
   "temperatureUnit": "C",
   "calendar": { "showWeekend": false },
@@ -16,18 +16,18 @@
   "homeAssistant": {
     "host": "http://homeassistant.local:8123",
     "entities": [
-      { "id": "light.living_room", "label": "\u05e1\u05dc\u05d5\u05df", "icon": "\ud83d\udca1" },
-      { "id": "light.kitchen", "label": "\u05de\u05d8\u05d1\u05d7", "icon": "\ud83d\udca1" },
-      { "id": "climate.ac", "label": "\u05de\u05d6\u05d2\u05df", "icon": "\u2744\ufe0f" },
-      { "id": "media_player.tv", "label": "\u05d8\u05dc\u05d5\u05d9\u05d6\u05d9\u05d4", "icon": "\ud83d\udcfa" },
-      { "id": "switch.gate", "label": "\u05e9\u05e2\u05e8", "icon": "\ud83d\udd12" }
+      { "id": "light.living_room", "label": "סלון", "icon": "💡" },
+      { "id": "light.kitchen", "label": "מטבח", "icon": "💡" },
+      { "id": "climate.ac", "label": "מזגן", "icon": "❄️" },
+      { "id": "media_player.tv", "label": "טלויזיה", "icon": "📺" },
+      { "id": "switch.gate", "label": "שער", "icon": "🔒" }
     ],
     "scenes": [
-      { "id": "scene.good_morning", "label": "\u05d1\u05d5\u05e7\u05e8 \u05d8\u05d5\u05d1", "icon": "\ud83c\udf05" },
-      { "id": "scene.movie", "label": "\u05de\u05e6\u05d1 \u05e1\u05e8\u05d8", "icon": "\ud83c\udfac" },
-      { "id": "scene.good_night", "label": "\u05dc\u05d9\u05dc\u05d4 \u05d8\u05d5\u05d1", "icon": "\ud83c\udf19" },
-      { "id": "scene.leaving", "label": "\u05d9\u05e6\u05d9\u05d0\u05d4 \u05de\u05d4\u05d1\u05d9\u05ea", "icon": "\ud83d\udea4" }
+      { "id": "scene.good_morning", "label": "בוקר טוב", "icon": "🌅" },
+      { "id": "scene.movie", "label": "מצב סרט", "icon": "🎬" },
+      { "id": "scene.good_night", "label": "לילה טוב", "icon": "🌙" },
+      { "id": "scene.leaving", "label": "יציאה מהבית", "icon": "🚪" }
     ]
   },
-  "tasks": { "columns": ["\u05dc\u05d1\u05d9\u05e6\u05d5\u05e2", "\u05d1\u05d1\u05d9\u05e6\u05d5\u05e2", "\u05d4\u05d5\u05e9\u05dc\u05dd"] }
+  "tasks": { "columns": ["לביצוע", "בביצוע", "הושלם"] }
 }
