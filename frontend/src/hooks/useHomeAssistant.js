@@ -191,6 +191,7 @@ export default function useHomeAssistant() {
       // Use mock data in dev when API is unavailable
       if (entities.length === 0 && !lastKnownStates) {
         setEntities(MOCK_ENTITIES);
+        setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
       } else if (lastKnownStates) {
         setEntities(lastKnownStates);
       }
