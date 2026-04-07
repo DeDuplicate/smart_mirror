@@ -225,26 +225,62 @@ export default function useCalendar(weekStart) {
     const start = toISODate(weekStart);
     const end = toISODate(getWeekEnd(weekStart));
 
+    let googleEvents = [];
+    let icsEvents = [];
+    let gotGoogle = false;
+    let gotIcs = false;
+
+    // Try Google OAuth calendar first
     try {
       const res = await fetch(`/api/calendar/events?start=${start}&end=${end}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      if (data && data.length > 0) {
-        setEvents(data);
-        setError(null);
-      } else {
-        // Empty response — fall back to mock in dev
-        throw new Error('empty');
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.events && data.events.length > 0) {
+          googleEvents = data.events.map((ev) => ({
+            ...ev,
+            title: ev.title || ev.summary || '(No title)',
+            source: 'google',
+          }));
+          gotGoogle = true;
+        }
       }
     } catch (_err) {
-      // Use mock data when API is unavailable or returns empty
+      // Google OAuth not available — continue
+    }
+
+    // Try ICS calendars (always, to merge with Google if available)
+    try {
+      const res = await fetch(`/api/calendar/ics?start=${start}&end=${end}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.events && data.events.length > 0) {
+          icsEvents = data.events.map((ev) => ({
+            ...ev,
+            title: ev.title || ev.summary || '(No title)',
+            source: ev.source || 'ics',
+          }));
+          gotIcs = true;
+        }
+      }
+    } catch (_err) {
+      // ICS not available — continue
+    }
+
+    // Merge results from both sources
+    if (gotGoogle || gotIcs) {
+      const merged = [...googleEvents, ...icsEvents];
+      // Sort by start time
+      merged.sort((a, b) => new Date(a.start) - new Date(b.start));
+      setEvents(merged);
+      setError(null);
+    } else {
+      // Neither source returned data — fall back to mock in dev
       const mock = generateMockEvents(weekStart);
       setEvents(mock);
-      setError(null); // Don't show error when we have mock data
-    } finally {
-      setLoading(false);
+      setError(null);
     }
+
+    setLoading(false);
   }, [weekStart]);
 
   // Initial fetch + refresh on weekStart change

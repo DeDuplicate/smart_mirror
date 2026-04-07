@@ -428,6 +428,140 @@ function GoogleSection() {
   );
 }
 
+// ─── Section: ICS Calendar URLs ─────────────────────────────────────────────
+
+const ICS_COLOR_OPTIONS = [
+  { value: 'mint',  label: t.calendarColors.mint,     hex: '#2a9d7f' },
+  { value: 'lav',   label: t.calendarColors.lavender,  hex: '#5b52cc' },
+  { value: 'coral', label: t.calendarColors.coral,     hex: '#c95454' },
+  { value: 'gold',  label: t.calendarColors.gold,      hex: '#b07c10' },
+];
+
+function IcsCalendarSection() {
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const addToast = useStore((s) => s.addToast);
+
+  const [newUrl, setNewUrl] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('mint');
+
+  const icsUrls = Array.isArray(settings.calendarIcsUrls) ? settings.calendarIcsUrls : [];
+
+  const handleAdd = useCallback(() => {
+    if (!newUrl.trim()) {
+      addToast('warning', t.settings.calendarUrlRequired);
+      return;
+    }
+    const entry = {
+      url: newUrl.trim(),
+      name: newName.trim() || 'Calendar',
+      color: newColor,
+      id: 'ics_' + Date.now(),
+    };
+    const updated = [...icsUrls, entry];
+    setSettings({ calendarIcsUrls: updated });
+    updateSettings({ calendarIcsUrls: updated });
+    setNewUrl('');
+    setNewName('');
+    setNewColor('mint');
+    addToast('success', t.settings.calendarAdded);
+  }, [newUrl, newName, newColor, icsUrls, setSettings, updateSettings, addToast]);
+
+  const handleRemove = useCallback(
+    (id) => {
+      const updated = icsUrls.filter((c) => c.id !== id);
+      setSettings({ calendarIcsUrls: updated });
+      updateSettings({ calendarIcsUrls: updated });
+      addToast('success', t.settings.calendarRemoved);
+    },
+    [icsUrls, setSettings, updateSettings, addToast]
+  );
+
+  return (
+    <Section title={t.settings.calendarUrls}>
+      <div className="flex flex-col gap-4">
+        {/* Instructions */}
+        <p className="text-xs text-[var(--tm)] leading-relaxed">
+          {t.settings.calendarIcsInstructions}
+        </p>
+
+        {/* Add form */}
+        <div className="flex flex-col gap-3 p-4 bg-[var(--s2)] border border-[var(--bd)] rounded-xl">
+          <input
+            type="url"
+            value={newUrl}
+            onChange={(e) => setNewUrl(e.target.value)}
+            placeholder={t.settings.calendarUrlPlaceholder}
+            className="w-full h-11 px-4 rounded-xl bg-[var(--bg)] border border-[var(--bd)] text-[var(--tp)] text-sm
+                       placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
+            dir="ltr"
+          />
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={t.settings.calendarNamePlaceholder}
+              className="flex-1 h-11 px-4 rounded-xl bg-[var(--bg)] border border-[var(--bd)] text-[var(--tp)] text-sm
+                         placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
+              dir="rtl"
+            />
+            {/* Color picker as colored buttons */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {ICS_COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c.value}
+                  onClick={() => setNewColor(c.value)}
+                  title={c.label}
+                  className={`w-8 h-8 rounded-full border-2 transition-all duration-150
+                              ${newColor === c.value
+                                ? 'border-[var(--tp)] scale-110'
+                                : 'border-transparent opacity-60 hover:opacity-100'}`}
+                  style={{ backgroundColor: c.hex }}
+                />
+              ))}
+            </div>
+          </div>
+          <Btn variant="primary" onClick={handleAdd} disabled={!newUrl.trim()}>
+            <PlusIcon className="w-4 h-4" />
+            {t.settings.addCalendarUrl}
+          </Btn>
+        </div>
+
+        {/* List of configured calendars */}
+        {icsUrls.length === 0 ? (
+          <p className="text-sm text-[var(--tm)]">{t.settings.noCalendarsConfigured}</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {icsUrls.map((cal) => {
+              const colorHex = ICS_COLOR_OPTIONS.find((c) => c.value === cal.color)?.hex || '#888';
+              return (
+                <li
+                  key={cal.id}
+                  className="flex items-center gap-3 bg-[var(--s2)] border border-[var(--bd)] rounded-xl px-4 py-3"
+                >
+                  <div
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: colorHex }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[var(--tp)] truncate">{cal.name}</p>
+                    <p className="text-xs text-[var(--tm)] truncate" dir="ltr">{cal.url}</p>
+                  </div>
+                  <Btn variant="danger" icon={<TrashIcon />} onClick={() => handleRemove(cal.id)}>
+                    {t.settings.removeCalendar}
+                  </Btn>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 // ─── Section: Home Assistant ─────────────────────────────────────────────────
 
 function HomeAssistantSection() {
@@ -1178,6 +1312,7 @@ export default function SettingsPage() {
         {/* Column B (left in RTL) */}
         <div>
           <GoogleSection />
+          <IcsCalendarSection />
           <SpotifySection />
           <FamilySection />
           <TasksSection />
