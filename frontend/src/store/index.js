@@ -94,6 +94,7 @@ const settingsSlice = (set) => ({
     idleTimeout: 300,
     screensaverStyle: 'clock',
     displaySchedule: { wake: '06:00', sleep: '23:00' },
+    darkMode: false,
     loaded: false,
     firstRun: true,
   },
@@ -109,6 +110,16 @@ const settingsSlice = (set) => ({
     set((state) => ({
       settings: { ...state.settings, firstRun: false },
     })),
+  toggleDarkMode: () =>
+    set((state) => {
+      const next = !state.settings.darkMode;
+      if (next) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        delete document.documentElement.dataset.theme;
+      }
+      return { settings: { ...state.settings, darkMode: next } };
+    }),
 });
 
 // ─── Weather Slice ───────────────────────────────────────────────────────────

@@ -26,12 +26,6 @@ const COLUMN_BADGE = {
   done: 'bg-mint text-mint-d',
 };
 
-const COLUMN_DROP_HIGHLIGHT = {
-  todo: 'ring-lav-d/40',
-  inProgress: 'ring-gold-d/40',
-  done: 'ring-mint-d/40',
-};
-
 // ─── Priority config ────────────────────────────────────────────────────────
 
 const PRIORITIES = [
@@ -243,32 +237,54 @@ function DatePicker({ value, onChange }) {
 
 // ─── TaskCard ───────────────────────────────────────────────────────────────
 
-function TaskCard({ task, index, isDone, onTap, onDragStart }) {
+function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
   const longPressTimer = useRef(null);
   const isDragging = useRef(false);
+  const touchStartPos = useRef({ x: 0, y: 0 });
   const cardRef = useRef(null);
 
-  const handleTouchStart = useCallback(
+  const startDrag = useCallback(
     (e) => {
-      isDragging.current = false;
-      longPressTimer.current = setTimeout(() => {
-        isDragging.current = true;
-        onDragStart(task, e, cardRef.current);
-      }, 300);
+      isDragging.current = true;
+      onDragStart(task, e, cardRef.current);
     },
     [task, onDragStart]
   );
 
-  const handleTouchMove = useCallback(() => {
-    // If we moved before long-press threshold, cancel drag
-    if (!isDragging.current && longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
+  const handleTouchStart = useCallback(
+    (e) => {
+      isDragging.current = false;
+      const touch = e.touches[0];
+      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+      // Stash the event's touch coords so the timer callback can use them
+      const startEvent = e;
+      longPressTimer.current = setTimeout(() => {
+        startDrag(startEvent);
+      }, 300);
+    },
+    [startDrag]
+  );
+
+  const handleTouchMove = useCallback(
+    (e) => {
+      // If already in drag mode, let the global handler deal with it
+      if (isDragging.current) return;
+      // If finger moved >10px before long-press fires, cancel (user is scrolling)
+      if (longPressTimer.current) {
+        const touch = e.touches[0];
+        const dx = touch.clientX - touchStartPos.current.x;
+        const dy = touch.clientY - touchStartPos.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 10) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+      }
+    },
+    []
+  );
 
   const handleTouchEnd = useCallback(
-    (e) => {
+    () => {
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
@@ -276,10 +292,17 @@ function TaskCard({ task, index, isDone, onTap, onDragStart }) {
       if (!isDragging.current) {
         onTap(task);
       }
-      // If dragging, the drag system handles touch end
+      // If dragging, the global drag system handles touchend
     },
     [task, onTap]
   );
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
+  }, []);
 
   const overdue = !isDone && isOverdue(task.dueDate);
 
@@ -293,32 +316,26 @@ function TaskCard({ task, index, isDone, onTap, onDragStart }) {
         hover:shadow-md active:scale-[0.98]
       `}
       style={{
-        opacity: 0,
-        animation: `taskCardIn var(--dur-normal) var(--ease-out) ${index * 60}ms forwards`,
+        opacity: isBeingDragged ? 0.4 : 0,
+        animation: isBeingDragged
+          ? 'none'
+          : `taskCardIn var(--dur-normal) var(--ease-out) ${index * 60}ms forwards`,
+        ...(isBeingDragged ? { border: '2px dashed var(--acc)', background: 'var(--s2)' } : {}),
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onMouseDown={(e) => {
-        // For desktop: single click to open
-        // Could add mouse drag here if needed
+      onClick={(e) => {
+        // Prevent tap when drag just ended
+        if (isDragging.current) {
+          e.preventDefault();
+          return;
+        }
+        onTap(task);
       }}
-      onClick={() => onTap(task)}
       data-task-id={task.id}
     >
       <div className="flex items-start gap-3">
-        {/* Drag handle */}
-        <div
-          className="text-tm mt-0.5 shrink-0 touch-manipulation"
-          onTouchStart={(e) => {
-            e.stopPropagation();
-            isDragging.current = true;
-            onDragStart(task, e, cardRef.current);
-          }}
-        >
-          <GripIcon className="w-4 h-4" />
-        </div>
-
         {/* Card content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -373,6 +390,14 @@ function TaskCard({ task, index, isDone, onTap, onDragStart }) {
               </span>
             )}
           </div>
+        </div>
+
+        {/* Drag grip handle (trailing edge) */}
+        <div
+          className="text-tm/40 mt-0.5 shrink-0 touch-manipulation"
+          aria-hidden="true"
+        >
+          <GripIcon className="w-4 h-4" />
         </div>
       </div>
     </div>
@@ -662,6 +687,8 @@ export default function TasksPage() {
     refetch,
   } = useTasks();
 
+  const addToast = useStore((s) => s.addToast);
+
   // Pull to refresh
   const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
 
@@ -672,7 +699,7 @@ export default function TasksPage() {
   // Drag state
   const [draggedTask, setDraggedTask] = useState(null);
   const [dragGhost, setDragGhost] = useState(null); // { x, y, width, height }
-  const [dropTarget, setDropTarget] = useState(null); // column key
+  const [dropTarget, setDropTarget] = useState(null); // column key being hovered (different from source)
   const dragSourceCol = useRef(null);
   const dragCardRect = useRef(null);
   const touchOffsetRef = useRef({ x: 0, y: 0 });
@@ -718,12 +745,20 @@ export default function TasksPage() {
 
   // ── Drag-and-drop system ─────────────────────────────────────────────────
 
+  const cancelDrag = useCallback(() => {
+    setDraggedTask(null);
+    setDragGhost(null);
+    setDropTarget(null);
+    dragSourceCol.current = null;
+    dragCardRect.current = null;
+  }, []);
+
   const handleDragStart = useCallback((task, e, cardEl) => {
     if (!cardEl) return;
     const rect = cardEl.getBoundingClientRect();
     dragCardRect.current = rect;
 
-    // Find which column the task is in
+    // Record source column
     dragSourceCol.current = task.status;
 
     const touch = e.touches ? e.touches[0] : e;
@@ -739,9 +774,25 @@ export default function TasksPage() {
       width: rect.width,
       height: rect.height,
     });
-
-    // Prevent scroll
+    // Prevent scroll while dragging
     e.preventDefault?.();
+  }, []);
+
+  // Detect which column a point is over
+  const detectColumn = useCallback((clientX, clientY) => {
+    for (const [key, el] of Object.entries(columnRefs.current)) {
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      ) {
+        return key;
+      }
+    }
+    return null;
   }, []);
 
   const handleGlobalTouchMove = useCallback(
@@ -755,40 +806,40 @@ export default function TasksPage() {
       setDragGhost((prev) => (prev ? { ...prev, x, y } : null));
 
       // Determine which column we're over
-      let found = null;
-      for (const [key, el] of Object.entries(columnRefs.current)) {
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        if (
-          touch.clientX >= rect.left &&
-          touch.clientX <= rect.right &&
-          touch.clientY >= rect.top &&
-          touch.clientY <= rect.bottom
-        ) {
-          found = key;
-          break;
-        }
-      }
+      const found = detectColumn(touch.clientX, touch.clientY);
+      setHoverColumn(found);
+      // dropTarget is only set when hovering a *different* column from source
       setDropTarget(found && found !== dragSourceCol.current ? found : null);
     },
-    [draggedTask]
+    [draggedTask, detectColumn]
   );
 
   const handleGlobalTouchEnd = useCallback(() => {
     if (!draggedTask) return;
 
     if (dropTarget && dropTarget !== draggedTask.status) {
+      // Move task to new column
       updateTask(draggedTask.id, { status: dropTarget });
+      addToast('success', t.tasks.taskMoved);
     }
+    // If hovering original column or no column → cancel (snap back, no action)
 
-    setDraggedTask(null);
-    setDragGhost(null);
-    setDropTarget(null);
-    dragSourceCol.current = null;
-    dragCardRect.current = null;
-  }, [draggedTask, dropTarget, updateTask]);
+    cancelDrag();
+  }, [draggedTask, dropTarget, updateTask, addToast, cancelDrag]);
 
-  // Register global touch listeners for drag
+  // Escape key to cancel drag
+  useEffect(() => {
+    if (!draggedTask) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        cancelDrag();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [draggedTask, cancelDrag]);
+
+  // Register global touch/mouse listeners for drag
   useEffect(() => {
     if (!draggedTask) return;
 
@@ -798,16 +849,11 @@ export default function TasksPage() {
     document.addEventListener('touchmove', moveHandler, { passive: false });
     document.addEventListener('touchend', endHandler);
     document.addEventListener('touchcancel', endHandler);
-    // Mouse fallback
-    document.addEventListener('mousemove', moveHandler);
-    document.addEventListener('mouseup', endHandler);
 
     return () => {
       document.removeEventListener('touchmove', moveHandler);
       document.removeEventListener('touchend', endHandler);
       document.removeEventListener('touchcancel', endHandler);
-      document.removeEventListener('mousemove', moveHandler);
-      document.removeEventListener('mouseup', endHandler);
     };
   }, [draggedTask, handleGlobalTouchMove, handleGlobalTouchEnd]);
 
@@ -841,11 +887,16 @@ export default function TasksPage() {
               key={col.key}
               ref={(el) => { columnRefs.current[col.key] = el; }}
               className={`
-                flex-1 min-w-[280px] flex flex-col rounded-2xl overflow-hidden
+                flex-1 min-w-[280px] flex flex-col rounded-2xl
                 transition-all duration-[var(--dur-fast)]
                 ${COLUMN_BG[col.key]}
-                ${isDropHere ? `ring-4 ${COLUMN_DROP_HIGHLIGHT[col.key]} scale-[1.01]` : ''}
               `}
+              style={isDropHere ? {
+                outline: '2px dashed var(--acc)',
+                outlineOffset: '-2px',
+                borderRadius: 'var(--radius-2xl, 1rem)',
+                transform: 'scale(1.01)',
+              } : undefined}
             >
               {/* Column header */}
               <div className="flex items-center gap-3 px-5 py-4 shrink-0">
@@ -877,6 +928,7 @@ export default function TasksPage() {
                         isDone={isDone}
                         onTap={openOverlay}
                         onDragStart={handleDragStart}
+                        isBeingDragged={draggedTask?.id === task.id}
                       />
                     ))}
                   </div>
@@ -900,33 +952,47 @@ export default function TasksPage() {
         })}
       </div>
 
-      {/* Drag ghost */}
+      {/* Drag ghost — floating clone following finger */}
       {dragGhost && draggedTask && (
         <div
-          className="fixed pointer-events-none z-50"
+          className="fixed pointer-events-none"
           style={{
             left: dragGhost.x,
             top: dragGhost.y,
             width: dragGhost.width,
+            zIndex: 100,
             transform: 'scale(1.03)',
             opacity: 0.92,
-            filter: 'drop-shadow(0 12px 24px rgba(0,0,0,0.18))',
             transition: 'transform var(--dur-fast)',
           }}
         >
           <div className="bg-surf border border-acc/30 rounded-xl p-4 shadow-xl">
-            <div className="flex items-center gap-2">
-              {draggedTask.priority && draggedTask.priority !== 'none' && (
-                <span className={`w-2.5 h-2.5 rounded-full ${PRIORITY_DOT_COLOR[draggedTask.priority]}`} />
-              )}
-              <span className="text-sm font-medium text-tp line-clamp-1">
-                {draggedTask.title}
-              </span>
-              {draggedTask.starred && (
-                <span className="text-amber-400">
-                  <StarIcon filled className="w-4 h-4" />
-                </span>
-              )}
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  {draggedTask.priority && draggedTask.priority !== 'none' && (
+                    <span className={`w-2.5 h-2.5 rounded-full ${PRIORITY_DOT_COLOR[draggedTask.priority]}`} />
+                  )}
+                  <span className="text-sm font-medium text-tp line-clamp-1 flex-1">
+                    {draggedTask.title}
+                  </span>
+                  {draggedTask.starred && (
+                    <span className="text-amber-400 shrink-0">
+                      <StarIcon filled className="w-4 h-4" />
+                    </span>
+                  )}
+                </div>
+                {/* Due date row in ghost */}
+                {draggedTask.dueDate && (
+                  <div className="flex items-center gap-1 mt-2 text-xs text-ts font-mono">
+                    <CalendarIcon className="w-3.5 h-3.5" />
+                    {formatDate(draggedTask.dueDate)}
+                  </div>
+                )}
+              </div>
+              <div className="text-tm/40 mt-0.5 shrink-0">
+                <GripIcon className="w-4 h-4" />
+              </div>
             </div>
           </div>
         </div>
