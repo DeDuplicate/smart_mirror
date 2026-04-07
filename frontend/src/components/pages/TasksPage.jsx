@@ -243,26 +243,25 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
   const touchStartPos = useRef({ x: 0, y: 0 });
   const cardRef = useRef(null);
 
-  const startDrag = useCallback(
-    (e) => {
-      isDragging.current = true;
-      onDragStart(task, e, cardRef.current);
-    },
-    [task, onDragStart]
-  );
-
   const handleTouchStart = useCallback(
     (e) => {
       isDragging.current = false;
       const touch = e.touches[0];
-      touchStartPos.current = { x: touch.clientX, y: touch.clientY };
-      // Stash the event's touch coords so the timer callback can use them
-      const startEvent = e;
+      const startX = touch.clientX;
+      const startY = touch.clientY;
+      touchStartPos.current = { x: startX, y: startY };
+      // Build a minimal synthetic touch object for onDragStart so it can
+      // compute the offset even after the original event is recycled.
+      const frozenEvent = {
+        touches: [{ clientX: startX, clientY: startY }],
+        preventDefault: () => {},
+      };
       longPressTimer.current = setTimeout(() => {
-        startDrag(startEvent);
+        isDragging.current = true;
+        onDragStart(task, frozenEvent, cardRef.current);
       }, 300);
     },
-    [startDrag]
+    [task, onDragStart]
   );
 
   const handleTouchMove = useCallback(
@@ -289,12 +288,10 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
       }
-      if (!isDragging.current) {
-        onTap(task);
-      }
-      // If dragging, the global drag system handles touchend
+      // Tap is handled by onClick — touchend just cleans up the timer.
+      // If dragging, the global drag system handles touchend.
     },
-    [task, onTap]
+    []
   );
 
   // Cleanup timer on unmount
@@ -805,10 +802,8 @@ export default function TasksPage() {
 
       setDragGhost((prev) => (prev ? { ...prev, x, y } : null));
 
-      // Determine which column we're over
+      // Determine which column we're over — only highlight if different from source
       const found = detectColumn(touch.clientX, touch.clientY);
-      setHoverColumn(found);
-      // dropTarget is only set when hovering a *different* column from source
       setDropTarget(found && found !== dragSourceCol.current ? found : null);
     },
     [draggedTask, detectColumn]
