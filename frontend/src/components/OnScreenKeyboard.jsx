@@ -28,7 +28,7 @@ const EMOJI_ROWS = [
 
 // ─── Key Component ──────────────────────────────────────────────────────────
 
-function Key({ label, onPress, flex = 1, variant = 'default', icon }) {
+function Key({ label, onPress, flex = 1, variant = 'default', icon, ariaLabel }) {
   const [pressed, setPressed] = useState(false);
 
   const variants = {
@@ -39,6 +39,7 @@ function Key({ label, onPress, flex = 1, variant = 'default', icon }) {
 
   return (
     <button
+      aria-label={ariaLabel || label || undefined}
       onTouchStart={() => setPressed(true)}
       onTouchEnd={() => {
         setPressed(false);
@@ -118,6 +119,7 @@ function BackspaceKey({ onBackspace }) {
 
   return (
     <button
+      aria-label="מחיקה"
       onTouchStart={startRepeat}
       onTouchEnd={stopRepeat}
       onTouchCancel={stopRepeat}
@@ -248,6 +250,7 @@ export default function OnScreenKeyboard({
                   onPress={() => setShifted((s) => !s)}
                   flex={1.3}
                   variant={shifted ? 'accent' : 'special'}
+                  ariaLabel={shifted ? 'Shift פעיל' : 'Shift'}
                 />
               )}
 
@@ -286,6 +289,7 @@ export default function OnScreenKeyboard({
               onPress={toggleLang}
               flex={1.2}
               variant="special"
+              ariaLabel={lang === 'he' ? 'עבור לאנגלית' : 'עבור לעברית'}
             />
 
             {/* Number mode toggle */}
@@ -294,6 +298,7 @@ export default function OnScreenKeyboard({
               onPress={() => { setNumberMode((m) => !m); setEmojiMode(false); }}
               flex={1.2}
               variant="special"
+              ariaLabel={numberMode ? 'מצב אותיות' : 'מצב מספרים וסימנים'}
             />
 
             {/* Emoji toggle */}
@@ -302,6 +307,7 @@ export default function OnScreenKeyboard({
               onPress={() => { setEmojiMode((m) => !m); setNumberMode(false); }}
               flex={1.2}
               variant={emojiMode ? 'accent' : 'special'}
+              ariaLabel={emojiMode ? 'מצב אותיות' : 'מצב אמוג\'י'}
             />
 
             {/* Space bar */}
@@ -309,6 +315,7 @@ export default function OnScreenKeyboard({
               label=" "
               onPress={() => onInput(' ')}
               flex={5}
+              ariaLabel="רווח"
             />
 
             {/* Enter / Done */}
@@ -318,6 +325,7 @@ export default function OnScreenKeyboard({
               onPress={onEnter}
               flex={1.5}
               variant="accent"
+              ariaLabel="אישור"
             />
           </div>
         </div>

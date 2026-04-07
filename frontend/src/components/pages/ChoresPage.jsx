@@ -275,6 +275,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
     <button
       onClick={handleToggle}
       data-clap-target
+      aria-label={`${task.title}${isComplete ? ' — הושלם' : ''}${overdue ? ' — באיחור' : ''}`}
       className={`
         relative w-full flex items-center gap-3 p-3 rounded-xl
         border border-[var(--bd)]
@@ -287,6 +288,9 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
     >
       {/* Checkbox */}
       <div
+        role="checkbox"
+        aria-checked={isComplete}
+        aria-label={isComplete ? 'מטלה הושלמה' : 'מטלה לא הושלמה'}
         className={`
           relative flex-shrink-0 w-[44px] h-[44px] rounded-full
           flex items-center justify-center
@@ -305,7 +309,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
       {/* Content */}
       <div className="flex-1 flex flex-col items-start gap-0.5 min-w-0">
         <div className="flex items-center gap-2 w-full">
-          {task.emoji && <span className="text-lg">{task.emoji}</span>}
+          {task.emoji && <span className="text-lg" aria-hidden="true">{task.emoji}</span>}
           <span
             className={`
               text-sm font-medium text-right leading-snug truncate
@@ -328,6 +332,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
         onClick={handleDelete}
         className="flex-shrink-0 p-2 rounded-lg text-[var(--tm)] hover:text-[var(--coral-d)] hover:bg-[var(--coral-bg)]/30 transition-colors"
         role="button"
+        aria-label={`מחק מטלה: ${task.title}`}
         tabIndex={-1}
       >
         <TrashIcon />

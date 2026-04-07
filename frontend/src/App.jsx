@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { io } from 'socket.io-client';
 import './styles/global.css';
 import useStore from './store/index.js';
@@ -8,19 +8,22 @@ import TabBar from './components/TabBar.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import OAuthOverlay from './components/OAuthOverlay.jsx';
-import CalendarPage from './components/pages/CalendarPage.jsx';
-import TasksPage from './components/pages/TasksPage.jsx';
-import ChoresPage from './components/pages/ChoresPage.jsx';
-import HomePage from './components/pages/HomePage.jsx';
-import MusicPage from './components/pages/MusicPage.jsx';
-import NewsPage from './components/pages/NewsPage.jsx';
-import SettingsPage from './components/pages/SettingsPage.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 import useAuth from './hooks/useAuth.js';
 import { fetchApi } from './hooks/useApi.js';
 import useHealth from './hooks/useHealth.js';
 import useIdleDetection from './hooks/useIdleDetection.js';
 import useDisplaySchedule from './hooks/useDisplaySchedule.js';
 import Screensaver from './components/Screensaver.jsx';
+
+// ─── Lazy-loaded tab pages (code-split per tab) ────────────────────────────
+const CalendarPage = React.lazy(() => import('./components/pages/CalendarPage.jsx'));
+const TasksPage    = React.lazy(() => import('./components/pages/TasksPage.jsx'));
+const ChoresPage   = React.lazy(() => import('./components/pages/ChoresPage.jsx'));
+const HomePage     = React.lazy(() => import('./components/pages/HomePage.jsx'));
+const MusicPage    = React.lazy(() => import('./components/pages/MusicPage.jsx'));
+const NewsPage     = React.lazy(() => import('./components/pages/NewsPage.jsx'));
+const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage.jsx'));
 
 // ─── Socket.io singleton ─────────────────────────────────────────────────────
 
@@ -119,7 +122,9 @@ function TabContent() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <ActivePage />
+      <Suspense fallback={<SplashScreen />}>
+        <ActivePage />
+      </Suspense>
     </main>
   );
 }
@@ -740,6 +745,46 @@ export default function App() {
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
   }, []);
+
+  // ── Global error handlers — surface unhandled errors as toasts ──
+  useEffect(() => {
+    // Patterns we don't want to surface (non-actionable noise)
+    const IGNORED = [
+      /ResizeObserver loop/i,
+      /Network request failed/i,
+      /Failed to fetch/i,
+      /Load failed/i,
+      /timeout.*home.?assistant/i,
+      /home.?assistant.*timeout/i,
+    ];
+
+    function shouldIgnore(msg) {
+      if (!msg) return true;
+      return IGNORED.some((re) => re.test(msg));
+    }
+
+    function handleError(event) {
+      const msg = event?.message || String(event);
+      if (shouldIgnore(msg)) return;
+      addToast('error', msg);
+    }
+
+    function handleRejection(event) {
+      const msg =
+        event?.reason?.message ||
+        (typeof event?.reason === 'string' ? event.reason : null);
+      if (shouldIgnore(msg)) return;
+      addToast('error', msg || t.errors.noConnection);
+    }
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, [addToast]);
 
   // ── Health polling ──
   useHealth();
