@@ -1,19 +1,7 @@
 import { useEffect, useRef } from 'react';
 import useStore from '../store/index.js';
 import t from '../i18n/he.json';
-
-// ─── WMO weather code to icon mapping ───────────────────────────────────────
-
-function getWeatherIcon(code) {
-  if (code === 0) return '☀️';
-  if (code >= 1 && code <= 3) return '⛅';
-  if (code >= 45 && code <= 48) return '🌫️';
-  if (code >= 51 && code <= 67) return '🌧️';
-  if (code >= 71 && code <= 77) return '❄️';
-  if (code >= 80 && code <= 82) return '🌦️';
-  if (code >= 95 && code <= 99) return '⛈️';
-  return '🌤️';
-}
+import WeatherIcon from './WeatherIcon.jsx';
 
 // ─── WeatherPopup Component ─────────────────────────────────────────────────
 
@@ -74,7 +62,7 @@ export default function WeatherPopup({ anchorRef, onClose }) {
         <div className="bg-surf border border-bd rounded-2xl shadow-xl p-5 relative">
           {/* Current conditions */}
           <div className="flex items-center gap-4 mb-4 pb-4 border-b border-bd">
-            <span className="text-4xl">{getWeatherIcon(cur.code)}</span>
+            <WeatherIcon code={cur.code} size={80} />
             <div className="flex-1">
               <div className="flex items-baseline gap-3">
                 {cur.temp != null && (
@@ -117,7 +105,7 @@ export default function WeatherPopup({ anchorRef, onClose }) {
                       className="flex flex-col items-center gap-1 flex-1 min-w-0"
                     >
                       <span className="text-xs text-ts truncate">{dayLabel}</span>
-                      <span className="text-lg">{getWeatherIcon(day.code)}</span>
+                      <WeatherIcon code={day.code} size={32} />
                       <span className="font-mono text-sm text-tp">
                         {day.high != null ? `${Math.round(day.high)}°` : '—'}
                       </span>

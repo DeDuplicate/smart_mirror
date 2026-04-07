@@ -2,23 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 import WeatherPopup from './WeatherPopup.jsx';
+import WeatherIcon from './WeatherIcon.jsx';
 import BrightnessPopup from './BrightnessPopup.jsx';
 import WifiPopup from './WifiPopup.jsx';
 import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Map WMO weather code to emoji icon */
-function getWeatherIcon(code) {
-  if (code === 0) return '☀️';
-  if (code >= 1 && code <= 3) return '⛅';
-  if (code >= 45 && code <= 48) return '🌫️';
-  if (code >= 51 && code <= 67) return '🌧️';
-  if (code >= 71 && code <= 77) return '❄️';
-  if (code >= 80 && code <= 82) return '🌦️';
-  if (code >= 95 && code <= 99) return '⛈️';
-  return '🌤️';
-}
 
 /** 24h clock with seconds — HH:MM:SS */
 function getFormattedTime() {
@@ -164,9 +153,7 @@ function WeatherSection() {
                    select-none"
         aria-label="Weather"
       >
-        <span className="text-2xl leading-none">
-          {getWeatherIcon(weather.code)}
-        </span>
+        <WeatherIcon code={weather.code} size={36} />
         {tempText && (
           <span className="font-mono text-xl font-light text-tp">
             {tempText}
