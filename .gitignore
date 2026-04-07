@@ -8,3 +8,6 @@ logs/
 dist/
 .DS_Store
 home assistant connection details
+.playwright-mcp/
+*.png
+smart-mirror-*.png

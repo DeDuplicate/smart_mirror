@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, } from 'react';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import useCalendar, {
@@ -477,6 +477,29 @@ export default function CalendarPage() {
     }, 250);
   }, [currentWeekStart]);
 
+  // ── Swipe detection for week navigation ──
+  const calTouchRef = useRef({ startX: 0, startY: 0 });
+
+  const handleCalTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    calTouchRef.current = { startX: touch.clientX, startY: touch.clientY };
+  }, []);
+
+  const handleCalTouchEnd = useCallback((e) => {
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - calTouchRef.current.startX;
+    const dy = Math.abs(touch.clientY - calTouchRef.current.startY);
+
+    // Minimum 50px horizontal, max 30px vertical deviation
+    if (Math.abs(dx) < 50 || dy > 30) return;
+
+    if (dx < 0) {
+      goNextWeek();
+    } else {
+      goPrevWeek();
+    }
+  }, [goNextWeek, goPrevWeek]);
+
   // ── Categorize events ──
   const { timedByDay, allDayEvents, multiDayEvents, upcoming } = useMemo(() => {
     const timed = {};   // dayIndex -> [event]
@@ -657,6 +680,8 @@ export default function CalendarPage() {
         {/* ── Day Column Grid ── */}
         <div
           className="flex-1 flex flex-col overflow-hidden"
+          onTouchStart={handleCalTouchStart}
+          onTouchEnd={handleCalTouchEnd}
           style={{
             direction: 'ltr', /* Calendar grid is always LTR (Sun→Sat) */
             opacity: slideDir ? 0.4 : 1,

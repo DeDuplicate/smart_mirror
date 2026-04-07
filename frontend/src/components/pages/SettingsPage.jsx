@@ -845,6 +845,84 @@ function SystemSection() {
   );
 }
 
+// ─── Section: Log Viewer ────────────────────────────────────────────────────
+
+function LogViewerSection() {
+  const [logs, setLogs] = useState([]);
+  const [level, setLevel] = useState('all');
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ lines: '50' });
+      if (level !== 'all') params.set('level', level);
+      const data = await fetchApi(`/api/system/logs?${params}`);
+      setLogs(data?.entries || []);
+    } catch {
+      setError(t.logs.loadError);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [level]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  const LEVEL_NAMES = { 10: 'TRACE', 20: 'DEBUG', 30: 'INFO', 40: 'WARN', 50: 'ERROR', 60: 'FATAL' };
+
+  const formatEntry = (entry) => {
+    const ts = entry.time ? new Date(entry.time).toLocaleTimeString('he-IL') : '';
+    const lvl = LEVEL_NAMES[entry.level] || 'INFO';
+    const msg = entry.msg || entry.message || JSON.stringify(entry);
+    return `[${ts}] ${lvl}: ${msg}`;
+  };
+
+  return (
+    <Section title={t.logs.viewLogs}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <SelectRow
+            label={t.logs.levelFilter}
+            value={level}
+            onChange={(e) => setLevel(e.target.value)}
+            options={[
+              { value: 'all',   label: t.logs.all },
+              { value: 'error', label: t.logs.error },
+              { value: 'warn',  label: t.logs.warn },
+              { value: 'info',  label: t.logs.info },
+            ]}
+            className="flex-1"
+          />
+          <Btn
+            icon={loadingLogs ? <Spinner /> : <RefreshIcon />}
+            onClick={fetchLogs}
+            disabled={loadingLogs}
+            className="self-end"
+          >
+            {t.logs.refresh}
+          </Btn>
+        </div>
+
+        {error && (
+          <p className="text-sm text-coral-d">{error}</p>
+        )}
+
+        <textarea
+          readOnly
+          value={logs.length > 0 ? logs.map(formatEntry).join('\n') : t.logs.noLogs}
+          className="w-full h-[240px] bg-s2 border border-bd rounded-xl p-3 text-xs text-tp
+                     font-mono resize-none focus:outline-none"
+          style={{ fontFamily: "'DM Mono', monospace", direction: 'ltr' }}
+        />
+      </div>
+    </Section>
+  );
+}
+
 // ─── Section: Wi-Fi ──────────────────────────────────────────────────────────
 
 function WifiSection() {
@@ -965,6 +1043,7 @@ export default function SettingsPage() {
           <SpotifySection />
           <TasksSection />
           <SystemSection />
+          <LogViewerSection />
           <AboutSection />
         </div>
       </div>

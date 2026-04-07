@@ -15,6 +15,7 @@ import MusicPage from './components/pages/MusicPage.jsx';
 import NewsPage from './components/pages/NewsPage.jsx';
 import SettingsPage from './components/pages/SettingsPage.jsx';
 import useAuth from './hooks/useAuth.js';
+import { fetchApi } from './hooks/useApi.js';
 import useHealth from './hooks/useHealth.js';
 import useIdleDetection from './hooks/useIdleDetection.js';
 import useDisplaySchedule from './hooks/useDisplaySchedule.js';
@@ -52,9 +53,11 @@ const PAGES = [
 function TabContent() {
   const activeTab = useStore((s) => s.activeTab);
   const previousTab = useStore((s) => s.previousTab);
+  const setActiveTab = useStore((s) => s.setActiveTab);
   const [displayedTab, setDisplayedTab] = useState(activeTab);
   const [animClass, setAnimClass] = useState('');
   const contentRef = useRef(null);
+  const touchRef = useRef({ startX: 0, startY: 0 });
 
   useEffect(() => {
     if (activeTab === displayedTab) return;
@@ -81,12 +84,38 @@ function TabContent() {
     return () => clearTimeout(exitTimer);
   }, [activeTab, displayedTab, previousTab]);
 
+  // ── Swipe detection for tab navigation ──
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    touchRef.current = { startX: touch.clientX, startY: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchRef.current.startX;
+    const dy = Math.abs(touch.clientY - touchRef.current.startY);
+
+    // Minimum 50px horizontal, max 30px vertical deviation
+    if (Math.abs(dx) < 50 || dy > 30) return;
+
+    const current = useStore.getState().activeTab;
+    if (dx < 0 && current < PAGES.length - 1) {
+      // Swipe left -> next tab
+      setActiveTab(current + 1);
+    } else if (dx > 0 && current > 0) {
+      // Swipe right -> previous tab
+      setActiveTab(current - 1);
+    }
+  }, [setActiveTab]);
+
   const ActivePage = PAGES[displayedTab] || PAGES[0];
 
   return (
     <main
       ref={contentRef}
       className={`flex-1 overflow-hidden relative ${animClass}`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       <ActivePage />
     </main>
@@ -180,6 +209,21 @@ function SetupWizard({ onComplete }) {
   const [googleAccounts, setGoogleAccounts] = useState([]);
   const [calendarColors, setCalendarColors] = useState({});
 
+  // Home Assistant state
+  const [haHost, setHaHost] = useState('');
+  const [haToken, setHaToken] = useState('');
+  const [haTesting, setHaTesting] = useState(false);
+  const [haTestResult, setHaTestResult] = useState(null); // 'ok' | 'fail' | null
+  const [haEntities, setHaEntities] = useState(null); // { domain: [...] }
+  const [haEntityCount, setHaEntityCount] = useState(0);
+
+  // Spotify state
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+
+  // News sources state
+  const [newsYnet, setNewsYnet] = useState(true);
+  const [newsNow14, setNewsNow14] = useState(false);
+
   const steps = [
     t.setup.welcome,
     t.setup.name,
@@ -214,15 +258,22 @@ function SetupWizard({ onComplete }) {
   };
 
   const handleFinish = useCallback(() => {
-    setSettings({
+    const patch = {
       userName: name,
       location,
       firstRun: false,
       calendarColors: calendarColors,
-    });
+      newsYnet,
+      newsNow14,
+    };
+    // Only include HA settings if the user filled them in
+    if (haHost) patch.haHost = haHost;
+    if (haToken) patch.haToken = haToken;
+
+    setSettings(patch);
     markSetupComplete();
     if (onComplete) onComplete();
-  }, [name, location, calendarColors, setSettings, markSetupComplete, onComplete]);
+  }, [name, location, calendarColors, haHost, haToken, newsYnet, newsNow14, setSettings, markSetupComplete, onComplete]);
 
   const handleNext = () => {
     if (step === steps.length - 1) {
@@ -361,11 +412,129 @@ function SetupWizard({ onComplete }) {
                 {t.setup.smartHome}
               </h2>
               <p className="text-ts mb-6">{t.setup.smartHomeDesc}</p>
-              <button className="px-6 min-h-[56px] bg-acc text-white rounded-xl font-medium
-                                 hover:bg-acc/90 active:scale-95 transition-all"
-                      style={{ transitionDuration: 'var(--dur-fast)' }}>
-                {t.setup.connect}
-              </button>
+
+              <div className="flex flex-col gap-4">
+                {/* Host URL input */}
+                <div>
+                  <label className="block text-sm font-medium text-ts mb-1.5" dir="rtl">
+                    {t.settings.haUrl}
+                  </label>
+                  <input
+                    type="text"
+                    value={haHost}
+                    onChange={(e) => { setHaHost(e.target.value); setHaTestResult(null); setHaEntities(null); }}
+                    placeholder="http://homeassistant.local:8123"
+                    className="w-full px-5 py-3 rounded-xl bg-s2 border border-bd text-tp
+                               placeholder:text-tm focus:outline-none focus:border-acc
+                               transition-colors duration-[var(--dur-fast)] text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                {/* Token input (password type) */}
+                <div>
+                  <label className="block text-sm font-medium text-ts mb-1.5" dir="rtl">
+                    {t.settings.haToken}
+                  </label>
+                  <input
+                    type="password"
+                    value={haToken}
+                    onChange={(e) => { setHaToken(e.target.value); setHaTestResult(null); setHaEntities(null); }}
+                    placeholder="eyJ..."
+                    className="w-full px-5 py-3 rounded-xl bg-s2 border border-bd text-tp
+                               placeholder:text-tm focus:outline-none focus:border-acc
+                               transition-colors duration-[var(--dur-fast)] text-sm"
+                    dir="ltr"
+                  />
+                </div>
+
+                {/* Test Connection button */}
+                <button
+                  onClick={async () => {
+                    if (!haHost || !haToken) return;
+                    setHaTesting(true);
+                    setHaTestResult(null);
+                    setHaEntities(null);
+                    try {
+                      // Save HA settings first so the backend can use them
+                      await fetchApi('/api/settings', {
+                        method: 'PUT',
+                        body: JSON.stringify({ haHost, haToken }),
+                      });
+                      // Test the connection
+                      const data = await fetchApi('/api/ha/states');
+                      setHaTestResult('ok');
+                      // Fetch entity discovery
+                      try {
+                        const entData = await fetchApi('/api/ha/entities');
+                        setHaEntities(entData.entities || {});
+                        setHaEntityCount(entData.total || 0);
+                      } catch {
+                        // entities fetch failed but connection is OK
+                      }
+                    } catch {
+                      setHaTestResult('fail');
+                    } finally {
+                      setHaTesting(false);
+                    }
+                  }}
+                  disabled={haTesting || !haHost || !haToken}
+                  className="px-6 min-h-[48px] bg-acc text-white rounded-xl font-medium
+                             hover:bg-acc/90 active:scale-95 transition-all
+                             disabled:opacity-50 disabled:cursor-not-allowed
+                             flex items-center gap-2 self-start"
+                  style={{ transitionDuration: 'var(--dur-fast)' }}
+                >
+                  {haTesting ? (
+                    <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                  )}
+                  <span>{t.settings.testConnection}</span>
+                </button>
+
+                {/* Test result feedback */}
+                {haTestResult === 'ok' && (
+                  <div className="px-4 py-3 rounded-xl text-sm font-medium"
+                       style={{ backgroundColor: 'var(--mint-bg)', color: 'var(--mint-d)' }}>
+                    {t.settings.haConnectionOk}
+                  </div>
+                )}
+                {haTestResult === 'fail' && (
+                  <div className="px-4 py-3 rounded-xl text-sm font-medium"
+                       style={{ backgroundColor: 'var(--coral-bg)', color: 'var(--coral-d)' }}>
+                    {t.settings.haConnectionFail}
+                  </div>
+                )}
+
+                {/* Entity auto-discovery list */}
+                {haEntities && Object.keys(haEntities).length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-ts mb-2 font-medium" dir="rtl">
+                      {haEntityCount} entities
+                    </p>
+                    <div className="bg-s2 border border-bd rounded-xl p-3 max-h-[160px] overflow-y-auto
+                                    flex flex-wrap gap-2">
+                      {Object.entries(haEntities).map(([domain, entities]) => (
+                        <span
+                          key={domain}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                                     text-xs font-medium bg-acc/10 text-acc"
+                        >
+                          {domain}
+                          <span className="text-acc/60">({entities.length})</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -375,11 +544,60 @@ function SetupWizard({ onComplete }) {
                 {t.setup.spotify}
               </h2>
               <p className="text-ts mb-6">{t.setup.spotifyDesc}</p>
-              <button className="px-6 min-h-[56px] bg-acc text-white rounded-xl font-medium
-                                 hover:bg-acc/90 active:scale-95 transition-all"
-                      style={{ transitionDuration: 'var(--dur-fast)' }}>
-                {t.setup.connect}
-              </button>
+
+              {spotifyConnected ? (
+                <div className="flex items-center gap-3 bg-s2 border border-bd rounded-xl px-5 py-4">
+                  {/* Spotify icon */}
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                       style={{ backgroundColor: 'var(--mint-bg)' }}>
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ color: 'var(--mint-d)' }}>
+                      <path fill="currentColor" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-tp font-medium text-sm">{t.settings.spotify}</p>
+                  </div>
+                  <span className="shrink-0 px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{ backgroundColor: 'var(--mint-bg)', color: 'var(--mint-d)' }}>
+                    {t.setup.connected}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {/* Auth error */}
+                  {auth.error && auth.provider === 'spotify' && (
+                    <div className="px-4 py-3 rounded-xl text-sm font-medium"
+                         style={{ backgroundColor: 'var(--coral-bg)', color: 'var(--coral-d)' }}>
+                      {t.setup.authError}: {auth.error}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      auth.startSpotifyAuth(() => {
+                        setSpotifyConnected(true);
+                      });
+                    }}
+                    disabled={auth.isAuthenticating}
+                    className="px-6 min-h-[56px] bg-acc text-white rounded-xl font-medium
+                               hover:bg-acc/90 active:scale-95 transition-all
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               flex items-center gap-3 self-start"
+                    style={{ transitionDuration: 'var(--dur-fast)' }}
+                  >
+                    {auth.isAuthenticating && auth.provider === 'spotify' ? (
+                      <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0">
+                        <path fill="currentColor" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                      </svg>
+                    )}
+                    <span>{t.settings.connectSpotify}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -389,8 +607,44 @@ function SetupWizard({ onComplete }) {
                 {t.setup.newsSources}
               </h2>
               <p className="text-ts mb-6">{t.setup.newsSourcesDesc}</p>
-              {/* News source checkboxes would go here */}
-              <div className="text-tm text-sm">{t.errors.configureInSettings}</div>
+
+              <div className="flex flex-col divide-y divide-bd bg-s2 border border-bd rounded-xl overflow-hidden">
+                {/* Ynet toggle */}
+                <label className="flex items-center justify-between px-5 py-4 cursor-pointer
+                                  hover:bg-surf transition-colors duration-[var(--dur-fast)]">
+                  <span className="text-tp font-medium text-sm">{t.settings.sourceYnet}</span>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={newsYnet}
+                      onChange={(e) => setNewsYnet(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
+                                    transition-colors duration-[var(--dur-fast)]" />
+                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow
+                                    peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
+                  </div>
+                </label>
+
+                {/* Channel 14 toggle */}
+                <label className="flex items-center justify-between px-5 py-4 cursor-pointer
+                                  hover:bg-surf transition-colors duration-[var(--dur-fast)]">
+                  <span className="text-tp font-medium text-sm">{t.settings.sourceNow14}</span>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={newsNow14}
+                      onChange={(e) => setNewsNow14(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
+                                    transition-colors duration-[var(--dur-fast)]" />
+                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow
+                                    peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
+                  </div>
+                </label>
+              </div>
             </div>
           )}
 
@@ -545,15 +799,37 @@ export default function App() {
     };
   }, [setWeather, setConnectionStatus, setAllConnectionStatuses, setSettings, addToast]);
 
+  // ── Socket.io heartbeat every 15 seconds ──
+  useEffect(() => {
+    const sock = getSocket();
+    const interval = setInterval(() => {
+      sock.emit('heartbeat');
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ── Wizard complete handler ──
   const handleWizardComplete = useCallback(() => {
     setShowWizard(false);
     // Persist settings to backend
-    const { userName, location, calendarColors } = useStore.getState().settings;
+    const s = useStore.getState().settings;
+    const payload = {
+      userName: s.userName,
+      location: s.location,
+      calendarColors: s.calendarColors,
+      firstRun: false,
+    };
+    // Include HA settings if configured
+    if (s.haHost) payload.haHost = s.haHost;
+    if (s.haToken) payload.haToken = s.haToken;
+    // Include news source preferences
+    if (s.newsYnet !== undefined) payload.newsYnet = s.newsYnet;
+    if (s.newsNow14 !== undefined) payload.newsNow14 = s.newsNow14;
+
     fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userName, location, calendarColors, firstRun: false }),
+      body: JSON.stringify(payload),
     }).catch(() => {
       // Silently fail - settings will be saved on next opportunity
     });

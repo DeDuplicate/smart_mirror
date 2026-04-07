@@ -1,0 +1,33 @@
+{
+  "location": { "city": "\u05e0\u05ea\u05e0\u05d9\u05d4", "lat": 32.33, "lon": 34.86 },
+  "language": "he",
+  "userName": "\u05d7\u05d9\u05d9\u05dd",
+  "idleTimeoutMin": 5,
+  "temperatureUnit": "C",
+  "calendar": { "showWeekend": false },
+  "hebrewCalendar": { "enabled": true, "showShabbatTimes": true, "holidayTypes": ["major"] },
+  "display": {
+    "schedule": { "wake": "06:00", "sleep": "23:00" },
+    "screensaver": "slideshow",
+    "photosPath": "~/photos/"
+  },
+  "music": { "provider": "spotify" },
+  "news": { "sources": ["ynet", "now14"], "refreshMin": 30 },
+  "homeAssistant": {
+    "host": "http://homeassistant.local:8123",
+    "entities": [
+      { "id": "light.living_room", "label": "\u05e1\u05dc\u05d5\u05df", "icon": "\ud83d\udca1" },
+      { "id": "light.kitchen", "label": "\u05de\u05d8\u05d1\u05d7", "icon": "\ud83d\udca1" },
+      { "id": "climate.ac", "label": "\u05de\u05d6\u05d2\u05df", "icon": "\u2744\ufe0f" },
+      { "id": "media_player.tv", "label": "\u05d8\u05dc\u05d5\u05d9\u05d6\u05d9\u05d4", "icon": "\ud83d\udcfa" },
+      { "id": "switch.gate", "label": "\u05e9\u05e2\u05e8", "icon": "\ud83d\udd12" }
+    ],
+    "scenes": [
+      { "id": "scene.good_morning", "label": "\u05d1\u05d5\u05e7\u05e8 \u05d8\u05d5\u05d1", "icon": "\ud83c\udf05" },
+      { "id": "scene.movie", "label": "\u05de\u05e6\u05d1 \u05e1\u05e8\u05d8", "icon": "\ud83c\udfac" },
+      { "id": "scene.good_night", "label": "\u05dc\u05d9\u05dc\u05d4 \u05d8\u05d5\u05d1", "icon": "\ud83c\udf19" },
+      { "id": "scene.leaving", "label": "\u05d9\u05e6\u05d9\u05d0\u05d4 \u05de\u05d4\u05d1\u05d9\u05ea", "icon": "\ud83d\udea4" }
+    ]
+  },
+  "tasks": { "columns": ["\u05dc\u05d1\u05d9\u05e6\u05d5\u05e2", "\u05d1\u05d1\u05d9\u05e6\u05d5\u05e2", "\u05d4\u05d5\u05e9\u05dc\u05dd"] }
+}

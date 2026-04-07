@@ -378,6 +378,22 @@
     "coral": "קורל",
     "gold": "זהב"
   },
+  "errorBoundary": {
+    "title": "משהו השתבש",
+    "description": "אירעה שגיאה בלתי צפויה. נסה לרענן את הדף.",
+    "refresh": "רענן"
+  },
+  "logs": {
+    "viewLogs": "צפייה בלוגים",
+    "levelFilter": "סינון לפי רמה",
+    "all": "הכל",
+    "error": "שגיאה",
+    "warn": "אזהרה",
+    "info": "מידע",
+    "refresh": "רענן",
+    "noLogs": "אין לוגים להצגה",
+    "loadError": "טעינת לוגים נכשלה"
+  },
   "holidays": {
     "candleLighting": "הדלקת נרות",
     "havdalah": "הבדלה",

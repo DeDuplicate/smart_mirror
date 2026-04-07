@@ -15,9 +15,11 @@ const BACKUP_DIR = path.join(__dirname, '..', 'backups');
 // ---------------------------------------------------------------------------
 // Safe shell helper - uses execFile (no shell injection risk)
 // ---------------------------------------------------------------------------
-function run(cmd, args, timeout) {
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
+
+function run(cmd, args, timeout, opts) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: timeout || 10000 }, (err, stdout, stderr) => {
+    execFile(cmd, args, { timeout: timeout || 10000, ...opts }, (err, stdout, stderr) => {
       if (err) {
         resolve({ ok: false, stdout: '', stderr: err.message });
       } else {
@@ -300,6 +302,88 @@ router.post('/schedule', (req, res) => {
     logger.error('Schedule update error: %s', err.message);
     res.status(500).json({ error: 'Failed to update schedule' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/system/log - receive client-side log entries
+// ---------------------------------------------------------------------------
+router.post('/log', (req, res) => {
+  const logger = req.app.locals.logger;
+  const { level, message, stack } = req.body || {};
+
+  if (!message) {
+    return res.status(400).json({ error: 'message is required' });
+  }
+
+  const logLevel = ['error', 'warn', 'info', 'debug'].includes(level) ? level : 'info';
+  logger[logLevel]({ source: 'client', stack }, 'Client: %s', message);
+
+  res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/system/check-update - compare local HEAD with remote
+// ---------------------------------------------------------------------------
+router.get('/check-update', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const gitOpts = { cwd: PROJECT_ROOT };
+
+  try {
+    // Fetch latest from origin
+    const fetchResult = await run('git', ['fetch', 'origin', 'main'], 15000, gitOpts);
+    if (!fetchResult.ok) {
+      return res.json({ updateAvailable: false, error: fetchResult.stderr });
+    }
+
+    const [localResult, remoteResult] = await Promise.all([
+      run('git', ['rev-parse', 'HEAD'], 10000, gitOpts),
+      run('git', ['rev-parse', 'origin/main'], 10000, gitOpts),
+    ]);
+
+    if (!localResult.ok || !remoteResult.ok) {
+      return res.json({ updateAvailable: false, error: 'Failed to get commit hashes' });
+    }
+
+    const currentHash = localResult.stdout.trim();
+    const remoteHash = remoteResult.stdout.trim();
+
+    // Count commits behind
+    const behindResult = await run('git', ['rev-list', '--count', 'HEAD..origin/main'], 10000, gitOpts);
+    const behindBy = behindResult.ok ? parseInt(behindResult.stdout.trim(), 10) || 0 : 0;
+
+    res.json({
+      updateAvailable: currentHash !== remoteHash,
+      currentHash,
+      remoteHash,
+      behindBy,
+    });
+  } catch (err) {
+    logger.error('Check-update error: %s', err.message);
+    res.json({ updateAvailable: false, error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/system/update - pull latest and rebuild
+// ---------------------------------------------------------------------------
+router.post('/update', (req, res) => {
+  const logger = req.app.locals.logger;
+  const { exec } = require('child_process');
+
+  // Hardcoded command string — no user input, safe to use exec for shell chaining
+  const cmd = 'git pull origin main && cd frontend && npm install && npx vite build';
+
+  logger.info('Starting update: %s', cmd);
+
+  exec(cmd, { cwd: PROJECT_ROOT, timeout: 300000 }, (err, stdout, stderr) => {
+    if (err) {
+      logger.error('Update failed: %s', err.message);
+      return res.json({ success: false, message: err.message });
+    }
+
+    logger.info('Update completed successfully');
+    res.json({ success: true, message: stdout.toString().slice(-500) });
+  });
 });
 
 module.exports = router;
