@@ -420,16 +420,16 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
         style={{ animation: 'fadeIn var(--dur-fast) var(--ease) forwards' }}
       />
 
-      {/* Panel — when keyboard open, panel sits in the top 55% leaving bottom 40% for keyboard + 5% gap */}
+      {/* Panel — when keyboard open, panel fills from top to keyboard (top 60%, keyboard is bottom 40%) */}
       <div
         className="relative bg-surf shadow-2xl flex flex-col overflow-hidden"
         style={{
-          marginTop: 'auto',
+          marginTop: keyboardTarget ? '0' : 'auto',
           marginBottom: keyboardTarget ? '40%' : '0',
-          height: keyboardTarget ? '55%' : '80%',
-          borderRadius: keyboardTarget ? '24px' : '24px 24px 0 0',
+          height: keyboardTarget ? '60%' : '80%',
+          borderRadius: keyboardTarget ? '0 0 16px 16px' : '24px 24px 0 0',
           animation: 'taskOverlayUp var(--dur-normal) var(--ease-out) forwards',
-          transition: 'height 0.25s ease, margin-bottom 0.25s ease, border-radius 0.25s ease',
+          transition: 'height 0.25s ease, margin-top 0.25s ease, margin-bottom 0.25s ease, border-radius 0.25s ease',
         }}
       >
         {/* Header */}
