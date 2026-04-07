@@ -1,58 +1,126 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+// ─── Mock Data ─────────────────────────────────────────────────────────────
+
+const MOCK_TASKS = [
+  {
+    id: '1',
+    title: 'לקנות חלב ולחם מהסופר',
+    description: 'חלב תנובה 3%, לחם אחיד',
+    status: 'todo',
+    priority: 'high',
+    starred: true,
+    dueDate: '2026-04-07',
+    listName: 'קניות',
+    listColor: '#6b62e0',
+  },
+  {
+    id: '2',
+    title: 'לתאם פגישה עם רו"ח',
+    description: 'לדבר על דוח שנתי ומע"מ',
+    status: 'todo',
+    priority: 'medium',
+    starred: false,
+    dueDate: '2026-04-10',
+    listName: 'עבודה',
+    listColor: '#2ab58a',
+  },
+  {
+    id: '3',
+    title: 'לתקן את הברז במטבח',
+    description: '',
+    status: 'todo',
+    priority: 'low',
+    starred: false,
+    dueDate: null,
+    listName: 'בית',
+    listColor: '#b07c10',
+  },
+  {
+    id: '4',
+    title: 'להכין מצגת לישיבת צוות',
+    description: 'כולל גרפים מרבעון אחרון',
+    status: 'inProgress',
+    priority: 'high',
+    starred: true,
+    dueDate: '2026-04-08',
+    listName: 'עבודה',
+    listColor: '#2ab58a',
+  },
+  {
+    id: '5',
+    title: 'לעדכן קורות חיים',
+    description: 'להוסיף את הפרויקט האחרון',
+    status: 'inProgress',
+    priority: 'medium',
+    starred: false,
+    dueDate: '2026-04-12',
+    listName: 'אישי',
+    listColor: '#c95454',
+  },
+  {
+    id: '6',
+    title: 'לשלם חשבון ארנונה',
+    description: 'תשלום רבעוני',
+    status: 'inProgress',
+    priority: 'high',
+    starred: false,
+    dueDate: '2026-04-05',
+    listName: 'בית',
+    listColor: '#b07c10',
+  },
+  {
+    id: '7',
+    title: 'להזמין טיסות לחופשה',
+    description: 'בדקנו טיסות לברצלונה',
+    status: 'done',
+    priority: 'medium',
+    starred: true,
+    dueDate: '2026-04-01',
+    listName: 'אישי',
+    listColor: '#c95454',
+  },
+  {
+    id: '8',
+    title: 'לשלוח דוח חודשי למנהל',
+    description: 'דוח מרץ 2026',
+    status: 'done',
+    priority: 'low',
+    starred: false,
+    dueDate: '2026-04-02',
+    listName: 'עבודה',
+    listColor: '#2ab58a',
+  },
+  {
+    id: '9',
+    title: 'לנקות את המחסן',
+    description: '',
+    status: 'done',
+    priority: 'none',
+    starred: false,
+    dueDate: '2026-03-30',
+    listName: 'בית',
+    listColor: '#b07c10',
+  },
+  {
+    id: '10',
+    title: 'להרשם לקורס ריצה',
+    description: 'קורס ערב ביום שלישי',
+    status: 'todo',
+    priority: 'none',
+    starred: false,
+    dueDate: '2026-04-15',
+    listName: 'אישי',
+    listColor: '#c95454',
+  },
+];
+
 // ─── Dev mode check ────────────────────────────────────────────────────────
 
 const isDev =
   typeof import.meta !== 'undefined' &&
   import.meta.env &&
   import.meta.env.DEV;
-
-// ─── Mock Data (person-based) ──────────────────────────────────────────────
-
-const MOCK_PEOPLE = [
-  {
-    id: 'p1',
-    name: 'חיים',
-    color: '#2a9d7f',
-    listId: 'list-chaim',
-    avatar: null,
-    tasks: [
-      { id: 't1', title: 'לקנות חלב ולחם', emoji: '🛒', completed: true, recurrence: 'once', dueDate: '2026-04-06' },
-      { id: 't2', title: 'לשלם חשבון ארנונה', emoji: '💳', completed: true, recurrence: 'monthly', dueDate: '2026-04-05' },
-      { id: 't3', title: 'להוציא את הכלב', emoji: '🐕', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't4', title: 'לתקן ברז במטבח', emoji: '🔧', completed: false, recurrence: 'once', dueDate: null },
-      { id: 't5', title: 'לנקות את המחסן', emoji: '🧹', completed: false, recurrence: 'weekly', dueDate: '2026-04-10' },
-    ],
-  },
-  {
-    id: 'p2',
-    name: 'מעיין',
-    color: '#5b52cc',
-    listId: 'list-maayan',
-    avatar: null,
-    tasks: [
-      { id: 't6', title: 'להכין שיעורי בית', emoji: '📚', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't7', title: 'לסדר את החדר', emoji: '🛏️', completed: true, recurrence: 'weekly', dueDate: '2026-04-07' },
-      { id: 't8', title: 'לתרגל פסנתר', emoji: '🎹', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't9', title: 'לקרוא ספר', emoji: '📖', completed: true, recurrence: 'once', dueDate: '2026-04-09' },
-    ],
-  },
-  {
-    id: 'p3',
-    name: 'רון',
-    color: '#c95454',
-    listId: 'list-ron',
-    avatar: null,
-    tasks: [
-      { id: 't10', title: 'להכין מצגת לעבודה', emoji: '💼', completed: false, recurrence: 'once', dueDate: '2026-04-08' },
-      { id: 't11', title: 'לרוץ 5 ק"מ', emoji: '🏃', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't12', title: 'לקנות מתנה ליום הולדת', emoji: '🎁', completed: false, recurrence: 'once', dueDate: '2026-04-03' },
-      { id: 't13', title: 'לעדכן קורות חיים', emoji: '📝', completed: false, recurrence: 'once', dueDate: '2026-04-12' },
-      { id: 't14', title: 'לתאם פגישה עם רו"ח', emoji: '📞', completed: false, recurrence: 'once', dueDate: '2026-04-10' },
-      { id: 't15', title: 'להחליף שמן ברכב', emoji: '🚗', completed: false, recurrence: 'once', dueDate: '2026-04-15' },
-    ],
-  },
-];
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 
@@ -65,47 +133,26 @@ async function apiFetch(url, options = {}) {
   return res.json();
 }
 
-// ─── localStorage helpers ─────────────────────────────────────────────────
-
-const HIDE_COMPLETED_KEY = 'tasks_hideCompleted';
-
-function loadHideCompleted() {
-  try {
-    return localStorage.getItem(HIDE_COMPLETED_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function saveHideCompleted(val) {
-  try {
-    localStorage.setItem(HIDE_COMPLETED_KEY, val ? 'true' : 'false');
-  } catch {
-    // ignore
-  }
-}
-
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
-let nextMockId = 200;
+let nextMockId = 100;
 
 export default function useTasks() {
-  const [people, setPeople] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [hideCompleted, setHideCompletedState] = useState(loadHideCompleted);
   const intervalRef = useRef(null);
 
-  // ── Fetch tasks (person-based) ─────────────────────────────────────────
+  // ── Fetch tasks ────────────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
     try {
       if (isDev) {
         // Simulate network delay on first load
-        await new Promise((r) => setTimeout(r, 800));
-        setPeople(MOCK_PEOPLE.map((p) => ({ ...p, tasks: [...p.tasks] })));
+        if (loading) await new Promise((r) => setTimeout(r, 800));
+        setTasks(MOCK_TASKS);
       } else {
-        const data = await apiFetch('/api/tasks/people');
-        setPeople(data);
+        const data = await apiFetch('/api/tasks');
+        setTasks(data);
       }
       setError(null);
     } catch (err) {
@@ -113,7 +160,7 @@ export default function useTasks() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Initial fetch + 2-minute polling ───────────────────────────────────
   useEffect(() => {
@@ -122,111 +169,63 @@ export default function useTasks() {
     return () => clearInterval(intervalRef.current);
   }, [fetchTasks]);
 
-  // ── Toggle task completion (optimistic) ────────────────────────────────
-  const toggleTask = useCallback(
-    async (personId, taskId) => {
-      let wasAllComplete = false;
-      let isNowAllComplete = false;
-      let personName = '';
-      let personColor = '';
+  // ── Grouped by column ─────────────────────────────────────────────────
+  const columns = {
+    todo: tasks.filter((t) => t.status === 'todo'),
+    inProgress: tasks.filter((t) => t.status === 'inProgress'),
+    done: tasks.filter((t) => t.status === 'done'),
+  };
 
-      setPeople((prev) =>
-        prev.map((person) => {
-          if (person.id !== personId) return person;
-
-          personName = person.name;
-          personColor = person.color;
-
-          const updatedTasks = person.tasks.map((task) =>
-            task.id === taskId ? { ...task, completed: !task.completed } : task
-          );
-
-          const totalTasks = updatedTasks.length;
-          const completedBefore = person.tasks.filter((t) => t.completed).length;
-          const completedAfter = updatedTasks.filter((t) => t.completed).length;
-
-          wasAllComplete = completedBefore === totalTasks;
-          isNowAllComplete = completedAfter === totalTasks && totalTasks > 0;
-
-          return { ...person, tasks: updatedTasks };
-        })
-      );
-
-      if (!isDev) {
-        try {
-          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
-            method: 'PATCH',
-          });
-        } catch {
-          await fetchTasks();
-        }
-      }
-
-      // Return whether celebration should trigger
-      return {
-        justCompleted: !wasAllComplete && isNowAllComplete,
-        personName,
-        personColor,
-      };
-    },
-    [fetchTasks]
-  );
-
-  // ── Add task to a person ───────────────────────────────────────────────
-  const addTask = useCallback(
-    async (personId, { title, emoji, recurrence }) => {
+  // ── Create task ───────────────────────────────────────────────────────
+  const createTask = useCallback(
+    async (taskData) => {
       const newTask = {
-        id: isDev ? `t${++nextMockId}` : undefined,
-        title,
-        emoji: emoji || '📌',
-        completed: false,
-        recurrence: recurrence || 'once',
-        dueDate: null,
+        ...taskData,
+        id: isDev ? String(++nextMockId) : undefined,
+        status: taskData.status || 'todo',
       };
-
       if (isDev) {
-        setPeople((prev) =>
-          prev.map((person) =>
-            person.id === personId
-              ? { ...person, tasks: [...person.tasks, newTask] }
-              : person
-          )
-        );
+        setTasks((prev) => [...prev, newTask]);
         return newTask;
       }
-
-      const created = await apiFetch(`/api/tasks/people/${personId}/tasks`, {
+      const created = await apiFetch('/api/tasks', {
         method: 'POST',
         body: JSON.stringify(newTask),
       });
-      setPeople((prev) =>
-        prev.map((person) =>
-          person.id === personId
-            ? { ...person, tasks: [...person.tasks, created] }
-            : person
-        )
-      );
+      setTasks((prev) => [...prev, created]);
       return created;
     },
     []
   );
 
-  // ── Delete task ────────────────────────────────────────────────────────
-  const deleteTask = useCallback(
-    async (personId, taskId) => {
-      setPeople((prev) =>
-        prev.map((person) =>
-          person.id === personId
-            ? { ...person, tasks: person.tasks.filter((t) => t.id !== taskId) }
-            : person
-        )
+  // ── Update task (including column move) ───────────────────────────────
+  const updateTask = useCallback(
+    async (id, patch) => {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
       );
-
       if (!isDev) {
         try {
-          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}`, {
-            method: 'DELETE',
+          await apiFetch(`/api/tasks/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(patch),
           });
+        } catch {
+          // Revert on failure
+          await fetchTasks();
+        }
+      }
+    },
+    [fetchTasks]
+  );
+
+  // ── Delete task ───────────────────────────────────────────────────────
+  const deleteTask = useCallback(
+    async (id) => {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      if (!isDev) {
+        try {
+          await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
         } catch {
           await fetchTasks();
         }
@@ -235,26 +234,32 @@ export default function useTasks() {
     [fetchTasks]
   );
 
-  // ── Hide completed toggle ─────────────────────────────────────────────
-  const setHideCompleted = useCallback((val) => {
-    const next = typeof val === 'function' ? val(hideCompleted) : val;
-    setHideCompletedState(next);
-    saveHideCompleted(next);
-  }, [hideCompleted]);
-
-  const toggleHideCompleted = useCallback(() => {
-    setHideCompleted((prev) => !prev);
-  }, [setHideCompleted]);
+  // ── Clear completed ───────────────────────────────────────────────────
+  const clearCompleted = useCallback(async () => {
+    const doneIds = tasks.filter((t) => t.status === 'done').map((t) => t.id);
+    setTasks((prev) => prev.filter((t) => t.status !== 'done'));
+    if (!isDev) {
+      try {
+        await Promise.all(
+          doneIds.map((id) =>
+            apiFetch(`/api/tasks/${id}`, { method: 'DELETE' })
+          )
+        );
+      } catch {
+        await fetchTasks();
+      }
+    }
+  }, [tasks, fetchTasks]);
 
   return {
-    people,
+    tasks,
+    columns,
     loading,
     error,
-    hideCompleted,
-    toggleHideCompleted,
-    toggleTask,
-    addTask,
+    createTask,
+    updateTask,
     deleteTask,
+    clearCompleted,
     refetch: fetchTasks,
   };
 }

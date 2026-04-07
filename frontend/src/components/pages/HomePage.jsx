@@ -3,6 +3,7 @@ import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import { HomeSkeleton } from '../Skeleton.jsx';
 import useHomeAssistant from '../../hooks/useHomeAssistant.js';
+import IRRemoteOverlay from '../IRRemoteOverlay.jsx';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -117,6 +118,40 @@ function FanIcon({ className = 'w-8 h-8' }) {
       <path d="M12 12c2 3 6 4 6 8a6 6 0 0 1-12 0c0-4 4-5 6-8z" />
       <path d="M12 12c-3-2-4-6-8-6a6 6 0 0 0 0 12c4 0 5-4 8-6z" />
       <circle cx="12" cy="12" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function LightningBoltIcon({ className = 'w-8 h-8' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function CurtainIcon({ className = 'w-8 h-8' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M2 2h20v2H2z" />
+      <path d="M4 4v16c3-2 4-6 4-8s1-6 4-8" />
+      <path d="M20 4v16c-3-2-4-6-4-8s-1-6-4-8" />
+      <line x1="2" y1="20" x2="4" y2="20" />
+      <line x1="20" y1="20" x2="22" y2="20" />
+    </svg>
+  );
+}
+
+function RemoteControlIcon({ className = 'w-8 h-8' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="6" y="2" width="12" height="20" rx="3" />
+      <circle cx="12" cy="8" r="2" />
+      <line x1="10" y1="13" x2="14" y2="13" />
+      <line x1="10" y1="16" x2="14" y2="16" />
     </svg>
   );
 }
@@ -783,6 +818,243 @@ function SceneButton({ config, onActivate }) {
       <Icon className="w-5 h-5" />
       <span>{config.label}</span>
     </button>
+  );
+}
+
+// ─── Electricity Monitor Tile (Feature 1) ─────────────────────────────────
+
+function ElectricityTile({ allStates }) {
+  const sensor = allStates.find((e) => e.entity_id === 'sensor.2_power_meter');
+  const watts = sensor ? parseFloat(sensor.state) : null;
+  const isValid = watts !== null && !isNaN(watts);
+
+  const color = !isValid ? 'text-tm'
+    : watts < 500 ? 'text-[#2ab58a]'
+    : watts <= 2000 ? 'text-[#e0a630]'
+    : 'text-[#c95454]';
+
+  const borderColor = !isValid ? 'border-bd'
+    : watts < 500 ? 'border-[#2ab58a]'
+    : watts <= 2000 ? 'border-[#e0a630]'
+    : 'border-[#c95454]';
+
+  return (
+    <div
+      className={`relative card flex flex-col items-center justify-center gap-2.5
+                   rounded-[20px] select-none overflow-hidden
+                   border-2 ${borderColor}
+                   transition-all duration-[var(--dur-fast)]`}
+      style={{ minHeight: '140px', minWidth: '180px' }}
+    >
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${color}`}
+        style={{ backgroundColor: isValid && watts >= 500 ? (watts > 2000 ? 'rgba(201,84,84,0.15)' : 'rgba(224,166,48,0.15)') : 'rgba(42,181,138,0.15)' }}
+      >
+        <LightningBoltIcon />
+      </div>
+      <span className={`text-2xl font-bold tabular-nums ${color}`}
+        style={{ fontFamily: "'DM Mono', monospace" }}
+      >
+        {isValid ? `${Math.round(watts)}W` : '--'}
+      </span>
+      <span className="text-xs font-medium text-ts">{t.home.electricityConsumption}</span>
+    </div>
+  );
+}
+
+// ─── Smart Curtain Tile (Feature 2) ───────────────────────────────────────
+
+function CurtainTile({ allStates, ha, onLongPress }) {
+  const entity = allStates.find((e) => e.entity_id === 'cover.smart_curtain_robot_curtain');
+  const pressTimerRef = useRef(null);
+  const pressedRef = useRef(false);
+  const [pressing, setPressing] = useState(false);
+
+  if (!entity) return null;
+
+  const pos = entity.attributes?.current_position;
+  const isClosed = entity.state === 'closed';
+  const isOpen = entity.state === 'open';
+  const statusText = isClosed ? t.home.curtainClosed
+    : (pos != null && pos > 0 && pos < 100) ? `${pos}%`
+    : t.home.curtainOpen;
+
+  const borderColor = isOpen ? 'border-acc2' : 'border-bd';
+
+  const handlePressStart = (e) => {
+    e.preventDefault();
+    pressedRef.current = true;
+    setPressing(true);
+    pressTimerRef.current = setTimeout(() => {
+      if (pressedRef.current) {
+        pressedRef.current = false;
+        setPressing(false);
+        onLongPress(entity);
+      }
+    }, 300);
+  };
+
+  const handlePressEnd = (e) => {
+    e.preventDefault();
+    if (!pressedRef.current) {
+      setPressing(false);
+      return;
+    }
+    pressedRef.current = false;
+    setPressing(false);
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+    // Short tap: toggle open/close
+    if (isClosed) {
+      ha.callService('cover', 'open_cover', { entity_id: entity.entity_id });
+    } else {
+      ha.callService('cover', 'close_cover', { entity_id: entity.entity_id });
+    }
+  };
+
+  const handlePressCancel = () => {
+    pressedRef.current = false;
+    setPressing(false);
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
+
+  return (
+    <div
+      className={`relative card flex flex-col items-center justify-center gap-2.5
+                   rounded-[20px] cursor-pointer select-none overflow-hidden
+                   border-2 ${borderColor}
+                   transition-all duration-[var(--dur-fast)]
+                   ${pressing ? 'scale-[0.97]' : 'scale-100'}
+                   hover:shadow-md`}
+      style={{ minHeight: '140px', minWidth: '180px' }}
+      onPointerDown={handlePressStart}
+      onPointerUp={handlePressEnd}
+      onPointerLeave={handlePressCancel}
+      onPointerCancel={handlePressCancel}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
+        ${isOpen ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}>
+        <CurtainIcon />
+      </div>
+      <span className="text-sm font-medium text-tp text-center leading-tight px-2 line-clamp-1">
+        {t.home.curtain}
+      </span>
+      <span className={`text-xs font-medium ${isOpen ? 'text-acc2' : 'text-tm'}`}>
+        {statusText}
+      </span>
+    </div>
+  );
+}
+
+// ─── Curtain Control Popup (Feature 2) ────────────────────────────────────
+
+function CurtainPopup({ entity, anchorRect, onClose, ha }) {
+  const popupRef = useRef(null);
+
+  const style = useMemo(() => {
+    if (!anchorRect) return {};
+    const popupW = 260;
+    const popupH = 360;
+    let left = anchorRect.left + anchorRect.width / 2 - popupW / 2;
+    let top = anchorRect.top - popupH - 12;
+    if (left < 16) left = 16;
+    if (left + popupW > window.innerWidth - 16) left = window.innerWidth - 16 - popupW;
+    if (top < 16) top = anchorRect.bottom + 12;
+    if (top + popupH > window.innerHeight - 16) top = window.innerHeight - 16 - popupH;
+    return { position: 'fixed', left: `${left}px`, top: `${top}px`, width: `${popupW}px`, zIndex: 50 };
+  }, [anchorRect]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (popupRef.current && !popupRef.current.contains(e.target)) onClose();
+    }
+    const timer = setTimeout(() => document.addEventListener('pointerdown', handleClickOutside), 50);
+    return () => { clearTimeout(timer); document.removeEventListener('pointerdown', handleClickOutside); };
+  }, [onClose]);
+
+  useEffect(() => {
+    function handleKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const pos = entity.attributes?.current_position ?? 0;
+
+  return (
+    <div ref={popupRef} className="bg-surf border border-bd rounded-2xl shadow-2xl animate-popup-in" style={style} dir="rtl">
+      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+        <span className="text-sm font-semibold text-tp">{t.home.curtain}</span>
+        <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center text-tm hover:bg-s2 transition-colors active:scale-90">
+          <CloseIcon className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex flex-col items-center gap-4 p-4">
+        {/* Position slider */}
+        <PopupSlider
+          value={pos}
+          min={0}
+          max={100}
+          step={1}
+          label={t.home.position}
+          suffix="%"
+          onChange={(val) => ha.setCoverPosition(entity.entity_id, val)}
+        />
+
+        {/* Quick buttons */}
+        <div className="flex gap-2 w-full">
+          <button
+            onClick={() => ha.callService('cover', 'open_cover', { entity_id: entity.entity_id })}
+            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-medium bg-acc2 text-white
+                       hover:bg-acc2/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
+          >
+            {t.home.openCurtain}
+          </button>
+          <button
+            onClick={() => ha.setCoverPosition(entity.entity_id, 50)}
+            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-medium bg-s2 text-tp
+                       hover:bg-bd active:scale-95 transition-all duration-[var(--dur-fast)]"
+          >
+            {t.home.halfPosition}
+          </button>
+          <button
+            onClick={() => ha.callService('cover', 'close_cover', { entity_id: entity.entity_id })}
+            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-medium bg-s2 text-tp
+                       hover:bg-bd active:scale-95 transition-all duration-[var(--dur-fast)]"
+          >
+            {t.home.closeCurtain}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── IR Remote Tile (Feature 3) ───────────────────────────────────────────
+
+function IRRemoteTile({ entityId, label, onTap }) {
+  return (
+    <div
+      className="relative card flex flex-col items-center justify-center gap-2.5
+                 rounded-[20px] cursor-pointer select-none overflow-hidden
+                 border-2 border-bd hover:shadow-md
+                 transition-all duration-[var(--dur-fast)] active:scale-[0.97]"
+      style={{ minHeight: '140px', minWidth: '180px' }}
+      onClick={() => onTap(entityId)}
+    >
+      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-lav-bg/50 text-lav-d">
+        <RemoteControlIcon />
+      </div>
+      <span className="text-sm font-medium text-tp text-center leading-tight px-2 line-clamp-1">
+        {label}
+      </span>
+      <span className="text-xs font-medium text-ts">{t.home.irRemote}</span>
+    </div>
   );
 }
 

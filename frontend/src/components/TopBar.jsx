@@ -5,7 +5,9 @@ import WeatherPopup from './WeatherPopup.jsx';
 import WeatherIcon from './WeatherIcon.jsx';
 import BrightnessPopup from './BrightnessPopup.jsx';
 import WifiPopup from './WifiPopup.jsx';
+import ShoppingListPopup, { useShoppingListCount } from './ShoppingListPopup.jsx';
 import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
+import useHomeAssistant from '../hooks/useHomeAssistant.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -382,6 +384,101 @@ function WifiIndicator() {
   );
 }
 
+/** Person presence indicators — green=home, grey=away */
+function PersonPresence() {
+  const haStatus = useStore((s) => s.connections.ha);
+  const isConfigured = haStatus === 'connected' || haStatus === 'degraded';
+  const { allStates } = useHomeAssistant();
+
+  if (!isConfigured) return null;
+
+  const persons = [
+    { entityId: 'person.yossef', initial: '\u05D9', label: t.presence.yossef },
+    { entityId: 'person.maayan', initial: '\u05DE', label: t.presence.maayan },
+  ];
+
+  // Find person entities from allStates
+  const personStates = persons.map((p) => {
+    const entity = allStates.find((e) => e.entity_id === p.entityId);
+    const isHome = entity?.state === 'home';
+    return { ...p, isHome, state: entity?.state };
+  });
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {personStates.map((p) => (
+        <div
+          key={p.entityId}
+          className="relative flex items-center justify-center"
+          title={`${p.label}: ${p.isHome ? t.presence.home : t.presence.away}`}
+        >
+          <div
+            className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold
+              border-2 transition-colors duration-300
+              ${p.isHome
+                ? 'border-acc2 bg-acc2/15 text-acc2'
+                : 'border-bd bg-s2 text-tm'
+              }`}
+          >
+            {p.initial}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Shopping list button with badge */
+function ShoppingListButton() {
+  const haStatus = useStore((s) => s.connections.ha);
+  const isConfigured = haStatus === 'connected' || haStatus === 'degraded';
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const close = useCallback(() => setOpen(false), []);
+  const count = useShoppingListCount();
+
+  if (!isConfigured) return null;
+
+  return (
+    <div className="relative">
+      <button
+        ref={anchorRef}
+        onClick={toggle}
+        className="relative flex items-center justify-center w-[56px] h-[56px] rounded-xl
+                   hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
+                   text-ts hover:text-tp"
+        aria-label={t.shoppingList.title}
+      >
+        {/* Shopping bag icon */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-6 h-6"
+        >
+          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <path d="M16 10a4 4 0 01-8 0" />
+        </svg>
+
+        {/* Item count badge */}
+        {count > 0 && (
+          <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] rounded-full
+                          bg-acc text-white text-[10px] font-bold flex items-center justify-center
+                          px-1 leading-none">
+            {count}
+          </span>
+        )}
+      </button>
+      <ShoppingListPopup visible={open} onClose={close} anchorRef={anchorRef} />
+    </div>
+  );
+}
+
 /** Settings gear — switches to Settings tab (index 5) */
 function SettingsButton() {
   const setActiveTab = useStore((s) => s.setActiveTab);
@@ -435,6 +532,8 @@ export default function TopBar() {
 
       {/* Left side in RTL: Utility buttons */}
       <div className="flex items-center gap-1">
+        <PersonPresence />
+        <ShoppingListButton />
         <DarkModeToggle />
         <BrightnessButton />
         <WifiIndicator />
