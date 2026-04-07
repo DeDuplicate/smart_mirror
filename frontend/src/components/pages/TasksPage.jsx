@@ -322,6 +322,33 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onMouseDown={(e) => {
+        if (e.button !== 0) return; // left click only
+        isDragging.current = false;
+        touchStartPos.current = { x: e.clientX, y: e.clientY };
+        const frozenEvent = { clientX: e.clientX, clientY: e.clientY, preventDefault: () => {} };
+        longPressTimer.current = setTimeout(() => {
+          isDragging.current = true;
+          onDragStart(task, frozenEvent, cardRef.current);
+        }, 300);
+        // Track mouse movement to cancel if >10px
+        const moveHandler = (me) => {
+          if (isDragging.current) return;
+          const dx = me.clientX - touchStartPos.current.x;
+          const dy = me.clientY - touchStartPos.current.y;
+          if (Math.sqrt(dx * dx + dy * dy) > 10 && longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+          }
+        };
+        const upHandler = () => {
+          if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+          document.removeEventListener('mousemove', moveHandler);
+          document.removeEventListener('mouseup', upHandler);
+        };
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', upHandler);
+      }}
       onClick={(e) => {
         // Prevent tap when drag just ended
         if (isDragging.current) {
@@ -792,18 +819,18 @@ export default function TasksPage() {
     return null;
   }, []);
 
-  const handleGlobalTouchMove = useCallback(
+  const handleGlobalMove = useCallback(
     (e) => {
       if (!draggedTask) return;
       e.preventDefault();
-      const touch = e.touches[0];
-      const x = touch.clientX - touchOffsetRef.current.x;
-      const y = touch.clientY - touchOffsetRef.current.y;
+      const point = e.touches ? e.touches[0] : e;
+      const x = point.clientX - touchOffsetRef.current.x;
+      const y = point.clientY - touchOffsetRef.current.y;
 
       setDragGhost((prev) => (prev ? { ...prev, x, y } : null));
 
       // Determine which column we're over — only highlight if different from source
-      const found = detectColumn(touch.clientX, touch.clientY);
+      const found = detectColumn(point.clientX, point.clientY);
       setDropTarget(found && found !== dragSourceCol.current ? found : null);
     },
     [draggedTask, detectColumn]
@@ -838,19 +865,23 @@ export default function TasksPage() {
   useEffect(() => {
     if (!draggedTask) return;
 
-    const moveHandler = (e) => handleGlobalTouchMove(e);
+    const moveHandler = (e) => handleGlobalMove(e);
     const endHandler = () => handleGlobalTouchEnd();
 
     document.addEventListener('touchmove', moveHandler, { passive: false });
     document.addEventListener('touchend', endHandler);
     document.addEventListener('touchcancel', endHandler);
+    document.addEventListener('mousemove', moveHandler);
+    document.addEventListener('mouseup', endHandler);
 
     return () => {
       document.removeEventListener('touchmove', moveHandler);
       document.removeEventListener('touchend', endHandler);
       document.removeEventListener('touchcancel', endHandler);
+      document.removeEventListener('mousemove', moveHandler);
+      document.removeEventListener('mouseup', endHandler);
     };
-  }, [draggedTask, handleGlobalTouchMove, handleGlobalTouchEnd]);
+  }, [draggedTask, handleGlobalMove, handleGlobalTouchEnd]);
 
   // ── Loading state ────────────────────────────────────────────────────────
   if (loading) return <TasksSkeleton />;
