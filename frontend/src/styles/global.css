@@ -372,6 +372,17 @@
   }
 }
 
+@keyframes clapParticle {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--clap-x), var(--clap-y)) rotate(var(--clap-rot)) scale(0.3);
+    opacity: 0;
+  }
+}
+
 @keyframes brightnessPopupIn {
   0% {
     transform: scale(0.9);
