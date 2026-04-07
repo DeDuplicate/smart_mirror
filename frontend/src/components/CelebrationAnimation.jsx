@@ -77,7 +77,7 @@ export default function CelebrationAnimation({
     const cy = 60;
 
     // ── Create particles ───────────────────────────────────────────────
-    const particleCount = Math.floor(randomRange(80, 120));
+    const particleCount = Math.floor(randomRange(150, 200));
     const particles = [];
     for (let i = 0; i < particleCount; i++) {
       const angle = randomRange(0, Math.PI * 2);
@@ -89,7 +89,7 @@ export default function CelebrationAnimation({
         vx: Math.cos(angle) * velocity,
         vy: Math.sin(angle) * velocity,
         gravity: 100,
-        life: randomRange(1200, 2500),
+        life: randomRange(2000, 4000),
         born: 0,
         type: isEmoji ? 'emoji' : 'confetti',
         char: isEmoji ? PARTICLE_CHARS[Math.floor(Math.random() * PARTICLE_CHARS.length)] : null,
@@ -101,7 +101,7 @@ export default function CelebrationAnimation({
     }
 
     // ── Create firework rockets ────────────────────────────────────────
-    const rocketCount = Math.floor(randomRange(5, 8));
+    const rocketCount = Math.floor(randomRange(10, 15));
     const rockets = [];
     for (let i = 0; i < rocketCount; i++) {
       const startX = randomRange(rect.width * 0.2, rect.width * 0.8);
@@ -112,7 +112,7 @@ export default function CelebrationAnimation({
         targetY,
         startY: rect.height,
         speed: randomRange(300, 500),
-        launchDelay: randomRange(200, 1000),
+        launchDelay: randomRange(200, 4000),
         launched: false,
         exploded: false,
         explodeTime: 0,
@@ -143,7 +143,7 @@ export default function CelebrationAnimation({
       setTimeout(() => {
         banner.style.opacity = '0';
         banner.style.transform = 'translateY(-20px)';
-      }, 4500);
+      }, 7000);
     }
 
     // ── Play sound ─────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export default function CelebrationAnimation({
 
     function animate(now) {
       const elapsed = now - startTimeRef.current;
-      if (elapsed > 5000) {
+      if (elapsed > 8000) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (onComplete) onComplete();
         return;
@@ -162,8 +162,8 @@ export default function CelebrationAnimation({
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw particles (0-2500ms)
-      if (elapsed < 2500) {
+      // Draw particles (0-5000ms)
+      if (elapsed < 5000) {
         for (const p of particles) {
           if (p.born === 0) p.born = elapsed;
           const age = elapsed - p.born;
@@ -191,8 +191,8 @@ export default function CelebrationAnimation({
         }
       }
 
-      // Draw rockets (200-3000ms)
-      if (elapsed > 200 && elapsed < 3000) {
+      // Draw rockets (200-6000ms)
+      if (elapsed > 200 && elapsed < 6000) {
         for (const r of rockets) {
           if (elapsed < r.launchDelay + 200) continue;
 
@@ -286,7 +286,7 @@ export default function CelebrationAnimation({
       playSound();
       const timeout = setTimeout(() => {
         if (onComplete) onComplete();
-      }, 5000);
+      }, 8000);
       return () => clearTimeout(timeout);
     }
 
