@@ -93,6 +93,7 @@ const settingsSlice = (set) => ({
     showWeekend: true,
     idleTimeout: 300,
     screensaverStyle: 'clock',
+    weatherSource: 'openmeteo',
     displaySchedule: { wake: '06:00', sleep: '23:00' },
     darkMode: false,
     loaded: false,

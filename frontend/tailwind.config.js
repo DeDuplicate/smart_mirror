@@ -42,6 +42,10 @@ export default {
         spin: 'spin 0.8s linear infinite',
         'popup-in': 'popupIn var(--dur-normal) var(--ease-out) forwards',
         'scene-pulse': 'scenePulse 600ms var(--ease-out) forwards',
+        'task-checkbox-pop': 'taskCheckboxPop 400ms var(--ease) forwards',
+        'avatar-glow': 'avatarPulseGlow 2s ease-in-out infinite',
+        'ring-pulse': 'ringPulse 1.5s ease-in-out infinite',
+        'sheet-slide-up': 'sheetSlideUp 300ms var(--ease-out) forwards',
       },
       keyframes: {
         fadeIn: {

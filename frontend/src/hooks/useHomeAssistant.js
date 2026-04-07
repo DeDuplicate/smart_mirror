@@ -140,6 +140,7 @@ export default function useHomeAssistant() {
   const isConfigured = haStatus === 'connected' || haStatus === 'degraded';
 
   const [entities, setEntities] = useState([]);
+  const [allStates, setAllStates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [connected, setConnected] = useState(false);
@@ -156,7 +157,9 @@ export default function useHomeAssistant() {
       if (!mountedRef.current) return;
 
       const states = res?.states || [];
-      // Filter to relevant domains
+      // Store all states for person/script/todo lookups
+      setAllStates(states);
+      // Filter to relevant domains for device tiles
       const relevant = states.filter((e) => {
         const domain = e.entity_id.split('.')[0];
         return ['light', 'climate', 'switch', 'input_boolean', 'media_player',
@@ -417,6 +420,7 @@ export default function useHomeAssistant() {
 
   return {
     entities,
+    allStates,
     loading,
     error,
     connected,
