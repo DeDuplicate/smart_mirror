@@ -143,18 +143,18 @@ function ClapBurst({ onDone }) {
   const [particles, setParticles] = useState([]);
 
   useEffect(() => {
-    const emojis = ['👏', '👏🏻', '👏🏽', '⭐', '✨', '🎉'];
-    const newParticles = Array.from({ length: 12 }, (_, i) => ({
+    const emojis = ['👏', '👏🏻', '👏🏽', '⭐', '✨', '🎉', '💪', '🌟', '👍'];
+    const newParticles = Array.from({ length: 20 }, (_, i) => ({
       id: i,
       emoji: emojis[Math.floor(Math.random() * emojis.length)],
-      x: (Math.random() - 0.5) * 120,
-      y: -(Math.random() * 80 + 30),
-      rotation: (Math.random() - 0.5) * 60,
-      scale: 0.6 + Math.random() * 0.6,
-      delay: Math.random() * 200,
+      x: (Math.random() - 0.5) * 200,
+      y: -(Math.random() * 140 + 40),
+      rotation: (Math.random() - 0.5) * 90,
+      scale: 0.7 + Math.random() * 0.8,
+      delay: Math.random() * 500,
     }));
     setParticles(newParticles);
-    const timer = setTimeout(() => { if (onDone) onDone(); }, 1200);
+    const timer = setTimeout(() => { if (onDone) onDone(); }, 2500);
     return () => clearTimeout(timer);
   }, [onDone]);
 
@@ -169,7 +169,7 @@ function ClapBurst({ onDone }) {
             top: '50%',
             fontSize: `${p.scale * 24}px`,
             transform: `translate(-50%, -50%)`,
-            animation: `clapParticle 1s ease-out ${p.delay}ms forwards`,
+            animation: `clapParticle 2s ease-out ${p.delay}ms forwards`,
             '--clap-x': `${p.x}px`,
             '--clap-y': `${p.y}px`,
             '--clap-rot': `${p.rotation}deg`,
