@@ -50,6 +50,16 @@ function PlusIcon({ className = 'w-4 h-4' }) {
   );
 }
 
+function CloudOffIcon({ className = 'w-5 h-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
 function ShoppingBagIcon({ className = 'w-5 h-5' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -76,6 +86,30 @@ function TrashIcon({ className = 'w-4 h-4' }) {
 
 const ENTITY_ID = 'todo.shopping_list';
 const POLL_INTERVAL = 30_000;
+const POPUP_WIDTH = 320;
+const POPUP_MAX_HEIGHT = 460;
+
+// Compute popup position relative to the anchor (top bar icon), clamped to
+// the viewport. Recomputed on open and on window resize.
+function computePosition(anchorRef) {
+  if (!anchorRef?.current) return null;
+  const rect = anchorRef.current.getBoundingClientRect();
+
+  // Vertical: below the button, but clamp to viewport
+  let top = rect.bottom + 8;
+  if (top + POPUP_MAX_HEIGHT > window.innerHeight) {
+    top = Math.max(8, window.innerHeight - POPUP_MAX_HEIGHT - 8);
+  }
+
+  // Horizontal: align right edge with button, but clamp to viewport
+  let right = window.innerWidth - rect.right;
+  if (right < 8) right = 8;
+  if (right + POPUP_WIDTH > window.innerWidth - 8) {
+    right = window.innerWidth - POPUP_WIDTH - 8;
+  }
+
+  return { top: `${top}px`, right: `${right}px` };
+}
 
 // ─── ShoppingListPopup ────────────────────────────────────────────────────
 
@@ -87,6 +121,9 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   const [error, setError] = useState(null);
   const [newItem, setNewItem] = useState('');
   const [adding, setAdding] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [position, setPosition] = useState(null);
   const pollRef = useRef(null);
 
   // Fetch items
@@ -96,13 +133,24 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       const fetched = res?.items || [];
       setItems(fetched);
       setError(null);
+      setOffline(false);
       setLoading(false);
     } catch (err) {
       console.error('Shopping list fetch error:', err);
       setError(t.shoppingList.loadError);
+      setOffline(true);
       setLoading(false);
     }
   }, []);
+
+  // Keep popup clamped to the viewport when the window resizes while open
+  useEffect(() => {
+    if (!visible) return;
+    const update = () => setPosition(computePosition(anchorRef));
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [visible, anchorRef]);
 
   // Fetch on open + poll (poll is a fallback safety net; real-time sync
   // happens via the 'ha:state_changed' socket event below)
@@ -129,6 +177,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       if (Array.isArray(newItems)) {
         setItems(newItems);
         setError(null);
+        setOffline(false);
       } else {
         fetchItems();
       }
@@ -241,33 +290,68 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
     }
   }, [items, fetchItems]);
 
+  // Bulk: remove all completed items (HA todo API is per-item, so loop
+  // client-side and tolerate individual failures)
+  const handleClearCompleted = useCallback(async () => {
+    const done = items.filter((i) => i.status === 'completed');
+    if (done.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    const prevItems = items;
+    setItems((prev) => prev.filter((i) => i.status !== 'completed'));
+    const results = await Promise.allSettled(
+      done.map((i) =>
+        fetchApi(`/api/ha/todo/${encodeURIComponent(ENTITY_ID)}/remove`, {
+          method: 'POST',
+          body: JSON.stringify({ item: i.summary }),
+        })
+      )
+    );
+    if (results.some((r) => r.status === 'rejected')) {
+      console.error('Clear completed partially failed');
+      setError(t.shoppingList.bulkError);
+      setItems(prevItems);
+    } else {
+      setError(null);
+    }
+    setTimeout(fetchItems, 500);
+    setBulkBusy(false);
+  }, [items, bulkBusy, fetchItems]);
+
+  // Bulk: mark every item completed / needs_action
+  const handleSetAll = useCallback(async (status) => {
+    const targets = items.filter((i) => i.status !== status);
+    if (targets.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    const prevItems = items;
+    setItems((prev) => prev.map((i) => ({ ...i, status })));
+    const results = await Promise.allSettled(
+      targets.map((i) =>
+        fetchApi(`/api/ha/todo/${encodeURIComponent(ENTITY_ID)}/update`, {
+          method: 'POST',
+          body: JSON.stringify({ item: i.summary, status }),
+        })
+      )
+    );
+    if (results.some((r) => r.status === 'rejected')) {
+      console.error('Set-all partially failed');
+      setError(t.shoppingList.bulkError);
+      setItems(prevItems);
+    } else {
+      setError(null);
+    }
+    setTimeout(fetchItems, 500);
+    setBulkBusy(false);
+  }, [items, bulkBusy, fetchItems]);
+
   if (!visible) return null;
 
-  // Position relative to anchor (top bar icon) with viewport bounds checking
-  const style = {};
-  if (anchorRef?.current) {
-    const rect = anchorRef.current.getBoundingClientRect();
-    const popupWidth = 320;
-    const popupMaxHeight = 460;
-
-    style.position = 'fixed';
-    style.zIndex = 50;
-
-    // Vertical: below the button, but clamp to viewport
-    let top = rect.bottom + 8;
-    if (top + popupMaxHeight > window.innerHeight) {
-      top = Math.max(8, window.innerHeight - popupMaxHeight - 8);
-    }
-    style.top = `${top}px`;
-
-    // Horizontal: align right edge with button, but clamp to viewport
-    let right = window.innerWidth - rect.right;
-    if (right < 8) right = 8;
-    if (right + popupWidth > window.innerWidth - 8) {
-      right = window.innerWidth - popupWidth - 8;
-    }
-    style.right = `${right}px`;
-  }
+  // Position relative to anchor (top bar icon) with viewport bounds checking;
+  // kept in state so it also recomputes on window resize
+  const style = {
+    position: 'fixed',
+    zIndex: 50,
+    ...(position || {}),
+  };
 
   const withIdx = items.map((item, idx) => ({ item, idx }));
   const activeItems = withIdx.filter((x) => x.item.status !== 'completed');
@@ -303,8 +387,8 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         </button>
       </div>
 
-      {/* Error banner */}
-      {error && (
+      {/* Error banner (suppressed when the full offline state is shown) */}
+      {error && !(offline && items.length === 0) && (
         <div className="mx-3 mt-2 px-3 py-2 rounded-xl bg-[var(--coral-bg)] text-[13px] text-[var(--coral-d)] flex items-center justify-between gap-2">
           <span>{error}</span>
           <button
@@ -317,11 +401,61 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         </div>
       )}
 
+      {/* Bulk actions — shown only when relevant */}
+      {!loading && !offline && items.length > 0 && (activeItems.length > 0 || completedItems.length > 0) && (
+        <div className="flex items-center gap-2 px-3 pt-2">
+          {activeItems.length > 0 ? (
+            <button
+              onClick={() => handleSetAll('completed')}
+              disabled={bulkBusy}
+              className="flex-1 min-h-[56px] rounded-xl bg-s2 text-xs font-medium text-ts
+                         hover:bg-bd transition-colors active:scale-95
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t.shoppingList.checkAll}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSetAll('needs_action')}
+              disabled={bulkBusy}
+              className="flex-1 min-h-[56px] rounded-xl bg-s2 text-xs font-medium text-ts
+                         hover:bg-bd transition-colors active:scale-95
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t.shoppingList.uncheckAll}
+            </button>
+          )}
+          {completedItems.length > 0 && (
+            <button
+              onClick={handleClearCompleted}
+              disabled={bulkBusy}
+              className="flex-1 min-h-[56px] rounded-xl bg-[var(--coral-bg)] text-xs font-medium text-[var(--coral-d)]
+                         hover:opacity-80 transition-opacity active:scale-95
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t.shoppingList.clearCompleted}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Item list */}
-      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ maxHeight: '320px' }}>
+      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ maxHeight: '240px' }}>
         {loading ? (
           <div className="flex items-center justify-center py-8 text-sm text-tm">
             {t.common.loading}
+          </div>
+        ) : offline && items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-8 px-4 text-center">
+            <CloudOffIcon className="w-8 h-8 text-tm" />
+            <span className="text-sm text-tm">{t.shoppingList.unavailable}</span>
+            <button
+              onClick={() => { setLoading(true); fetchItems(); }}
+              className="min-h-[56px] px-5 rounded-xl bg-s2 text-sm font-medium text-tp
+                         hover:bg-bd transition-colors active:scale-95"
+            >
+              {t.shoppingList.retry}
+            </button>
           </div>
         ) : activeItems.length === 0 && completedItems.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-sm text-tm">
@@ -333,7 +467,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             {activeItems.map(({ item, idx }) => (
               <div
                 key={`active-${item.uid || idx}`}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-s2 transition-colors group"
+                className="w-full flex items-center gap-3 px-3 py-2 min-h-[56px] rounded-xl hover:bg-s2 transition-colors group"
               >
                 <button
                   onClick={() => handleToggleItem(idx)}
@@ -356,7 +490,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             {completedItems.map(({ item, idx }) => (
               <div
                 key={`done-${item.uid || idx}`}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-s2 transition-colors opacity-50 group"
+                className="w-full flex items-center gap-3 px-3 py-2 min-h-[56px] rounded-xl hover:bg-s2 transition-colors opacity-50 group"
               >
                 <button
                   onClick={() => handleToggleItem(idx)}
