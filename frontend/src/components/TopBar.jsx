@@ -397,12 +397,17 @@ function PersonPresence() {
     { entityId: 'person.maayan', initial: '\u05DE', label: t.presence.maayan },
   ];
 
-  // Find person entities from allStates
-  const personStates = persons.map((p) => {
-    const entity = allStates.find((e) => e.entity_id === p.entityId);
-    const isHome = entity?.state === 'home';
-    return { ...p, isHome, state: entity?.state };
-  });
+  // Find person entities from allStates — only show if entity actually exists in HA
+  const personStates = persons
+    .map((p) => {
+      const entity = allStates.find((e) => e.entity_id === p.entityId);
+      if (!entity) return null;
+      const isHome = entity.state === 'home';
+      return { ...p, isHome, state: entity.state };
+    })
+    .filter(Boolean);
+
+  if (personStates.length === 0) return null;
 
   return (
     <div className="flex items-center gap-1.5">
