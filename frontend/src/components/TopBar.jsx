@@ -153,7 +153,7 @@ function WeatherSection() {
         className="flex items-center gap-2 px-3 py-2 rounded-xl min-w-[56px] min-h-[56px]
                    hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                    select-none"
-        aria-label="Weather"
+        aria-label={t.weather.title}
       >
         <WeatherIcon code={weather.code} size={36} />
         {tempText && (

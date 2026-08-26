@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import { HomeSkeleton } from '../Skeleton.jsx';
@@ -610,12 +610,22 @@ function ClimateModeSelector({ currentMode, modes, onChange }) {
 function ControlPopup({ entity, anchorRect, onClose, ha }) {
   const domain = getDomain(entity.entity_id);
   const popupRef = useRef(null);
+  const popupW = 220;
+  // Real rendered height, measured after paint — replaces a hardcoded
+  // estimate that used to under/overshoot once the a11y pass grew the
+  // close button and made popups taller than the old magic number assumed.
+  const [popupH, setPopupH] = useState(320);
+
+  useLayoutEffect(() => {
+    if (popupRef.current) {
+      const h = popupRef.current.offsetHeight;
+      if (h && h !== popupH) setPopupH(h);
+    }
+  });
 
   // Position near the tile
   const style = useMemo(() => {
     if (!anchorRect) return {};
-    const popupW = 220;
-    const popupH = 320;
     let left = anchorRect.left + anchorRect.width / 2 - popupW / 2;
     let top = anchorRect.top - popupH - 12;
 
@@ -636,7 +646,7 @@ function ControlPopup({ entity, anchorRect, onClose, ha }) {
       width: `${popupW}px`,
       zIndex: 50,
     };
-  }, [anchorRect]);
+  }, [anchorRect, popupH]);
 
   // Close on click outside
   useEffect(() => {
@@ -957,11 +967,19 @@ function CurtainTile({ allStates, ha, onLongPress }) {
 
 function CurtainPopup({ entity, anchorRect, onClose, ha }) {
   const popupRef = useRef(null);
+  const popupW = 260;
+  // See ControlPopup above: measured real height, not a hardcoded estimate.
+  const [popupH, setPopupH] = useState(360);
+
+  useLayoutEffect(() => {
+    if (popupRef.current) {
+      const h = popupRef.current.offsetHeight;
+      if (h && h !== popupH) setPopupH(h);
+    }
+  });
 
   const style = useMemo(() => {
     if (!anchorRect) return {};
-    const popupW = 260;
-    const popupH = 360;
     let left = anchorRect.left + anchorRect.width / 2 - popupW / 2;
     let top = anchorRect.top - popupH - 12;
     if (left < 16) left = 16;
@@ -969,7 +987,7 @@ function CurtainPopup({ entity, anchorRect, onClose, ha }) {
     if (top < 16) top = anchorRect.bottom + 12;
     if (top + popupH > window.innerHeight - 16) top = window.innerHeight - 16 - popupH;
     return { position: 'fixed', left: `${left}px`, top: `${top}px`, width: `${popupW}px`, zIndex: 50 };
-  }, [anchorRect]);
+  }, [anchorRect, popupH]);
 
   useEffect(() => {
     function handleClickOutside(e) {
