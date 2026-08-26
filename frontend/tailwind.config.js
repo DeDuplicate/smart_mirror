@@ -3,24 +3,28 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // Colors resolve through CSS vars (channels) so they respond to
+      // [data-theme="dark"]. The `rgb(var(--x-rgb) / <alpha-value>)` form
+      // keeps `/opacity` modifiers working (e.g. bg-tp/50) — plain var()
+      // colors silently emit no rule when an opacity modifier is used.
       colors: {
-        bg: '#f4f5f7',
-        surf: '#ffffff',
-        s2: '#f0f1f5',
-        bd: '#e8e9f0',
-        tp: '#1a1c2e',
-        ts: '#7b7f9e',
-        tm: '#b0b4cc',
-        acc: '#6b62e0',
-        acc2: '#2ab58a',
-        mint: '#b8ede0',
-        'mint-d': '#2a9d7f',
-        lav: '#d4cfff',
-        'lav-d': '#5b52cc',
-        coral: '#ffc8c8',
-        'coral-d': '#c95454',
-        gold: '#ffe4a0',
-        'gold-d': '#b07c10',
+        bg: 'rgb(var(--bg-rgb) / <alpha-value>)',
+        surf: 'rgb(var(--surf-rgb) / <alpha-value>)',
+        s2: 'rgb(var(--s2-rgb) / <alpha-value>)',
+        bd: 'rgb(var(--bd-rgb) / <alpha-value>)',
+        tp: 'rgb(var(--tp-rgb) / <alpha-value>)',
+        ts: 'rgb(var(--ts-rgb) / <alpha-value>)',
+        tm: 'rgb(var(--tm-rgb) / <alpha-value>)',
+        acc: 'rgb(var(--acc-rgb) / <alpha-value>)',
+        acc2: 'rgb(var(--acc2-rgb) / <alpha-value>)',
+        mint: 'rgb(var(--mint-bg-rgb) / <alpha-value>)',
+        'mint-d': 'rgb(var(--mint-d-rgb) / <alpha-value>)',
+        lav: 'rgb(var(--lav-bg-rgb) / <alpha-value>)',
+        'lav-d': 'rgb(var(--lav-d-rgb) / <alpha-value>)',
+        coral: 'rgb(var(--coral-bg-rgb) / <alpha-value>)',
+        'coral-d': 'rgb(var(--coral-d-rgb) / <alpha-value>)',
+        gold: 'rgb(var(--gold-bg-rgb) / <alpha-value>)',
+        'gold-d': 'rgb(var(--gold-d-rgb) / <alpha-value>)',
       },
       fontFamily: {
         heebo: ['Heebo', 'sans-serif'],

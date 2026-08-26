@@ -51,28 +51,51 @@
    ======================================================================== */
 
 :root {
-  /* Color tokens */
+  /* Color tokens. Every hex token has a matching `--x-rgb` channel triplet
+     — tailwind.config.js builds its utilities from the channels
+     (`rgb(var(--x-rgb) / <alpha-value>)`) so utilities like `bg-surf`
+     follow the theme. When adding a token, add both forms. */
   --bg: #f4f5f7;
+  --bg-rgb: 244 245 247;
   --surf: #ffffff;
+  --surf-rgb: 255 255 255;
   --s2: #f0f1f5;
+  --s2-rgb: 240 241 245;
   --bd: #e8e9f0;
+  --bd-rgb: 232 233 240;
   --tp: #1a1c2e;
+  --tp-rgb: 26 28 46;
   --ts: #7b7f9e;
+  --ts-rgb: 123 127 158;
   --tm: #b0b4cc;
+  --tm-rgb: 176 180 204;
 
   /* Accent */
   --acc: #6b62e0;
+  --acc-rgb: 107 98 224;
   --acc2: #2ab58a;
+  --acc2-rgb: 42 181 138;
 
   /* Pastels */
   --mint-bg: #b8ede0;
+  --mint-bg-rgb: 184 237 224;
   --mint-d: #2a9d7f;
+  --mint-d-rgb: 42 157 127;
   --lav-bg: #d4cfff;
+  --lav-bg-rgb: 212 207 255;
   --lav-d: #5b52cc;
+  --lav-d-rgb: 91 82 204;
   --coral-bg: #ffc8c8;
+  --coral-bg-rgb: 255 200 200;
   --coral-d: #c95454;
+  --coral-d-rgb: 201 84 84;
   --gold-bg: #ffe4a0;
+  --gold-bg-rgb: 255 228 160;
   --gold-d: #b07c10;
+  --gold-d-rgb: 176 124 16;
+
+  /* One-off hues with no pastel family */
+  --amber: #e0a630;
 
   /* Elevation — semantic, see rule 4. Tinted with the --tp hue so shadows
      read as the same cool grey as the rest of the palette. */
@@ -96,20 +119,36 @@
 
 :root[data-theme="dark"] {
   --bg:    #0f1019;
+  --bg-rgb: 15 16 25;
   --surf:  #1a1b2e;
+  --surf-rgb: 26 27 46;
   --s2:    #22243a;
+  --s2-rgb: 34 36 58;
   --bd:    #2d2f4a;
+  --bd-rgb: 45 47 74;
   --tp:    #e8e9f0;
+  --tp-rgb: 232 233 240;
   --ts:    #9b9fc0;
+  --ts-rgb: 155 159 192;
   --tm:    #5d6080;
+  --tm-rgb: 93 96 128;
   --acc:   #8b82f0;
+  --acc-rgb: 139 130 240;
   --acc2:  #3dd9a0;
+  --acc2-rgb: 61 217 160;
 
   /* Pastels — slightly muted for dark backgrounds */
-  --mint-bg: #1a3d35;  --mint-d: #3dd9a0;
-  --lav-bg:  #252046;  --lav-d:  #8b82f0;
-  --coral-bg: #3d1a1a; --coral-d: #ff8888;
-  --gold-bg:  #3d2d0a; --gold-d:  #ffc040;
+  --mint-bg: #1a3d35;  --mint-bg-rgb: 26 61 53;
+  --mint-d: #3dd9a0;   --mint-d-rgb: 61 217 160;
+  --lav-bg:  #252046;  --lav-bg-rgb: 37 32 70;
+  --lav-d:  #8b82f0;   --lav-d-rgb: 139 130 240;
+  --coral-bg: #3d1a1a; --coral-bg-rgb: 61 26 26;
+  --coral-d: #ff8888;  --coral-d-rgb: 255 136 136;
+  --gold-bg:  #3d2d0a; --gold-bg-rgb: 61 45 10;
+  --gold-d:  #ffc040;  --gold-d-rgb: 255 192 64;
+
+  /* One-off hues */
+  --amber: #f0b840;
 
   /* Elevation — neutral black and deeper, since a tinted shadow disappears
      against dark surfaces */
