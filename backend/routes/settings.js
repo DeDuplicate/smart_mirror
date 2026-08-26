@@ -13,8 +13,8 @@ router.get('/', (req, res) => {
     const rows = db.prepare('SELECT key, value FROM config').all();
     const settings = {};
     for (const row of rows) {
-      // Skip internal keys
-      if (row.key === 'api_token') continue;
+      // Skip internal/secret keys
+      if (row.key === 'api_token' || row.key === 'token_secret') continue;
       // Try to parse JSON values, fall back to raw string
       try {
         settings[row.key] = JSON.parse(row.value);
@@ -48,8 +48,8 @@ router.put('/', (req, res) => {
 
     const runBatch = db.transaction((entries) => {
       for (const [key, value] of entries) {
-        // Prevent overwriting the API token via settings endpoint
-        if (key === 'api_token') continue;
+        // Prevent overwriting internal/secret keys via settings endpoint
+        if (key === 'api_token' || key === 'token_secret') continue;
         const serialized = typeof value === 'string' ? value : JSON.stringify(value);
         upsert.run(key, serialized);
       }
@@ -77,8 +77,8 @@ router.put('/:key', (req, res) => {
   const logger = req.app.locals.logger;
   const { key } = req.params;
 
-  if (key === 'api_token') {
-    return res.status(403).json({ error: 'Cannot modify api_token via this endpoint' });
+  if (key === 'api_token' || key === 'token_secret') {
+    return res.status(403).json({ error: `Cannot modify ${key} via this endpoint` });
   }
 
   const { value } = req.body;
