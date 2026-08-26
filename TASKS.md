@@ -29,10 +29,6 @@ _(none known — verify the new 56px controls and popup clamps on the real
       have no effect — `TasksPage.jsx`'s `COLUMNS` is a hardcoded constant that
       never reads them. Needs a design decision (what should cleanup-interval
       even do?), not a quick fix.
-- [ ] TopBar/WeatherPopup never display the configured city name — only the
-      Settings page confirmation card (added in the city-picker fix) shows it.
-      Consider surfacing it in the weather popup too so it's visible outside
-      Settings.
 
 ## Backlog — design follow-ups
 
@@ -40,6 +36,9 @@ _(none)_
 
 ## Done
 
+- [x] **WeatherPopup shows the configured city** — pin icon + `location`
+      (+ country) row at the top of the popup, rendered only when the city
+      picker has saved one.
 - [x] **News section redesign** (the "Requested" item) — `NewsPage.jsx`
       reworked to the design-system rules deliberately: featured article is a
       full-width hero (340px, `rounded-3xl`, category-driven pastel gradient +
