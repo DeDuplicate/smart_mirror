@@ -266,6 +266,43 @@ router.post('/todo/:entity_id/update', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/ha/todo/:entity_id/remove — remove item from todo list
+// ---------------------------------------------------------------------------
+router.post('/todo/:entity_id/remove', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const entityId = req.params.entity_id;
+  const { item } = req.body;
+
+  if (!item) {
+    return res.status(400).json({ error: 'Missing "item" field' });
+  }
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(
+      `${host}/api/services/todo/remove_item`,
+      {
+        method: 'POST',
+        headers: haHeaders(),
+        body: JSON.stringify({ entity_id: entityId, item }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA API ${response.status}: ${text}`);
+    }
+
+    logger.info('Todo item removed from %s: %s', entityId, item);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('HA todo remove error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/ha/weather/:entity_id — fetch weather entity state (for IMS)
 // ---------------------------------------------------------------------------
 router.get('/weather/:entity_id', async (req, res) => {
