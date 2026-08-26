@@ -324,7 +324,6 @@ export default function MusicPage() {
   const activeTab = useStore((s) => s.activeTab);
   const spotifyStatus = useStore((s) => s.connections.spotify);
   const setActiveTab = useStore((s) => s.setActiveTab);
-  const addToast = useStore((s) => s.addToast);
 
   const isMusicTab = activeTab === 3;
   const isConfigured = spotifyStatus === 'connected';
@@ -342,15 +341,19 @@ export default function MusicPage() {
     pause,
     next,
     prev,
+    playTrack,
     setVolume,
     toggleShuffle,
     toggleRepeat,
     seekTo,
   } = useMusic(isMusicTab && isConfigured);
 
-  const handleQueueTap = useCallback(() => {
-    addToast('info', t.music.comingSoon);
-  }, [addToast]);
+  const handleQueueTap = useCallback(
+    (track) => {
+      playTrack(track);
+    },
+    [playTrack]
+  );
 
   // ── Loading ───────────────────────────────────────────────────────────
   if (isConfigured && loading) {
@@ -489,7 +492,7 @@ export default function MusicPage() {
                 key={item.id}
                 track={item}
                 isCurrent={i === 0 && currentTrack?.name === item.name}
-                onTap={handleQueueTap}
+                onTap={() => handleQueueTap(item)}
               />
             ))
           ) : (

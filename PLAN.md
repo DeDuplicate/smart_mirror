@@ -558,7 +558,7 @@ HA automations (`automation.sunrise`, `automation.sunset`, `automation.boiler_ma
 | 2 | Tasks | Drag-and-drop between Kanban columns | ✅ Built — grip handle instant drag |
 | 3 | Tasks | Add-task button + on-screen Hebrew keyboard | ✅ Built — FAB + keyboard with emoji |
 | 4 | Home | Long-press slider for brightness/temp | ✅ Built — entity-specific popups |
-| 5 | Music | Queue tap-to-play not wired | ⬜ Low priority |
+| 5 | Music | Queue tap-to-play not wired | ✅ Fixed — tap plays track via `PUT /me/player/play` with its URI |
 | 6 | General | Idle screensaver | ✅ Built — clock + slideshow modes |
 | 7 | Calendar | Month view not available | ⬜ Future enhancement |
 | 8 | News | Full article overlay not built | ✅ Built — readability extraction |
