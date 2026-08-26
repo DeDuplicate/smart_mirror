@@ -15,4 +15,5 @@ home assistant connection details
 .playwright-mcp/
 .github/skills/
 *.png
+!docs/screenshots/*.png
 smart-mirror-*.png
