@@ -261,6 +261,36 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 // ---------------------------------------------------------------------------
+// 12b. Global crash safety net
+// ---------------------------------------------------------------------------
+// A rejected promise that nobody attached a .catch() to (e.g. a stray async
+// DB call in a route handler) terminates the process on Node >=15. Express 4
+// does not catch async route-handler rejections on its own, so a single bad
+// query could otherwise take down the whole kiosk display. Log it and keep
+// the server alive — the offending request handler should still be fixed to
+// respond with its own error, but the process itself must not die for this.
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error({ err, stack: err.stack }, 'Unhandled promise rejection — continuing (not exiting)');
+});
+
+// An uncaughtException means the process is in an undefined state (Node's
+// own guidance). Log everything we can, attempt a best-effort synchronous
+// cleanup, then exit so PM2 can cleanly restart the process.
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err, stack: err && err.stack }, 'Uncaught exception — process state is undefined, exiting for PM2 restart');
+
+  try {
+    db.close();
+  } catch {
+    // already closed / corrupted — nothing more we can do
+  }
+
+  logger.flush();
+  process.exit(1);
+});
+
+// ---------------------------------------------------------------------------
 // 13. Start listening
 // ---------------------------------------------------------------------------
 const PORT = parseInt(process.env.PORT, 10) || 3001;

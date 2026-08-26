@@ -295,11 +295,18 @@ router.get('/events', async (req, res) => {
 
   const cacheKey = `calendar:${start}:${end}`;
 
-  // Stale-while-revalidate: return cached if available (max 5 min)
-  const cached = getCached(db, cacheKey, 5 * 60 * 1000);
+  let cached, accounts;
+  try {
+    // Stale-while-revalidate: return cached if available (max 5 min)
+    cached = getCached(db, cacheKey, 5 * 60 * 1000);
 
-  // Get linked Google accounts
-  const accounts = getAccountsByProvider(db, 'google');
+    // Get linked Google accounts
+    accounts = getAccountsByProvider(db, 'google');
+  } catch (err) {
+    logger.error('Calendar cache/account lookup error: %s', err.message);
+    return res.status(500).json({ error: 'Failed to read calendar cache or accounts' });
+  }
+
   if (accounts.length === 0 && !cached) {
     return res.json({ events: [], source: 'none', message: 'No Google accounts linked' });
   }

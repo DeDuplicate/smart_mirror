@@ -12,6 +12,10 @@ const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 const LOGS_DIR = path.join(__dirname, '..', 'logs');
 const BACKUP_DIR = path.join(__dirname, '..', 'backups');
 
+// PM2 process name for this backend — must match apps[].name for the backend
+// entry in ecosystem.config.js at the repo root.
+const PM2_APP_NAME = 'mirror-backend';
+
 // ---------------------------------------------------------------------------
 // Safe shell helper - uses execFile (no shell injection risk)
 // ---------------------------------------------------------------------------
@@ -201,7 +205,7 @@ router.get('/logs', (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/system/backup - trigger backup of database and config
 // ---------------------------------------------------------------------------
-router.post('/backup', (req, res) => {
+router.post('/backup', async (req, res) => {
   const db = req.app.locals.db;
   const logger = req.app.locals.logger;
 
@@ -212,9 +216,10 @@ router.post('/backup', (req, res) => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
   try {
-    // Backup SQLite database using backup API
+    // Backup SQLite database using backup API (returns a Promise — must await
+    // it or a failed backup rejects with nothing to catch it)
     const backupPath = path.join(BACKUP_DIR, 'smart-mirror-' + timestamp + '.db');
-    db.backup(backupPath);
+    await db.backup(backupPath);
 
     // Backup .env if it exists
     const envPath = path.join(__dirname, '..', '.env');
@@ -384,6 +389,55 @@ router.post('/update', (req, res) => {
     logger.info('Update completed successfully');
     res.json({ success: true, message: stdout.toString().slice(-500) });
   });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/system/restart - restart the PM2-managed backend app process
+// ---------------------------------------------------------------------------
+router.post('/restart', (req, res) => {
+  const logger = req.app.locals.logger;
+
+  logger.info('App restart requested — issuing "pm2 restart %s" shortly', PM2_APP_NAME);
+
+  // Respond before executing: "pm2 restart" kills this very process, so the
+  // client must receive its response before that happens.
+  res.json({ ok: true, message: 'Restarting app...' });
+
+  setTimeout(() => {
+    run('pm2', ['restart', PM2_APP_NAME], 15000).then((result) => {
+      if (!result.ok) {
+        logger.error('App restart failed: %s', result.stderr);
+      } else {
+        logger.info('App restart command completed: %s', result.stdout.trim());
+      }
+    });
+  }, 500);
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/system/reboot - reboot the underlying Raspberry Pi
+// ---------------------------------------------------------------------------
+router.post('/reboot', (req, res) => {
+  const logger = req.app.locals.logger;
+
+  if (!IS_LINUX) {
+    logger.info('Pi reboot requested but not running on Linux — no-op (dev mode)');
+    return res.json({ ok: true, mock: true, message: 'Reboot skipped — not running on Raspberry Pi hardware' });
+  }
+
+  logger.warn('Pi reboot requested — issuing "sudo reboot" shortly');
+
+  // Respond before executing: rebooting kills this very process, so the
+  // client must receive its response before that happens.
+  res.json({ ok: true, message: 'Rebooting Pi...' });
+
+  setTimeout(() => {
+    run('sudo', ['reboot'], 15000).then((result) => {
+      if (!result.ok) {
+        logger.error('Pi reboot command failed: %s', result.stderr);
+      }
+    });
+  }, 500);
 });
 
 module.exports = router;
