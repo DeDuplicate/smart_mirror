@@ -16,19 +16,37 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 | Tab | Description |
 |-----|-------------|
-| :calendar: **Calendar** | Weekly grid with Google Calendar sync, color-coded events, week navigation |
-| :white_check_mark: **Tasks** | Kanban board with drag-and-drop, priorities, due dates |
-| :star: **Chores** | Per-person columns with progress rings, celebration animations & sounds |
-| :house: **Smart Home** | Home Assistant tiles, AC control, IR remote, curtain, power monitor |
-| :musical_note: **Music** | Spotify player with album art, queue, volume control |
-| :newspaper: **News** | Hebrew RSS feeds (Ynet, Channel 14) with full article view |
-| :gear: **Settings** | Full configuration UI, family management, dark mode |
+| :calendar: **Calendar** | Weekly grid (Israeli Sun–Thu week) with Google Calendar sync, local event editor, color-coded events, week navigation, month grid, pull-to-refresh |
+| :white_check_mark: **Tasks** | Kanban board with drag-and-drop, subtasks, priorities, due dates, Google Tasks sync |
+| :star: **Chores** | Per-person columns with progress rings, celebration animations & sounds, family photos |
+| :house: **Smart Home** | Home Assistant tiles, AC control (IR scripts), IR remote, curtain/cover control, power monitor, shopping list |
+| :musical_note: **Music** | YouTube search + IFrame player with queue, plus MP3 casting to Google Nest / Google Home speakers |
+| :newspaper: **News** | Hebrew RSS feeds (Ynet, Channel 14) with full article extraction |
+| :gear: **Settings** | Full configuration UI, family management, dark mode, backup/restore, factory reset, setup wizard |
+
+### Music & Casting (YouTube → Google Nest / Home)
+
+- :mag: **YouTube search** and IFrame playback with queue, shuffle, and repeat
+- :satellite: **Cast to Google Nest Mini / Home** — since Cast-audio speakers can't render YouTube, the backend transcodes the stream to MP3 on the fly (`yt-dlp` → `ffmpeg`) and serves a self-hosted, HMAC-signed LAN URL the speaker can play
+- :bar_chart: **Live progress bar** while casting, synced from Home Assistant media state (play/pause/seek supported)
+- :fast_forward: **Auto-advance** through the queue when a track finishes on the speaker
+- :rocket: **Next-song pre-warm** — the upcoming track is pre-converted and cached (disk LRU) so playback starts instantly
+
+### System & Data Management
+
+- :floppy_disk: **Backup** the database — creates a server-side snapshot and downloads the `.db` file to your browser
+- :inbox_tray: **Restore** from an uploaded `.db` backup (validated SQLite; API token preserved; a safety backup is taken first)
+- :arrows_counterclockwise: **Factory reset** — wipe and re-initialize the database (safety backup + token preserved)
+- :satellite_antenna: **OTA update** via `git pull` + rebuild, restart app / Raspberry Pi, log viewer, health monitoring
+- :sun_behind_small_cloud: **Display schedule** (wake/sleep times), idle detection → screensaver, brightness control
+- :signal_strength: **Wi-Fi manager** (scan/connect/forget via `nmcli`)
 
 ### Smart Features
 
-- :crescent_moon: **Dark mode** toggle with system-wide theme
-- :clock1: **Hebrew date** (gematria) + Jewish holidays + Shabbat times
-- :sun_behind_small_cloud: **Animated weather icons** (sun, rain, snow, thunder)
+- :crescent_moon: **Dark mode** toggle with system-wide theme, plus optional **auto day/night theme**
+- :clock1: **Hebrew date** (gematria) + Jewish holidays + Shabbat times (Hebcal)
+- :sun_behind_small_cloud: **Animated weather icons** (Open-Meteo + IMS via Home Assistant)
+- :speech_balloon: **Daily phrase / quote** of the day
 - :family_man_woman_girl_boy: **Family member photos** on chore avatars
 - :fireworks: **Fireworks celebration** when kids complete all chores
 - :clap: **Clap animation + sound** on each chore completion
@@ -37,8 +55,12 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 - :zap: **Real-time electricity** monitoring
 - :electric_plug: **IR remote control** for TVs per room
 - :snowflake: **AC control** via IR scripts
+- :keyboard: **On-screen keyboard** (Hebrew / English / emoji) for touch input
+- :framed_picture: **Screensaver** (clock / photo slideshow) on idle
+- :arrow_down: **Pull-to-refresh** on Calendar, Tasks and News
 - :iphone: **PWA installable** on mobile
 - :desktop_computer: **Multi-resolution scaling** (auto-adapts to any screen)
+- :rocket: **First-run setup wizard** (name, location, Google, Home Assistant, music, news)
 
 ---
 
@@ -62,6 +84,7 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 - **Node.js** 20+
 - **npm**
+- **ffmpeg** and **yt-dlp** — required for casting YouTube audio to Google Nest / Home speakers (auto-installed by `scripts/setup.sh` on Raspberry Pi)
 
 ### Development
 
@@ -107,6 +130,9 @@ Copy `backend/.env.example` to `backend/.env` and fill in your values:
 | `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
 | `HA_HOST` | Home Assistant URL (e.g. `http://homeassistant.local:8123`) |
 | `HA_TOKEN` | Home Assistant long-lived access token |
+| `YTDLP_PATH` | Path to the `yt-dlp` binary (optional; auto-detected on `PATH`) |
+| `FFMPEG_PATH` | Path to the `ffmpeg` binary (optional; auto-detected on `PATH`) |
+| `STREAM_HOST` | LAN host/IP the speaker uses to reach the MP3 stream (optional; auto-detected, set manually for Docker) |
 
 ---
 
