@@ -216,31 +216,11 @@ router.delete('/:id', async (req, res) => {
 // ===========================================================================
 // Person-based Chores (SQLite-backed)
 // ===========================================================================
-
-/** Ensure chore tables exist (idempotent) */
-function ensureChoresTables(db) {
-  db.prepare(`
-    CREATE TABLE IF NOT EXISTS chore_people (
-      id    TEXT PRIMARY KEY,
-      name  TEXT NOT NULL,
-      color TEXT DEFAULT '#6b62e0',
-      position INTEGER DEFAULT 0
-    )
-  `).run();
-  db.prepare(`
-    CREATE TABLE IF NOT EXISTS chore_tasks (
-      id          TEXT PRIMARY KEY,
-      person_id   TEXT NOT NULL REFERENCES chore_people(id) ON DELETE CASCADE,
-      title       TEXT NOT NULL,
-      emoji       TEXT DEFAULT '📌',
-      completed   INTEGER DEFAULT 0,
-      recurrence  TEXT DEFAULT 'once',
-      due_date    TEXT,
-      created_at  INTEGER DEFAULT (unixepoch()),
-      position    INTEGER DEFAULT 0
-    )
-  `).run();
-}
+// Table creation lives solely in db/migrations/002_chores.sql, applied once
+// at boot by runMigrations() in server.js before any route is reachable —
+// there is no ensureChoresTables() call here anymore. Keeping a second
+// inline CREATE TABLE IF NOT EXISTS in sync with the migration file by hand
+// was the actual bug (see TASKS.md): the two could silently drift apart.
 
 /** Sync people from localStorage-configured family (sent by frontend) */
 function syncPeople(db, configuredPeople) {
@@ -268,8 +248,6 @@ router.get('/people', (req, res) => {
   const logger = req.app.locals.logger;
 
   try {
-    ensureChoresTables(db);
-
     // If frontend sends configured people via query, sync them
     if (req.query.sync) {
       try {
@@ -310,7 +288,6 @@ router.patch('/people/:personId/tasks/:taskId/toggle', (req, res) => {
   const logger = req.app.locals.logger;
 
   try {
-    ensureChoresTables(db);
     const { personId, taskId } = req.params;
 
     const task = db.prepare('SELECT * FROM chore_tasks WHERE id = ? AND person_id = ?').get(taskId, personId);
@@ -334,7 +311,6 @@ router.post('/people/:personId/tasks', (req, res) => {
   const logger = req.app.locals.logger;
 
   try {
-    ensureChoresTables(db);
     const { personId } = req.params;
 
     // Verify person exists
@@ -373,7 +349,6 @@ router.delete('/people/:personId/tasks/:taskId', (req, res) => {
   const logger = req.app.locals.logger;
 
   try {
-    ensureChoresTables(db);
     const { personId, taskId } = req.params;
 
     const result = db.prepare('DELETE FROM chore_tasks WHERE id = ? AND person_id = ?').run(taskId, personId);
