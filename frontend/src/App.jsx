@@ -189,7 +189,7 @@ function GoogleAccountCard({ account, colorMap, onColorChange }) {
               title={c.label}
             >
               {selectedColor === c.key && (
-                <svg viewBox="0 0 24 24" fill="none" stroke={c.dot} strokeWidth="3"
+                <svg viewBox="0 0 24 24" fill="none" stroke={c.dot} strokeWidth="2.5"
                      strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
@@ -296,7 +296,7 @@ function SetupWizard({ onComplete }) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-bg flex items-center justify-center">
-      <div className="bg-surf rounded-3xl shadow-2xl p-10 w-[600px] min-h-[400px] flex flex-col">
+      <div className="bg-surf rounded-2xl shadow-modal p-10 w-[600px] min-h-[400px] flex flex-col">
         {/* Progress */}
         <div className="flex gap-1.5 mb-8">
           {steps.map((_, i) => (
@@ -531,7 +531,7 @@ function SetupWizard({ onComplete }) {
                       {Object.entries(haEntities).map(([domain, entities]) => (
                         <span
                           key={domain}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
                                      text-xs font-medium bg-acc/10 text-acc"
                         >
                           {domain}
@@ -629,7 +629,7 @@ function SetupWizard({ onComplete }) {
                     />
                     <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
                                     transition-colors duration-[var(--dur-fast)]" />
-                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow
+                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-card
                                     peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
                   </div>
                 </label>
@@ -647,7 +647,7 @@ function SetupWizard({ onComplete }) {
                     />
                     <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
                                     transition-colors duration-[var(--dur-fast)]" />
-                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow
+                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-card
                                     peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
                   </div>
                 </label>

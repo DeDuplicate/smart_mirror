@@ -164,7 +164,7 @@ function ScrollPicker({ items, value, onChange, label }) {
       <span className="text-xs text-ts font-medium">{label}</span>
       <div className="relative h-[144px] w-full overflow-hidden rounded-xl bg-s2">
         {/* Selection highlight */}
-        <div className="absolute inset-x-0 top-[48px] h-[48px] bg-acc/10 rounded-lg pointer-events-none z-10 border-y border-acc/20" />
+        <div className="absolute inset-x-0 top-[48px] h-[48px] bg-acc/10 rounded-xl pointer-events-none z-10 border-y border-acc/20" />
         <div
           ref={listRef}
           className="h-full overflow-y-auto scroll-smooth"
@@ -256,10 +256,10 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
     <div
       ref={cardRef}
       className={`
-        bg-surf border border-bd rounded-xl p-4 shadow-sm
+        bg-surf border border-bd rounded-xl p-4 shadow-card
         cursor-pointer select-none
         transition-all duration-[var(--dur-fast)]
-        hover:shadow-md active:scale-[0.98]
+        hover:shadow-raised active:scale-[0.98]
       `}
       style={{
         opacity: isBeingDragged ? 0.4 : 0,
@@ -422,7 +422,7 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
 
       {/* Panel — when keyboard open, panel sits directly above keyboard; keyboard=bottom 40%, panel=top of remaining 60% anchored to bottom */}
       <div
-        className="relative bg-surf shadow-2xl flex flex-col overflow-hidden"
+        className="relative bg-surf shadow-modal rounded-t-3xl flex flex-col overflow-hidden"
         style={{
           position: keyboardTarget ? 'absolute' : 'relative',
           bottom: keyboardTarget ? '40%' : '0',
@@ -430,7 +430,6 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
           right: 0,
           marginTop: keyboardTarget ? undefined : 'auto',
           height: keyboardTarget ? '60%' : '80%',
-          borderRadius: keyboardTarget ? '24px 24px 0 0' : '24px 24px 0 0',
           animation: 'taskOverlayUp var(--dur-normal) var(--ease-out) forwards',
           transition: 'height 0.25s ease, bottom 0.25s ease',
         }}
@@ -443,7 +442,7 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
           <button
             onClick={onClose}
             className="flex items-center justify-center w-14 h-14 rounded-full text-ts hover:bg-s2
-                       active:scale-90 transition-all duration-[var(--dur-fast)]"
+                       active:scale-95 transition-all duration-[var(--dur-fast)]"
             aria-label={t.common.cancel}
           >
             <CloseIcon />
@@ -497,7 +496,7 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
                   }
                 }}
                 className={`
-                  px-4 h-10 rounded-lg text-sm font-medium transition-all duration-[var(--dur-fast)]
+                  px-4 h-10 rounded-xl text-sm font-medium transition-all duration-[var(--dur-fast)]
                   ${hasDueDate
                     ? 'bg-acc text-white'
                     : 'bg-s2 text-ts border border-bd'
@@ -847,7 +846,6 @@ export default function TasksPage() {
               style={isDropHere ? {
                 outline: '2px dashed var(--acc)',
                 outlineOffset: '-2px',
-                borderRadius: 'var(--radius-2xl, 1rem)',
                 transform: 'scale(1.01)',
               } : undefined}
             >
@@ -919,7 +917,7 @@ export default function TasksPage() {
             transition: 'transform var(--dur-fast)',
           }}
         >
-          <div className="bg-surf border border-acc/30 rounded-xl p-4 shadow-xl">
+          <div className="bg-surf border border-acc/30 rounded-xl p-4 shadow-raised">
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -955,8 +953,8 @@ export default function TasksPage() {
       <button
         onClick={openNewTask}
         className="ripple absolute bottom-6 start-6 w-14 h-14 rounded-full bg-acc text-white
-                   shadow-lg flex items-center justify-center
-                   hover:bg-acc/90 active:scale-90 transition-all duration-[var(--dur-fast)]"
+                   shadow-raised flex items-center justify-center
+                   hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
         aria-label={t.tasks.addTask}
       >
         <PlusIcon />

@@ -166,7 +166,7 @@ function ToggleRow({ label, checked, onChange }) {
                     ${checked ? 'bg-acc' : 'bg-bd'}`}
       >
         <span
-          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm
+          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-card
                       transition-transform duration-[var(--dur-fast)]
                       ${checked ? 'translate-x-[-26px]' : 'translate-x-[-2px]'}`}
           style={{ right: 0 }}
@@ -200,7 +200,7 @@ function SliderRow({ label, min, max, step = 1, value, onChange, unit = '' }) {
                    [&::-webkit-slider-thumb]:h-5
                    [&::-webkit-slider-thumb]:rounded-full
                    [&::-webkit-slider-thumb]:bg-acc
-                   [&::-webkit-slider-thumb]:shadow-sm
+                   [&::-webkit-slider-thumb]:shadow-card
                    [&::-webkit-slider-thumb]:cursor-pointer"
       />
     </div>
@@ -916,10 +916,10 @@ function DisplaySection() {
                     setSettings({ temperatureUnit: unit });
                     updateSettings({ temperatureUnit: unit });
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all
                                duration-[var(--dur-fast)]
                                ${settings.temperatureUnit === unit
-                                 ? 'bg-acc text-white shadow-sm'
+                                 ? 'bg-acc text-white shadow-card'
                                  : 'text-ts hover:text-tp'}`}
                 >
                   {unit === 'celsius' ? t.weather.celsius : t.weather.fahrenheit}
@@ -942,10 +942,10 @@ function DisplaySection() {
                     setSettings({ weatherSource: src.value });
                     updateSettings({ weatherSource: src.value });
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all
                                duration-[var(--dur-fast)]
                                ${(settings.weatherSource || 'openmeteo') === src.value
-                                 ? 'bg-acc text-white shadow-sm'
+                                 ? 'bg-acc text-white shadow-card'
                                  : 'text-ts hover:text-tp'}`}
                 >
                   {src.label}

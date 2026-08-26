@@ -10,7 +10,7 @@ import ACControlPopup from '../ACControlPopup.jsx';
 
 function BulbIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M9 18h6" />
       <path d="M10 22h4" />
@@ -21,7 +21,7 @@ function BulbIcon({ className = 'w-8 h-8' }) {
 
 function SnowflakeIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <line x1="12" y1="2" x2="12" y2="22" />
       <path d="M20 12H4" />
@@ -37,7 +37,7 @@ function SnowflakeIcon({ className = 'w-8 h-8' }) {
 
 function FlameIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 22c4-3.5 7-7.5 7-11a7 7 0 0 0-14 0c0 3.5 3 7.5 7 11z" />
       <path d="M12 22c-1.5-1.3-2.5-3-2.5-5a2.5 2.5 0 0 1 5 0c0 2-1 3.7-2.5 5z" />
@@ -47,7 +47,7 @@ function FlameIcon({ className = 'w-8 h-8' }) {
 
 function PowerIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64" />
       <line x1="12" y1="2" x2="12" y2="12" />
@@ -57,7 +57,7 @@ function PowerIcon({ className = 'w-8 h-8' }) {
 
 function TvIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <rect x="2" y="3" width="20" height="14" rx="2" />
       <line x1="8" y1="21" x2="16" y2="21" />
@@ -68,7 +68,7 @@ function TvIcon({ className = 'w-8 h-8' }) {
 
 function SpeakerIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
       <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
@@ -79,7 +79,7 @@ function SpeakerIcon({ className = 'w-8 h-8' }) {
 
 function GateIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M3 21V8l9-5 9 5v13" />
       <path d="M9 21V12h6v9" />
@@ -90,7 +90,7 @@ function GateIcon({ className = 'w-8 h-8' }) {
 
 function LockIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <rect x="3" y="11" width="18" height="11" rx="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -101,7 +101,7 @@ function LockIcon({ className = 'w-8 h-8' }) {
 
 function UnlockedIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <rect x="3" y="11" width="18" height="11" rx="2" />
       <path d="M7 11V7a5 5 0 0 1 9.9-1" />
@@ -112,7 +112,7 @@ function UnlockedIcon({ className = 'w-8 h-8' }) {
 
 function FanIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 12c-2-3-6-4-6-8a6 6 0 0 1 12 0c0 4-4 5-6 8z" />
       <path d="M12 12c3 2 4 6 8 6a6 6 0 0 0 0-12c-4 0-5 4-8 6z" />
@@ -125,7 +125,7 @@ function FanIcon({ className = 'w-8 h-8' }) {
 
 function LightningBoltIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     </svg>
@@ -134,7 +134,7 @@ function LightningBoltIcon({ className = 'w-8 h-8' }) {
 
 function CurtainIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M2 2h20v2H2z" />
       <path d="M4 4v16c3-2 4-6 4-8s1-6 4-8" />
@@ -147,7 +147,7 @@ function CurtainIcon({ className = 'w-8 h-8' }) {
 
 function RemoteControlIcon({ className = 'w-8 h-8' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <rect x="6" y="2" width="12" height="20" rx="3" />
       <circle cx="12" cy="8" r="2" />
@@ -444,11 +444,11 @@ function DeviceTile({ entity, onToggle, onLongPress, offline }) {
   return (
     <div
       className={`relative card flex flex-col items-center justify-center gap-2.5
-                   rounded-2xl cursor-pointer select-none overflow-hidden
+                   cursor-pointer select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]
-                   ${pressing ? 'scale-[0.97]' : 'scale-100'}
-                   hover:shadow-md`}
+                   ${pressing ? 'scale-[0.98]' : 'scale-100'}
+                   hover:shadow-raised`}
       style={{
         minHeight: '140px',
         minWidth: '180px',
@@ -556,7 +556,7 @@ function PopupSlider({ value, min, max, step = 1, label, suffix = '', onChange }
           />
           {/* Thumb indicator */}
           <div
-            className="absolute left-1/2 -translate-x-1/2 w-8 h-3 rounded-full bg-white shadow-md
+            className="absolute left-1/2 -translate-x-1/2 w-8 h-3 rounded-full bg-white shadow-card
                        transition-[bottom] duration-75"
             style={{ bottom: `calc(${pct}% - 6px)` }}
           />
@@ -590,7 +590,7 @@ function ClimateModeSelector({ currentMode, modes, onChange }) {
           <button
             key={mode}
             onClick={() => onChange(mode)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-[var(--dur-fast)]
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-[var(--dur-fast)]
               active:scale-95 ${
               currentMode === mode
                 ? 'bg-acc2 text-white'
@@ -764,7 +764,7 @@ function ControlPopup({ entity, anchorRect, onClose, ha }) {
   return (
     <div
       ref={popupRef}
-      className="bg-surf border border-bd rounded-2xl shadow-2xl animate-popup-in"
+      className="bg-surf border border-bd rounded-2xl shadow-popover animate-popup-in"
       style={style}
       dir="rtl"
     >
@@ -777,7 +777,7 @@ function ControlPopup({ entity, anchorRect, onClose, ha }) {
           onClick={onClose}
           aria-label={t.common.close}
           className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
-                     hover:bg-s2 transition-colors active:scale-90"
+                     hover:bg-s2 transition-colors active:scale-95"
         >
           <CloseIcon className="w-4 h-4" />
         </button>
@@ -843,7 +843,7 @@ function ElectricityTile({ allStates }) {
   return (
     <div
       className={`relative card flex flex-col items-center justify-center gap-2.5
-                   rounded-2xl select-none overflow-hidden
+                   select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]`}
       style={{ minHeight: '140px', minWidth: '180px' }}
@@ -927,11 +927,11 @@ function CurtainTile({ allStates, ha, onLongPress }) {
   return (
     <div
       className={`relative card flex flex-col items-center justify-center gap-2.5
-                   rounded-2xl cursor-pointer select-none overflow-hidden
+                   cursor-pointer select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]
-                   ${pressing ? 'scale-[0.97]' : 'scale-100'}
-                   hover:shadow-md`}
+                   ${pressing ? 'scale-[0.98]' : 'scale-100'}
+                   hover:shadow-raised`}
       style={{ minHeight: '140px', minWidth: '180px' }}
       onPointerDown={handlePressStart}
       onPointerUp={handlePressEnd}
@@ -988,10 +988,10 @@ function CurtainPopup({ entity, anchorRect, onClose, ha }) {
   const pos = entity.attributes?.current_position ?? 0;
 
   return (
-    <div ref={popupRef} className="bg-surf border border-bd rounded-2xl shadow-2xl animate-popup-in" style={style} dir="rtl">
+    <div ref={popupRef} className="bg-surf border border-bd rounded-2xl shadow-popover animate-popup-in" style={style} dir="rtl">
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <span className="text-sm font-semibold text-tp">{t.home.curtain}</span>
-        <button onClick={onClose} aria-label={t.common.close} className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm hover:bg-s2 transition-colors active:scale-90">
+        <button onClick={onClose} aria-label={t.common.close} className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm hover:bg-s2 transition-colors active:scale-95">
           <CloseIcon className="w-4 h-4" />
         </button>
       </div>
@@ -1043,9 +1043,9 @@ function IRRemoteTile({ entityId, label, onTap }) {
   return (
     <div
       className="relative card flex flex-col items-center justify-center gap-2.5
-                 rounded-2xl cursor-pointer select-none overflow-hidden
-                 border-2 border-bd hover:shadow-md
-                 transition-all duration-[var(--dur-fast)] active:scale-[0.97]"
+                 cursor-pointer select-none overflow-hidden
+                 border-2 border-bd hover:shadow-raised
+                 transition-all duration-[var(--dur-fast)] active:scale-[0.98]"
       style={{ minHeight: '140px', minWidth: '180px' }}
       onClick={() => onTap(entityId)}
     >
@@ -1168,10 +1168,10 @@ export default function HomePage() {
         {/* AC Control tile — spans 2 columns */}
         <div
           className="col-span-2 card flex flex-col items-center justify-center gap-2.5
-                     rounded-2xl cursor-pointer select-none overflow-hidden
-                     border-2 border-bd hover:shadow-md
+                     cursor-pointer select-none overflow-hidden
+                     border-2 border-bd hover:shadow-raised
                      transition-all duration-[var(--dur-fast)]
-                     hover:border-acc2 active:scale-[0.97]"
+                     hover:border-acc2 active:scale-[0.98]"
           style={{ minHeight: '140px' }}
           onClick={() => setAcPopupOpen(true)}
         >
@@ -1225,7 +1225,7 @@ export default function HomePage() {
             <div
               key={`empty-${i}`}
               className="card flex flex-col items-center justify-center gap-2
-                         rounded-2xl border-2 border-dashed border-bd
+                         border-2 border-dashed border-bd
                          min-h-[140px] min-w-[180px] opacity-30"
             >
               <div className="w-10 h-10 rounded-full bg-s2 flex items-center justify-center">

@@ -132,7 +132,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
 
       {/* Slide-up panel */}
       <div
-        className="absolute bottom-0 inset-x-0 bg-surf rounded-t-[24px] shadow-2xl
+        className="absolute bottom-0 inset-x-0 bg-surf rounded-t-3xl shadow-modal
                    flex flex-col overflow-hidden transition-transform"
         style={{
           maxHeight: '85%',
@@ -225,8 +225,7 @@ function FeaturedCard({ article, onClick }) {
     <div
       onClick={() => onClick(article)}
       className="shrink-0 relative rounded-2xl overflow-hidden h-[280px] cursor-pointer
-                 hover:shadow-xl transition-shadow duration-[var(--dur-normal)]"
-      style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}
+                 shadow-card hover:shadow-raised transition-shadow duration-[var(--dur-normal)]"
     >
       {/* Background gradient */}
       <div className={`absolute inset-0 bg-gradient-to-br ${GRADIENT_BG[0]}`} />
@@ -264,7 +263,7 @@ function NewsCard({ article, index, onClick }) {
     <div
       onClick={() => onClick(article)}
       className="bg-surf border border-bd rounded-2xl overflow-hidden flex cursor-pointer
-                 hover:shadow-md transition-shadow duration-[var(--dur-fast)]"
+                 hover:shadow-raised transition-shadow duration-[var(--dur-fast)]"
     >
       {/* Image placeholder */}
       <div className={`w-[140px] shrink-0 bg-gradient-to-br ${GRADIENT_BG[gradientIdx]}`} />
