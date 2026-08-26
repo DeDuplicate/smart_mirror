@@ -795,77 +795,23 @@ function HomeAssistantSection() {
 // ─── Section: Spotify ────────────────────────────────────────────────────────
 
 function SpotifySection() {
-  const connections = useStore((s) => s.connections);
-  const {
-    startSpotifyAuth,
-    removeSpotifyAccount,
-    isAuthenticating,
-    provider,
-    authUrl,
-    error,
-    retryAuth,
-    cancelAuth,
-  } = useAuth();
-  const addToast = useStore((s) => s.addToast);
-  const isConnected = connections.spotify === 'connected';
-
-  const handleConnect = useCallback(() => {
-    startSpotifyAuth(() => {
-      addToast('success', t.settings.spotifyConnected);
-    });
-  }, [startSpotifyAuth, addToast]);
-
-  const handleDisconnect = useCallback(async () => {
-    const ok = await removeSpotifyAccount();
-    if (ok) {
-      addToast('success', t.settings.spotifyDisconnected);
-    } else {
-      addToast('error', t.settings.spotifyDisconnectFailed);
-    }
-  }, [removeSpotifyAccount, addToast]);
-
   return (
-    <>
-      <Section title={t.settings.spotify}>
-        {/* Show error if auth not configured */}
-        {error && provider === 'spotify' && (
-          <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm mb-3">
-            <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
-            <p className="text-[var(--ts)] text-xs">
-              הגדר SPOTIFY_CLIENT_ID ו-SPOTIFY_CLIENT_SECRET בקובץ .env בשרת
-            </p>
-          </div>
-        )}
-        {isConnected ? (
-          <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-tp">{t.settings.connectedAs}</span>
-              <span className="text-xs text-ts">Spotify</span>
-            </div>
-            <Btn variant="danger" onClick={handleDisconnect}>{t.settings.disconnectSpotify}</Btn>
-          </div>
-        ) : (
-          <Btn
-            variant="primary"
-            icon={isAuthenticating && provider === 'spotify' ? <Spinner /> : <LinkIcon />}
-            onClick={handleConnect}
-            disabled={isAuthenticating}
-          >
-            {t.settings.connectSpotify}
-          </Btn>
-        )}
-      </Section>
-
-      {isAuthenticating && authUrl && (
-        <OAuthOverlay
-          provider={provider}
-          authUrl={authUrl}
-          onSuccess={() => addToast('success', t.settings.spotifyConnected)}
-          onClose={cancelAuth}
-          onRetry={retryAuth}
-        />
-      )}
-    </>
+    <Section title={t.settings.spotify}>
+      <div className="flex items-start gap-3 bg-s2 border border-bd rounded-xl px-4 py-4">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+          style={{ backgroundColor: 'var(--mint-bg)' }}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6" style={{ color: 'var(--mint-d)' }}>
+            <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
+          </svg>
+        </div>
+        <div className="flex flex-col gap-1 min-w-0">
+          <p className="text-sm font-medium text-tp">{t.music.youtubeMusic}</p>
+          <p className="text-xs text-ts leading-relaxed">{t.settings.spotifySetupHint}</p>
+        </div>
+      </div>
+    </Section>
   );
 }
 
@@ -873,31 +819,96 @@ function SpotifySection() {
 
 function NewsSection() {
   const { settings, updateSettings } = useSettings();
-  const { setSettings } = useStore();
+  const addToast = useStore((s) => s.addToast);
+  const [catalog, setCatalog] = useState(null); // null = loading; [{id, name, category}] from backend
+  const [loadError, setLoadError] = useState(false);
 
-  const ynet = settings.newsYnet !== false; // default true
-  const now14 = settings.newsNow14 === true; // default false
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi('/api/news/sources')
+      .then((res) => {
+        if (cancelled) return;
+        setCatalog(Array.isArray(res?.sources) ? res.sources : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCatalog([]);
+        setLoadError(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Selected source ids: settings.news_sources (array) is authoritative —
+  // the exact config key backend/routes/news.js's resolveSources() reads.
+  // Unset/empty means ALL sources on (same default as the backend); the
+  // explicit id list is persisted in full, including when all are selected.
+  const allIds = (catalog || []).map((s) => s.id);
+  const saved = Array.isArray(settings.news_sources) ? settings.news_sources : [];
+  const selected = saved.length > 0 ? allIds.filter((id) => saved.includes(id)) : allIds;
+
+  const toggleSource = useCallback((id) => {
+    const isOn = selected.includes(id);
+    // An empty array means "all on" to the backend, so the last selected
+    // source can't be turned off — at least one source must stay selected.
+    if (isOn && selected.length === 1) {
+      addToast('error', t.settings.newsSourcesEmptyError);
+      return;
+    }
+    const next = isOn ? selected.filter((s) => s !== id) : [...selected, id];
+    updateSettings({ news_sources: next });
+  }, [selected, updateSettings, addToast]);
+
+  const categoryLabel = (category) =>
+    (category && t.news.categories[category]) || t.news.categories.news;
 
   return (
     <Section title={t.settings.news}>
-      <div className="flex flex-col divide-y divide-bd">
-        <ToggleRow
-          label={t.settings.sourceYnet}
-          checked={ynet}
-          onChange={(val) => {
-            setSettings({ newsYnet: val });
-            updateSettings({ newsYnet: val });
-          }}
-        />
-        <ToggleRow
-          label={t.settings.sourceNow14}
-          checked={now14}
-          onChange={(val) => {
-            setSettings({ newsNow14: val });
-            updateSettings({ newsNow14: val });
-          }}
-        />
-      </div>
+      <p className="text-xs text-tm mb-3">{t.settings.newsSourcesDesc}</p>
+      {catalog === null && (
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-14 w-full rounded-xl" />
+          ))}
+        </div>
+      )}
+      {catalog !== null && loadError && (
+        <p className="text-sm text-coral-d">{t.settings.newsSourcesLoadError}</p>
+      )}
+      {catalog !== null && !loadError && (
+        <div className="flex flex-col gap-2">
+          {catalog.map((src) => {
+            const isOn = selected.includes(src.id);
+            return (
+              <button
+                key={src.id}
+                role="checkbox"
+                aria-checked={isOn}
+                onClick={() => toggleSource(src.id)}
+                className={`flex items-center gap-3 min-h-[56px] px-4 rounded-xl border
+                            transition-all duration-[var(--dur-fast)] active:scale-95
+                            ${isOn
+                              ? 'border-acc bg-s2 shadow-card'
+                              : 'border-bd bg-s2'}`}
+              >
+                <span
+                  className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0
+                              transition-colors duration-[var(--dur-fast)]
+                              ${isOn ? 'bg-acc' : 'border-2 border-bd'}`}
+                >
+                  {isOn && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </span>
+                <span className="flex-1 text-start text-sm font-medium text-tp">{src.name}</span>
+                <span className="text-xs text-tm">{categoryLabel(src.category)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </Section>
   );
 }

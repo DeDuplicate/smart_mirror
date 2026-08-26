@@ -11,7 +11,7 @@ Smart Mirror Display — a touch-enabled family dashboard running on Raspberry P
 - **Frontend:** React 18 + Vite, Tailwind CSS v3 (logical properties), Zustand for state, Socket.io for real-time
 - **Backend:** Node.js + Express, SQLite (better-sqlite3), PM2 for process management
 - **Kiosk:** Chromium `--kiosk` on Raspberry Pi OS Bookworm 64-bit
-- **External APIs:** Google Calendar/Tasks (OAuth 2.0), Home Assistant (REST + WebSocket), Open-Meteo + IMS weather, Spotify, Hebcal (Jewish holidays), Ynet/Channel 14 RSS
+- **External APIs:** Google Calendar/Tasks (OAuth 2.0), Home Assistant (REST + WebSocket), Open-Meteo + IMS weather, YouTube (IFrame Player + search), Hebcal (Jewish holidays), Ynet/Channel 14 RSS
 
 ## Build & Run Commands
 
@@ -42,11 +42,11 @@ node scripts/generate-icons.js
 
 Frontend talks to backend via HTTP + WebSocket (Socket.io). Backend proxies all external APIs and manages OAuth tokens. SQLite stores config and kanban column state. Multi-resolution scaling via CSS transform.
 
-**7 Tabs:** Calendar (weekly grid) | Tasks (kanban drag-drop) | Chores (person columns + celebrations) | Home (HA tiles + AC + IR) | Music (Spotify player) | News (RSS headlines) | Settings (full config)
+**7 Tabs:** Calendar (weekly grid) | Tasks (kanban drag-drop) | Chores (person columns + celebrations) | Home (HA tiles + AC + IR) | Music (YouTube search + IFrame player) | News (RSS headlines) | Settings (full config)
 
 **TopBar** is always visible: live clock, animated weather icon, Hebrew date (gematria), holiday badge, Shabbat times, greeting, dark mode toggle, brightness, shopping list, person presence, WiFi manager.
 
-**First-Run Setup Wizard** (7 steps): name, location, Google OAuth, HA connection + entity discovery, Spotify, news sources, finish.
+**First-Run Setup Wizard** (7 steps): name, location, Google OAuth, HA connection + entity discovery, YouTube music (no account), news sources, finish.
 
 ## Critical Design Constraints (LOCKED)
 
@@ -68,7 +68,7 @@ Frontend talks to backend via HTTP + WebSocket (Socket.io). Backend proxies all 
 | `useTasks` | Kanban tasks CRUD, drag-drop state |
 | `useChores` | Person-based chores, reads family from localStorage |
 | `useHomeAssistant` | HA entity states, toggles, services, WebSocket |
-| `useMusic` | Spotify playback state, controls, queue |
+| `useMusic` | YouTube search, queue, IFrame playback |
 | `useNews` | RSS articles, full article extraction |
 | `useHebrewCalendar` | Hebcal API, holidays, Shabbat times |
 | `useAuth` | Google/Spotify OAuth flow, account management |
@@ -93,7 +93,7 @@ TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiP
 | `/api/tasks/*` | Google Tasks CRUD |
 | `/api/weather` | Open-Meteo + IMS weather |
 | `/api/ha/*` | HA states, services, todo, remote, weather entity |
-| `/api/music/*` | Spotify playback controls |
+| `/api/music/*` | YouTube search, suggest, related videos |
 | `/api/news/*` | RSS feeds + readability extraction |
 | `/api/wifi/*` | Network scan/connect/forget (nmcli) |
 | `/api/settings/*` | Config CRUD in SQLite |
