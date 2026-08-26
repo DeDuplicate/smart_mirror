@@ -56,6 +56,17 @@ _(none known — verify the new 56px controls and popup clamps on the real
 
 ## Done
 
+- [x] **Flashable OS image (pi-gen kiosk appliance) (user-requested).**
+      New `image/` directory: `build.sh` clones pi-gen (arm64/Bookworm),
+      injects `stage-smartmirror`, and builds via Docker → flashable
+      `smart-mirror.img.xz`. The stage: (00) apt packages incl. X11,
+      Chromium, ffmpeg, ddcutil; (01) Node 20 + yt-dlp + clone/build app
+      into `/opt/smart-mirror`; (02) systemd services for backend :3001 +
+      frontend :3000, tty1 autologin → startx → Chromium kiosk, i2c for
+      brightness. Added `.gitattributes` (LF for shell/stage files),
+      gitignored `image/pi-gen/`, docs in `image/README.md` + main README
+      section. All bash scripts syntax-verified (`bash -n`).
+
 - [x] **WiFi: audited for Pi-readiness, fixed 4 real nmcli bugs (user-requested).**
       Frontend is fully real (always hits `/api/wifi/*`); backend mocks only
       run on non-Linux dev machines. Fixed the Linux (`nmcli`) paths that

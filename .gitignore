@@ -14,6 +14,8 @@ backend/*.log
 home assistant connection details
 .playwright-mcp/
 .github/skills/
+# pi-gen checkout created by image/build.sh
+image/pi-gen/
 *.png
 !docs/screenshots/*.png
 smart-mirror-*.png

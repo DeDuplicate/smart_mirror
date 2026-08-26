@@ -1,0 +1,10 @@
+# Shell scripts and pi-gen stage files must keep LF endings —
+# they are executed on Linux (Raspberry Pi / pi-gen chroot).
+*.sh text eol=lf
+image/config text eol=lf
+image/stage-smartmirror/** text eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.db binary
