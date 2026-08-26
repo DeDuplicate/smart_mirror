@@ -325,7 +325,7 @@ export default function MusicPage() {
   const spotifyStatus = useStore((s) => s.connections.spotify);
   const setActiveTab = useStore((s) => s.setActiveTab);
 
-  const isMusicTab = activeTab === 3;
+  const isMusicTab = activeTab === 4;
   const isConfigured = spotifyStatus === 'connected';
 
   const {
