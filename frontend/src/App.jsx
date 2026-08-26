@@ -14,6 +14,7 @@ import { fetchApi } from './hooks/useApi.js';
 import useHealth from './hooks/useHealth.js';
 import useIdleDetection from './hooks/useIdleDetection.js';
 import useDisplaySchedule from './hooks/useDisplaySchedule.js';
+import useRippleEffect from './hooks/useRippleEffect.js';
 import Screensaver from './components/Screensaver.jsx';
 
 // ─── Lazy-loaded tab pages (code-split per tab) ────────────────────────────
@@ -733,6 +734,8 @@ export default function App() {
   const screensaverStyle = useStore((s) => s.settings.screensaverStyle) || 'clock';
   const [showWizard, setShowWizard] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useRippleEffect();
 
   // ── Offline / online detection ──
   useEffect(() => {

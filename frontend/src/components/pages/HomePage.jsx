@@ -5,6 +5,7 @@ import { HomeSkeleton } from '../Skeleton.jsx';
 import useHomeAssistant from '../../hooks/useHomeAssistant.js';
 import IRRemoteOverlay from '../IRRemoteOverlay.jsx';
 import ACControlPopup from '../ACControlPopup.jsx';
+import ConnectionBanner from '../ConnectionBanner.jsx';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -1181,6 +1182,14 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden p-6 gap-5" dir="rtl">
+      {haStatus === 'degraded' && (
+        <ConnectionBanner
+          integration={t.connection.degraded}
+          message={t.connection.haDegraded}
+          onAction={ha.refresh}
+        />
+      )}
+
       {/* Device tiles grid */}
       <div className="flex-1 grid grid-cols-5 grid-rows-2 gap-4 overflow-y-auto">
         {/* AC Control tile — spans 2 columns */}
