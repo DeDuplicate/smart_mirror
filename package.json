@@ -6,7 +6,9 @@
     "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npx vite --host\"",
     "build": "cd frontend && npx vite build",
     "start": "pm2 start ecosystem.config.js",
-    "setup": "bash scripts/setup.sh"
+    "setup": "bash scripts/setup.sh",
+    "sync": "node scripts/sync-to-pi.js",
+    "deploy": "node scripts/sync-to-pi.js --rebuild"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
