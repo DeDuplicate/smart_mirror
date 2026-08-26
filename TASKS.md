@@ -14,7 +14,10 @@ _(none)_
 
 ## In progress
 
-_(none)_
+- [ ] **News section redesign** using the locally cloned Apple-HIG skill at
+      `.github/skills/apple-design-skill/` (agent running: HIG-cited design
+      review + implementation of the featured card, headline list, and the
+      full-article reading overlay).
 
 ## Backlog — correctness / real bugs
 
@@ -23,13 +26,47 @@ _(none known — verify the new 56px controls and popup clamps on the real
 
 ## Backlog — features / gaps
 
-_(none)_
+- [ ] Vestigial Spotify plumbing after the YouTube migration: `/api/system/health`
+      still reports a `spotify` integration, `useHealth.js:47` still maps it into
+      `connections.spotify`, and `store/index.js:161` still seeds it. Nothing
+      renders it (TopBar shows only wifi + ha), so it's harmless dead state
+      rather than a misleading UI — but it should be removed along with the
+      remaining Spotify credential paths in `auth.js`/Settings.
 
 ## Backlog — design follow-ups
 
-_(none)_
+- [ ] `--amber` (`#e0a630` light / `#f0b840` dark) is the only color token with
+      no `-rgb` channel sibling and no `tailwind.config.js` entry, so it can't
+      be used as a utility or with an opacity modifier. Add the triplet if the
+      electricity-tile amber is meant to be a first-class token.
 
 ## Done
+
+- [x] **Verified the dark-mode rewrite rather than trusting it** — the change
+      swapped every color token to RGB channel triplets, where a single
+      hex→decimal slip would silently shift the palette. Checked all 18
+      light + dark conversions programmatically against the original hex:
+      exact. Confirmed from the built CSS that `.bg-surf` now emits
+      `rgb(var(--surf-rgb) / …)` and — the case that made the naive
+      `surf: 'var(--surf)'` fix unsafe — that opacity modifiers now emit real
+      rules (`.bg-tp\/50{background-color:rgb(var(--tp-rgb) / .5)}`).
+- [x] **Removed the token duplication that rewrite left behind** — 36 tokens
+      were defined twice per theme (`--surf: #fff` *and*
+      `--surf-rgb: 255 255 255`). They matched, but editing one without the
+      other would have split the 477 Tailwind utility usages from the 72
+      `[var(--x)]` arbitrary-value usages, in one theme only. Now
+      `--x: rgb(var(--x-rgb))`, triplet is the single source of truth, and the
+      comment documents the rule. Safe: nothing reads these from JS.
+- [x] **Runtime verification of the backend** (unverified across ~40 commits):
+      boots clean, `/api/system/health` reports `database: ok` and Home
+      Assistant `configured: true, reachable: true` against the live instance.
+      All three migrations applied in the real DB (`schema_version` = 3, with
+      `kanban_tasks`, `chore_people`, `chore_tasks` present).
+- [x] **Committed load-bearing untracked work** — `frontend/src/context/`
+      `MusicContext.jsx` was untracked while already imported by `App.jsx`,
+      `MusicPage.jsx` and `TopBar.jsx`, so a fresh clone would not have built.
+      Also gitignored `backend/*.log` (PM2 writes `err.log`/`out.log` beside
+      the backend and they were surfacing as untracked noise).
 
 - [x] **Fix Google account connection → Google integration fully removed;
       family calendar via ICS; Tasks tab converted to local SQLite (user
