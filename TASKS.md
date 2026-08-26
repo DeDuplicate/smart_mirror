@@ -59,14 +59,9 @@ _(none)_
       window resize — needs verification on the real 1920x1080 kiosk frame.
 - [ ] `useWifi.js` stale-closure bug on first scan (self-corrects after one
       manual re-scan) — low impact.
-- [ ] Several `useMusic.js` / `useAuth.js` controls silently swallow errors with
-      no user-facing toast on failure.
-- [ ] Duplicate/drifting inline `CREATE TABLE` in `backend/routes/tasks.js`
-      (~220-243) re-implements migration `002_chores.sql` — collapse to one
-      source of truth. (Harmless today: the runner applies 002 at boot, so this
-      is a redundant defensive fallback.)
-- [ ] `TopBar.jsx` weather button has a hardcoded English `aria-label="Weather"`
-      in an otherwise Hebrew app — should come from `he.json`.
+      _(Both the duplicate `CREATE TABLE` in `tasks.js` and TopBar's hardcoded
+      English `aria-label="Weather"` were on this list and are now fixed —
+      see Done.)_
 
 ## Backlog — features / gaps
 
@@ -102,6 +97,38 @@ _(source: design-system consolidation agent — deliberately left out of scope)_
       above).
 
 ## Done
+
+- [x] **Screensaver: Shabbat times on Friday + Saturday only** — a time row
+      below the weather, hidden the rest of the week. Friday shows כניסת שבת
+      (candle lighting), Saturday shows יציאת שבת (havdalah): an "entry" time
+      is meaningless once Shabbat has already begun, so the label follows the
+      day rather than being fixed. Reuses `useHebrewCalendar`, which checks a
+      localStorage cache before fetching and is already kept warm by TopBar, so
+      it adds no extra Hebcal request. Day comes from the clock's ticking Date
+      so it flips correctly across midnight; renders nothing when that day's
+      time isn't available. Day-index logic verified (Fri=5, Sat=6) and the
+      Hebrew labels confirmed present in the built bundle.
+- [x] **Duplicate `CREATE TABLE` removed from `tasks.js`** — table creation now
+      lives solely in `db/migrations/002_chores.sql`, applied at boot before any
+      route is reachable.
+- [x] **TopBar weather button's hardcoded English `aria-label="Weather"`** now
+      comes from `he.json` like every other string.
+- [x] **`useMusic.js` playback controls silently swallowed errors.** Every
+      control (`play`/`pause`/`next`/`prev`/`playTrack`/`setVolume`/
+      `toggleShuffle`/`toggleRepeat`/`seekTo`) applied an optimistic UI update
+      and then discarded the API failure with `catch { /* ignore */ }` — if
+      Spotify was disconnected or the API call 502'd, every button silently
+      looked like it worked while doing nothing. Added
+      `addToast('error', t.music.playbackError)` on failure (new i18n key) plus
+      state revert for the toggle-style controls (`play`/`pause`/`shuffle`/
+      `repeat`) where reverting is unambiguous; `seekTo`/`setVolume` show the
+      toast but don't revert since the 3s poll reconciles them naturally and a
+      revert mid-drag would be worse UX. Audited `useAuth.js` too — its
+      swallowed errors (`getGoogleAccounts`/`removeGoogleAccount`/
+      `removeSpotifyAccount`) already return `false`/`[]` to callers, and
+      `SettingsPage.jsx` already shows `accountRemoveFailed`/
+      `spotifyDisconnectFailed` toasts on those paths, so no change needed
+      there. Frontend build clean.
 
 - [x] **Screensaver clock now shows current weather** — animated condition icon
       + temperature + Hebrew condition name below the Hebrew date. Reuses the
