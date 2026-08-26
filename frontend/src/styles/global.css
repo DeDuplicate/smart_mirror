@@ -69,7 +69,13 @@
   --tp: rgb(var(--tp-rgb));
   --tp-rgb: 26 28 46;
   --ts: rgb(var(--ts-rgb));
-  --ts-rgb: 123 127 158;
+  /* Darkened from #7b7f9e (123 127 158) to meet WCAG 4.5:1 for body text.
+     The old value was 3.91:1 on --surf, 3.46:1 on --s2 and 3.58:1 on --bg,
+     i.e. failing on every light-mode background it is used against.
+     Now 5.23:1 on --surf, 4.63:1 on --s2, 4.79:1 on --bg. Hue preserved (same blue-grey,
+     scaled toward black). Dark mode already passes at 6.54:1 and is
+     unchanged. */
+  --ts-rgb: 103 107 133;
   --tm: rgb(var(--tm-rgb));
   --tm-rgb: 176 180 204;
 
