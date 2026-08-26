@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import useStore from '../store/index.js';
+import t from '../i18n/he.json';
 
 // ─── Dev Mode ─────────────────────────────────────────────────────────────
 
@@ -92,6 +94,7 @@ function parseSpotifyQueue(data) {
 const POLL_INTERVAL = 3000;
 
 export default function useMusic(active = true) {
+  const addToast = useStore((s) => s.addToast);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [queue, setQueue] = useState([]);
@@ -212,31 +215,49 @@ export default function useMusic(active = true) {
   const play = useCallback(async () => {
     setIsPlaying(true);
     if (!isDev) {
-      try { await musicApi('/play', { method: 'POST' }); } catch { /* ignore */ }
+      try {
+        await musicApi('/play', { method: 'POST' });
+      } catch {
+        setIsPlaying(false);
+        addToast('error', t.music.playbackError);
+      }
     }
-  }, []);
+  }, [addToast]);
 
   const pause = useCallback(async () => {
     setIsPlaying(false);
     if (!isDev) {
-      try { await musicApi('/pause', { method: 'POST' }); } catch { /* ignore */ }
+      try {
+        await musicApi('/pause', { method: 'POST' });
+      } catch {
+        setIsPlaying(true);
+        addToast('error', t.music.playbackError);
+      }
     }
-  }, []);
+  }, [addToast]);
 
   const next = useCallback(async () => {
     if (!isDev) {
-      try { await musicApi('/next', { method: 'POST' }); } catch { /* ignore */ }
+      try {
+        await musicApi('/next', { method: 'POST' });
+      } catch {
+        addToast('error', t.music.playbackError);
+      }
     }
     // Refetch state after skip
     setTimeout(fetchState, 500);
-  }, [fetchState]);
+  }, [fetchState, addToast]);
 
   const prev = useCallback(async () => {
     if (!isDev) {
-      try { await musicApi('/prev', { method: 'POST' }); } catch { /* ignore */ }
+      try {
+        await musicApi('/prev', { method: 'POST' });
+      } catch {
+        addToast('error', t.music.playbackError);
+      }
     }
     setTimeout(fetchState, 500);
-  }, [fetchState]);
+  }, [fetchState, addToast]);
 
   // Play one specific track immediately (tap-to-play from the queue).
   // Spotify's Web API has no "jump to this queue item" endpoint, so the
@@ -267,13 +288,13 @@ export default function useMusic(active = true) {
           body: JSON.stringify({ uri: track.uri }),
         });
       } catch {
-        /* ignore — reconciled by the refetch below / next poll */
+        addToast('error', t.music.playbackError);
       }
       // Spotify needs a moment to propagate the change; reconcile with
       // the real state shortly after instead of trusting the optimistic guess.
       setTimeout(fetchState, 700);
     },
-    [fetchState]
+    [fetchState, addToast]
   );
 
   const setVolume = useCallback((v) => {
@@ -289,10 +310,12 @@ export default function useMusic(active = true) {
             method: 'POST',
             body: JSON.stringify({ volume_percent: clamped }),
           });
-        } catch { /* ignore */ }
+        } catch {
+          addToast('error', t.music.playbackError);
+        }
       }
     }, 300);
-  }, []);
+  }, [addToast]);
 
   const toggleShuffle = useCallback(async () => {
     const newState = !shuffle;
@@ -303,13 +326,17 @@ export default function useMusic(active = true) {
           method: 'POST',
           body: JSON.stringify({ state: newState }),
         });
-      } catch { /* ignore */ }
+      } catch {
+        setShuffle(!newState);
+        addToast('error', t.music.playbackError);
+      }
     }
-  }, [shuffle]);
+  }, [shuffle, addToast]);
 
   const toggleRepeat = useCallback(async () => {
     // Cycle: off -> context -> track -> off
     const next = repeat === 'off' ? 'context' : repeat === 'context' ? 'track' : 'off';
+    const prevRepeat = repeat;
     setRepeat(next);
     if (!isDev) {
       try {
@@ -317,9 +344,12 @@ export default function useMusic(active = true) {
           method: 'POST',
           body: JSON.stringify({ state: next }),
         });
-      } catch { /* ignore */ }
+      } catch {
+        setRepeat(prevRepeat);
+        addToast('error', t.music.playbackError);
+      }
     }
-  }, [repeat]);
+  }, [repeat, addToast]);
 
   const seekTo = useCallback(async (positionMs) => {
     // Update local progress immediately
@@ -330,9 +360,11 @@ export default function useMusic(active = true) {
           method: 'POST',
           body: JSON.stringify({ position_ms: Math.round(positionMs) }),
         });
-      } catch { /* ignore */ }
+      } catch {
+        addToast('error', t.music.playbackError);
+      }
     }
-  }, []);
+  }, [addToast]);
 
   // ── Cleanup volume debounce timer ─────────────────────────────────────
   useEffect(() => {

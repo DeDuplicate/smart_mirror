@@ -303,6 +303,20 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         </button>
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div className="mx-3 mt-2 px-3 py-2 rounded-xl bg-[var(--coral-bg)] text-[13px] text-[var(--coral-d)] flex items-center justify-between gap-2">
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            aria-label={t.common.close}
+            className="min-w-[56px] min-h-[56px] flex items-center justify-center shrink-0"
+          >
+            <CloseIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Item list */}
       <div className="flex-1 overflow-y-auto px-2 py-2" style={{ maxHeight: '320px' }}>
         {loading ? (
@@ -316,30 +330,52 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         ) : (
           <>
             {/* Active items */}
-            {activeItems.map((item, idx) => (
-              <button
+            {activeItems.map(({ item, idx }) => (
+              <div
                 key={`active-${item.uid || idx}`}
-                onClick={() => handleToggleItem(item)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
-                           hover:bg-s2 transition-colors active:scale-[0.98]"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-s2 transition-colors group"
               >
-                <div className="w-5 h-5 rounded border-2 border-bd flex items-center justify-center shrink-0" />
-                <span className="text-sm text-tp text-right flex-1">{item.summary}</span>
-              </button>
+                <button
+                  onClick={() => handleToggleItem(idx)}
+                  className="flex items-center gap-3 flex-1 min-w-0 text-start active:scale-[0.98] transition-transform"
+                >
+                  <div className="w-5 h-5 rounded border-2 border-bd flex items-center justify-center shrink-0" />
+                  <span className="text-sm text-tp text-start flex-1 truncate">{item.summary}</span>
+                </button>
+                <button
+                  onClick={(e) => handleRemoveItem(idx, e)}
+                  aria-label={t.common.delete}
+                  className="min-w-[56px] min-h-[56px] rounded-xl flex items-center justify-center text-tm
+                             hover:bg-[var(--coral-bg)] hover:text-[var(--coral-d)] transition-colors active:scale-95 shrink-0"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
             ))}
             {/* Completed items */}
-            {completedItems.map((item, idx) => (
-              <button
+            {completedItems.map(({ item, idx }) => (
+              <div
                 key={`done-${item.uid || idx}`}
-                onClick={() => handleToggleItem(item)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl
-                           hover:bg-s2 transition-colors active:scale-[0.98] opacity-50"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-s2 transition-colors opacity-50 group"
               >
-                <div className="w-5 h-5 rounded bg-acc2/20 border-2 border-acc2 flex items-center justify-center shrink-0">
-                  <CheckIcon className="w-3 h-3 text-acc2" />
-                </div>
-                <span className="text-sm text-tm text-right flex-1 line-through">{item.summary}</span>
-              </button>
+                <button
+                  onClick={() => handleToggleItem(idx)}
+                  className="flex items-center gap-3 flex-1 min-w-0 text-start active:scale-[0.98] transition-transform"
+                >
+                  <div className="w-5 h-5 rounded bg-acc2/20 border-2 border-acc2 flex items-center justify-center shrink-0">
+                    <CheckIcon className="w-3 h-3 text-acc2" />
+                  </div>
+                  <span className="text-sm text-tm text-start flex-1 truncate line-through">{item.summary}</span>
+                </button>
+                <button
+                  onClick={(e) => handleRemoveItem(idx, e)}
+                  aria-label={t.common.delete}
+                  className="min-w-[56px] min-h-[56px] rounded-xl flex items-center justify-center text-tm
+                             hover:bg-[var(--coral-bg)] hover:text-[var(--coral-d)] transition-colors active:scale-95 shrink-0"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
             ))}
           </>
         )}
