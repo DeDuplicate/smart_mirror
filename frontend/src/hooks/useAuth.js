@@ -132,7 +132,7 @@ export default function useAuth() {
   // Remove Spotify account
   const removeSpotifyAccount = useCallback(async () => {
     try {
-      await fetchApi('/api/auth/spotify/disconnect', {
+      await fetchApi('/api/auth/spotify', {
         method: 'DELETE',
       });
       setConnectionStatus('spotify', 'not_configured');
