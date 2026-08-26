@@ -8,6 +8,7 @@ import useCalendar, {
 } from '../../hooks/useCalendar.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 import { CalendarSkeleton } from '../Skeleton.jsx';
+import ConnectionBanner from '../ConnectionBanner.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -410,6 +411,7 @@ function UpcomingCard({ event, onTap }) {
 
 export default function CalendarPage() {
   const showWeekend = useStore((s) => s.settings.showWeekend);
+  const googleStatus = useStore((s) => s.connections.google);
 
   // ── Week navigation state ──
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStart(new Date()));
@@ -640,6 +642,15 @@ export default function CalendarPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Degraded integration banner (Google Calendar not connected) ── */}
+      {googleStatus !== 'connected' && (
+        <ConnectionBanner
+          integration={t.connection.degraded}
+          message={t.connection.googleDegraded}
+          onAction={refetch}
+        />
+      )}
+
       {/* ── Week Navigation Bar ── */}
       <div className="flex items-center gap-3 px-6 py-3 shrink-0 border-b border-bd bg-surf">
         <button
