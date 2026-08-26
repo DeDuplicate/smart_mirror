@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import t from '../../i18n/he.json';
 import { NewsSkeleton } from '../Skeleton.jsx';
+import ConnectionBanner from '../ConnectionBanner.jsx';
 import useNews from '../../hooks/useNews.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 
@@ -41,29 +42,53 @@ function CloseIcon({ className = 'w-5 h-5' }) {
   );
 }
 
+function ChevronLeftIcon({ className = 'w-5 h-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+function NewspaperGlyph({ className = 'w-7 h-7' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+      <path d="M18 14h-8" />
+      <path d="M15 18h-5" />
+      <path d="M10 6h8v4h-8V6Z" />
+    </svg>
+  );
+}
+
 // ─── Category Styles ────────────────────────────────────────────────────────
+// Pastel token pairs from the design system (see global.css), mapped by
+// category and applied via inline var() so both light and dark themes resolve.
 
 const CATEGORY_STYLES = {
-  news:          { bg: 'bg-coral',   text: 'text-coral-d', label: t.news.categories.news },
-  sport:         { bg: 'bg-[#b8ede0]', text: 'text-mint-d',  label: t.news.categories.sport },
-  tech:          { bg: 'bg-[#d4cfff]', text: 'text-lav-d',   label: t.news.categories.tech },
-  finance:       { bg: 'bg-gold',    text: 'text-gold-d',  label: t.news.categories.finance },
-  entertainment: { bg: 'bg-[#e8d0ff]', text: 'text-[#7b44b0]', label: t.news.categories.entertainment },
+  news:          { bg: 'var(--coral-bg)', fg: 'var(--coral-d)' },
+  sport:         { bg: 'var(--mint-bg)',  fg: 'var(--mint-d)' },
+  tech:          { bg: 'var(--lav-bg)',   fg: 'var(--lav-d)' },
+  finance:       { bg: 'var(--gold-bg)',  fg: 'var(--gold-d)' },
+  entertainment: { bg: 'var(--lav-bg)',   fg: 'var(--lav-d)' },
 };
 
 function getCategoryStyle(category) {
   return CATEGORY_STYLES[category] || CATEGORY_STYLES.news;
 }
 
-// ─── Gradient Backgrounds ───────────────────────────────────────────────────
+function getCategoryLabel(category) {
+  return t.news.categories[category] || t.news.categories.news;
+}
 
-const GRADIENT_BG = [
-  'from-coral-d/40 to-coral/60',
-  'from-mint-d/40 to-mint/60',
-  'from-lav-d/40 to-lav/60',
-  'from-gold-d/40 to-gold/60',
-  'from-acc/40 to-lav/60',
-];
+// Hero gradient per category — pastel-d into pastel-bg. A dark scrim is
+// layered on top at render time so white text stays legible in both themes.
+function categoryGradient(category) {
+  const { bg, fg } = getCategoryStyle(category);
+  return { background: `linear-gradient(135deg, ${fg} 0%, ${bg} 100%)` };
+}
 
 // ─── Relative Time ──────────────────────────────────────────────────────────
 
@@ -88,14 +113,17 @@ function formatRelativeTime(isoDate) {
 // ─── Category Badge ─────────────────────────────────────────────────────────
 
 function CategoryBadge({ category, size = 'sm' }) {
-  const style = getCategoryStyle(category);
+  const { bg, fg } = getCategoryStyle(category);
   const sizeClass = size === 'lg'
     ? 'px-3 py-1 text-xs font-semibold'
     : 'px-2.5 py-0.5 text-[11px] font-medium';
 
   return (
-    <span className={`inline-block self-start rounded-full ${sizeClass} ${style.bg} ${style.text}`}>
-      {style.label}
+    <span
+      className={`inline-block self-start rounded-full ${sizeClass}`}
+      style={{ backgroundColor: bg, color: fg }}
+    >
+      {getCategoryLabel(category)}
     </span>
   );
 }
@@ -116,8 +144,6 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
     setTimeout(onClose, 400);
   }, [onClose]);
 
-  const catStyle = getCategoryStyle(article.category);
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col">
       {/* Backdrop */}
@@ -130,28 +156,31 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
         onClick={handleClose}
       />
 
-      {/* Slide-up panel */}
+      {/* Slide-up sheet — edge-anchored, so rounded-t-3xl + shadow-modal */}
       <div
         className="absolute bottom-0 inset-x-0 bg-surf rounded-t-3xl shadow-modal
                    flex flex-col overflow-hidden transition-transform"
         style={{
-          maxHeight: '85%',
+          maxHeight: '88%',
           transform: visible ? 'translateY(0)' : 'translateY(100%)',
           transitionDuration: 'var(--dur-slow)',
           transitionTimingFunction: 'var(--ease)',
         }}
       >
-        {/* Header with gradient */}
-        <div className={`relative h-[180px] shrink-0 bg-gradient-to-br ${GRADIENT_BG[0]}`}>
+        {/* Hero header — category gradient with legibility scrim */}
+        <div
+          className="relative h-[220px] shrink-0"
+          style={categoryGradient(article.category)}
+        >
           <div
             className="absolute inset-0"
             style={{
-              background: 'linear-gradient(to top, rgba(0,0,0,0.65) 40%, rgba(0,0,0,0.05) 100%)',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.68) 40%, rgba(0,0,0,0.05) 100%)',
             }}
           />
-          <div className="absolute bottom-0 inset-x-0 p-6 flex flex-col gap-2">
+          <div className="absolute bottom-0 inset-x-0 p-7 flex flex-col gap-2.5">
             <CategoryBadge category={article.category} size="lg" />
-            <h2 className="text-xl font-bold text-white leading-tight">
+            <h2 className="text-2xl font-bold text-white leading-tight">
               {article.title}
             </h2>
             <div className="flex items-center gap-2 text-white/70 text-sm">
@@ -161,54 +190,54 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
             </div>
           </div>
 
-          {/* Close button */}
+          {/* Close button — circular control, 56px touch target */}
           <button
             onClick={handleClose}
-            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/30
+            className="absolute top-4 end-4 w-14 h-14 rounded-full bg-black/30
                        flex items-center justify-center text-white
                        hover:bg-black/50 active:scale-95 transition-all
                        duration-[var(--dur-fast)]"
             aria-label={t.news.overlay.close}
           >
-            <CloseIcon />
+            <CloseIcon className="w-6 h-6" />
           </button>
         </div>
 
         {/* Scrollable body */}
         <div
-          className="flex-1 overflow-y-auto p-6"
+          className="flex-1 overflow-y-auto p-7"
           style={{ scrollbarWidth: 'thin' }}
         >
           {fullArticleLoading && (
-            <div className="flex flex-col gap-3">
-              <div className="skeleton h-4 w-full rounded" />
-              <div className="skeleton h-4 w-[90%] rounded" />
-              <div className="skeleton h-4 w-[95%] rounded" />
-              <div className="skeleton h-4 w-[80%] rounded" />
-              <div className="skeleton h-4 w-full rounded mt-4" />
-              <div className="skeleton h-4 w-[85%] rounded" />
+            <div className="flex flex-col gap-3" aria-label={t.news.overlay.loading}>
+              <div className="skeleton h-4 w-full" />
+              <div className="skeleton h-4 w-[90%]" />
+              <div className="skeleton h-4 w-[95%]" />
+              <div className="skeleton h-4 w-[80%]" />
+              <div className="skeleton h-4 w-full mt-4" />
+              <div className="skeleton h-4 w-[85%]" />
             </div>
           )}
 
           {!fullArticleLoading && fullArticle && (
-            <div className="text-tp text-[15px] leading-relaxed whitespace-pre-line">
+            <div className="text-tp text-base leading-relaxed whitespace-pre-line">
               {fullArticle.content || article.description}
             </div>
           )}
 
           {!fullArticleLoading && !fullArticle && (
-            <div className="text-tp text-[15px] leading-relaxed">
+            <div className="text-tp text-base leading-relaxed">
               {article.description}
             </div>
           )}
         </div>
 
-        {/* Bottom close bar */}
-        <div className="shrink-0 border-t border-bd p-4 flex justify-center">
+        {/* Footer — single button spanning the sheet: surface-tier press */}
+        <div className="shrink-0 border-t border-bd p-4">
           <button
             onClick={handleClose}
-            className="ripple px-8 min-h-[48px] rounded-xl bg-s2 text-ts font-medium
-                       hover:bg-bd active:scale-95 transition-all duration-[var(--dur-fast)]"
+            className="w-full min-h-[56px] rounded-xl bg-s2 text-ts font-medium
+                       hover:bg-bd active:scale-[0.98] transition-all duration-[var(--dur-fast)]"
           >
             {t.news.overlay.close}
           </button>
@@ -218,32 +247,69 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
   );
 }
 
-// ─── Featured Card ──────────────────────────────────────────────────────────
+// ─── Unread Dot ─────────────────────────────────────────────────────────────
+// Convey "unread" via a dot AND a font-weight/color shift (never color alone),
+// per accessibility guidance for color-blind and low-vision users.
 
-function FeaturedCard({ article, onClick }) {
+function UnreadDot({ className = 'w-2 h-2' }) {
+  return (
+    <span
+      className={`inline-block shrink-0 rounded-full bg-acc ${className}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+// ─── Featured Card (hero) ───────────────────────────────────────────────────
+
+function FeaturedCard({ article, unread, onClick }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${t.news.featured}: ${article.title}`}
       onClick={() => onClick(article)}
-      className="shrink-0 relative rounded-2xl overflow-hidden h-[280px] cursor-pointer
-                 shadow-card hover:shadow-raised transition-shadow duration-[var(--dur-normal)]"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(article);
+        }
+      }}
+      className="group shrink-0 relative rounded-3xl overflow-hidden h-[340px]
+                 cursor-pointer select-none
+                 shadow-card hover:shadow-raised active:scale-[0.98]
+                 transition-all duration-[var(--dur-normal)]"
+      style={categoryGradient(article.category)}
     >
-      {/* Background gradient */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${GRADIENT_BG[0]}`} />
-
-      {/* Bottom gradient overlay for text legibility */}
+      {/* Legibility scrim */}
       <div
         className="absolute inset-0"
         style={{
-          background: 'linear-gradient(to top, rgba(0,0,0,0.72) 45%, rgba(0,0,0,0.08) 100%)',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.74) 45%, rgba(0,0,0,0.08) 100%)',
         }}
       />
 
+      {/* Decorative oversized glyph, anchored to the end corner */}
+      <NewspaperGlyph className="absolute top-6 end-7 w-16 h-16 text-white/25" />
+
       {/* Text content anchored to bottom */}
-      <div className="absolute bottom-0 inset-x-0 p-6 flex flex-col gap-2">
-        <CategoryBadge category={article.category} size="lg" />
-        <h2 className="text-xl font-bold text-white leading-tight line-clamp-2">
+      <div className="absolute bottom-0 inset-x-0 p-7 flex flex-col gap-2.5">
+        <div className="flex items-center gap-3">
+          <CategoryBadge category={article.category} size="lg" />
+          {unread && <UnreadDot className="w-2.5 h-2.5" />}
+          <span className="text-white/70 text-sm font-medium tracking-wide">
+            {t.news.featured}
+          </span>
+        </div>
+        <h2 className={`text-2xl leading-tight line-clamp-2 ${unread ? 'font-bold text-white' : 'font-medium text-white/85'}`}>
+          {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
           {article.title}
         </h2>
+        {article.description && (
+          <p className="text-white/80 text-[15px] leading-relaxed line-clamp-2 max-w-3xl">
+            {article.description}
+          </p>
+        )}
         <div className="flex items-center gap-2 text-white/70 text-sm">
           <span>{article.source}</span>
           <span>·</span>
@@ -254,32 +320,60 @@ function FeaturedCard({ article, onClick }) {
   );
 }
 
-// ─── News Card ──────────────────────────────────────────────────────────────
+// ─── Headline Row ───────────────────────────────────────────────────────────
+// A repeated item in a scrolling list is a row, not a surface: rounded-xl,
+// hairline border at rest, raised elevation on hover, surface-tier press.
 
-function NewsCard({ article, index, onClick }) {
-  const gradientIdx = (index + 1) % GRADIENT_BG.length;
+function HeadlineRow({ article, unread, onClick }) {
+  const { bg, fg } = getCategoryStyle(article.category);
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${t.news.openArticle}: ${article.title}`}
       onClick={() => onClick(article)}
-      className="bg-surf border border-bd rounded-2xl overflow-hidden flex cursor-pointer
-                 hover:shadow-raised transition-shadow duration-[var(--dur-fast)]"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(article);
+        }
+      }}
+      className="flex items-center gap-4 rounded-xl bg-surf border border-bd p-3
+                 min-h-[88px] cursor-pointer select-none
+                 hover:shadow-raised hover:border-ts/40 active:scale-[0.98]
+                 transition-all duration-[var(--dur-fast)]"
     >
-      {/* Image placeholder */}
-      <div className={`w-[140px] shrink-0 bg-gradient-to-br ${GRADIENT_BG[gradientIdx]}`} />
+      {/* Category media thumb — nested block, rounded-xl */}
+      <div
+        className={`w-[64px] h-[64px] shrink-0 rounded-xl flex items-center justify-center ${unread ? '' : 'opacity-60'}`}
+        style={{ backgroundColor: bg, color: fg }}
+      >
+        <NewspaperGlyph className="w-7 h-7" />
+      </div>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col justify-center p-4 gap-2 min-w-0">
-        <CategoryBadge category={article.category} />
-        <h3 className="text-sm font-semibold text-tp leading-snug line-clamp-2">
-          {article.title}
-        </h3>
-        <div className="flex items-center gap-1.5 text-xs text-tm">
+      {/* Text */}
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <h3 className={`text-[15px] leading-snug line-clamp-2 ${unread ? 'font-semibold text-tp' : 'font-normal text-ts'}`}>
+            {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
+            {article.title}
+          </h3>
+          {unread && <UnreadDot />}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-ts">
+          <span className="font-medium" style={{ color: fg }}>
+            {getCategoryLabel(article.category)}
+          </span>
+          <span className="text-tm">·</span>
           <span>{article.source}</span>
-          <span>·</span>
+          <span className="text-tm">·</span>
           <span>{formatRelativeTime(article.publishedAt)}</span>
         </div>
       </div>
+
+      {/* Forward affordance — points left in RTL */}
+      <ChevronLeftIcon className="w-5 h-5 shrink-0 text-tm me-1" aria-hidden="true" />
     </div>
   );
 }
@@ -296,6 +390,8 @@ export default function NewsPage() {
     fullArticle,
     fullArticleLoading,
     clearFullArticle,
+    isRead,
+    markAsRead,
   } = useNews();
 
   const [selectedArticle, setSelectedArticle] = useState(null);
@@ -307,8 +403,9 @@ export default function NewsPage() {
     (article) => {
       setSelectedArticle(article);
       fetchFullArticle(article.id);
+      markAsRead(article.id);
     },
-    [fetchFullArticle]
+    [fetchFullArticle, markAsRead]
   );
 
   const handleOverlayClose = useCallback(() => {
@@ -322,17 +419,26 @@ export default function NewsPage() {
   // ─── Empty state ───────────────────────────────────────────────────────
   if (!articles || articles.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-5">
-        <NewspaperIcon className="w-28 h-28 text-tm" />
-        <p className="text-tm text-lg">{t.empty.noNews}</p>
-        <button
-          onClick={refresh}
-          className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
-                     font-medium hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
-        >
-          <RefreshIcon />
-          <span>{t.news.refresh}</span>
-        </button>
+      <div className="flex flex-col h-full">
+        {error && (
+          <ConnectionBanner
+            integration={t.news.banner.title}
+            message={t.news.banner.degraded}
+            onAction={refresh}
+          />
+        )}
+        <div className="flex-1 flex flex-col items-center justify-center gap-5">
+          <NewspaperIcon className="w-28 h-28 text-tm" />
+          <p className="text-tm text-lg">{t.empty.noNews}</p>
+          <button
+            onClick={refresh}
+            className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
+                       font-medium hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
+          >
+            <RefreshIcon />
+            <span>{t.news.refresh}</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -340,7 +446,7 @@ export default function NewsPage() {
   // ─── Populated layout ──────────────────────────────────────────────────
 
   const featured = articles[0];
-  const grid = articles.slice(1, 5);
+  const headlines = articles.slice(1);
 
   return (
     <>
@@ -361,20 +467,33 @@ export default function NewsPage() {
             />
           </div>
         )}
-        {/* Featured headline card */}
-        <FeaturedCard article={featured} onClick={handleArticleClick} />
 
-        {/* 2x2 news cards grid */}
-        <div className="grid grid-cols-2 gap-4" style={{ minHeight: '360px' }}>
-          {grid.map((article, i) => (
-            <NewsCard
-              key={article.id}
-              article={article}
-              index={i}
-              onClick={handleArticleClick}
-            />
-          ))}
-        </div>
+        {/* Degraded feeds banner */}
+        {error && (
+          <ConnectionBanner
+            integration={t.news.banner.title}
+            message={t.news.banner.degraded}
+            onAction={refresh}
+          />
+        )}
+
+        {/* Featured headline hero */}
+        <FeaturedCard article={featured} unread={!isRead(featured.id)} onClick={handleArticleClick} />
+
+        {/* Headline list */}
+        {headlines.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-sm font-semibold text-ts px-1">{t.news.headlines}</h2>
+            {headlines.map((article) => (
+              <HeadlineRow
+                key={article.id}
+                article={article}
+                unread={!isRead(article.id)}
+                onClick={handleArticleClick}
+              />
+            ))}
+          </section>
+        )}
       </div>
 
       {/* Full article overlay */}

@@ -5,6 +5,30 @@ import { fetchApi } from './useApi.js';
 
 const REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const API_BASE = '/api/news';
+const READ_IDS_STORAGE_KEY = 'smartMirror.news.readIds';
+const MAX_READ_IDS = 500; // cap persisted history so storage doesn't grow unbounded
+
+// ─── Read-state persistence (localStorage) ─────────────────────────────────
+
+function loadReadIds() {
+  try {
+    const raw = localStorage.getItem(READ_IDS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReadIds(ids) {
+  try {
+    const trimmed = Array.from(ids).slice(-MAX_READ_IDS);
+    localStorage.setItem(READ_IDS_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {
+    // ignore quota/serialization errors — read state is a non-critical enhancement
+  }
+}
 
 // ─── Mock Data (dev mode) ──────────────────────────────────────────────────
 
@@ -121,8 +145,22 @@ export default function useNews() {
   const [error, setError] = useState(null);
   const [fullArticle, setFullArticle] = useState(null);
   const [fullArticleLoading, setFullArticleLoading] = useState(false);
+  const [readIds, setReadIds] = useState(loadReadIds);
   const intervalRef = useRef(null);
   const mountedRef = useRef(true);
+
+  const isRead = useCallback((id) => readIds.has(id), [readIds]);
+
+  const markAsRead = useCallback((id) => {
+    if (!id) return;
+    setReadIds((current) => {
+      if (current.has(id)) return current;
+      const next = new Set(current);
+      next.add(id);
+      saveReadIds(next);
+      return next;
+    });
+  }, []);
 
   const fetchArticles = useCallback(async () => {
     try {
@@ -220,5 +258,7 @@ export default function useNews() {
     fullArticle,
     fullArticleLoading,
     clearFullArticle,
+    isRead,
+    markAsRead,
   };
 }
