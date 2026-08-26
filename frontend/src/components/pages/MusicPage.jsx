@@ -3,6 +3,7 @@ import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import useMusic from '../../hooks/useMusic.js';
 import { MusicSkeleton } from '../Skeleton.jsx';
+import ConnectionBanner from '../ConnectionBanner.jsx';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -336,7 +337,9 @@ export default function MusicPage() {
     shuffle,
     repeat,
     loading,
+    error,
     notPlaying,
+    refetch,
     play,
     pause,
     next,
@@ -392,7 +395,17 @@ export default function MusicPage() {
   const track = currentTrack || { name: '---', artist: '---', album: '', albumArt: null, duration: 0, progress: 0 };
 
   return (
-    <div className="flex h-full overflow-hidden p-6 gap-8">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Degraded integration banner (Spotify fetch failed) ── */}
+      {error && (
+        <ConnectionBanner
+          integration={t.connection.degraded}
+          message={t.connection.spotifyDegraded}
+          onAction={refetch}
+        />
+      )}
+
+      <div className="flex flex-1 overflow-hidden p-6 gap-8">
       {/* ── Left Side: Now Playing (60%) ── */}
       <div className="flex flex-col items-center gap-4 flex-[6] min-w-0">
         {/* Album Art */}
@@ -501,6 +514,7 @@ export default function MusicPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* ── Inline style for volume slider ── */}

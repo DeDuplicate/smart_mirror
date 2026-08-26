@@ -286,6 +286,18 @@ function SlideshowMode() {
         >
           {dateStr}
         </span>
+
+        {/* Current weather — same row as clock mode, small overlay so it
+            stays readable over the photos without covering them */}
+        <div
+          className="mt-3"
+          style={{
+            filter: 'drop-shadow(0 1px 6px rgba(0,0,0,0.5))',
+            textShadow: '0 1px 6px rgba(0,0,0,0.5)',
+          }}
+        >
+          <ScreensaverWeather iconSize={30} />
+        </div>
       </div>
     </div>
   );

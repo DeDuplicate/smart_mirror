@@ -843,12 +843,12 @@ function ElectricityTile({ allStates }) {
 
   const color = !isValid ? 'text-tm'
     : watts < 500 ? 'text-[#2ab58a]'
-    : watts <= 2000 ? 'text-[#e0a630]'
+    : watts <= 2000 ? 'text-[var(--amber)]'
     : 'text-[#c95454]';
 
   const borderColor = !isValid ? 'border-bd'
     : watts < 500 ? 'border-[#2ab58a]'
-    : watts <= 2000 ? 'border-[#e0a630]'
+    : watts <= 2000 ? 'border-[var(--amber)]'
     : 'border-[#c95454]';
 
   return (
@@ -860,7 +860,7 @@ function ElectricityTile({ allStates }) {
       style={{ minHeight: '140px', minWidth: '180px' }}
     >
       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${color}`}
-        style={{ backgroundColor: isValid && watts >= 500 ? (watts > 2000 ? 'rgba(201,84,84,0.15)' : 'rgba(224,166,48,0.15)') : 'rgba(42,181,138,0.15)' }}
+        style={{ backgroundColor: isValid && watts >= 500 ? (watts > 2000 ? 'rgba(201,84,84,0.15)' : 'color-mix(in srgb, var(--amber) 15%, transparent)') : 'rgba(42,181,138,0.15)' }}
       >
         <LightningBoltIcon />
       </div>
