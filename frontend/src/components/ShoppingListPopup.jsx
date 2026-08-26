@@ -1,6 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import { fetchApi } from '../hooks/useApi.js';
 import t from '../i18n/he.json';
+
+// ─── Socket.io singleton (real-time HA sync) ────────────────────────────────
+
+let socket = null;
+
+function getSocket() {
+  if (!socket) {
+    socket = io('/', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+    });
+  }
+  return socket;
+}
 
 // ─── Icons ─────────────────────────────────────────────────────────────────
 
@@ -44,6 +61,17 @@ function ShoppingBagIcon({ className = 'w-5 h-5' }) {
   );
 }
 
+function TrashIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const ENTITY_ID = 'todo.shopping_list';
@@ -56,6 +84,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   const inputRef = useRef(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [newItem, setNewItem] = useState('');
   const [adding, setAdding] = useState(false);
   const pollRef = useRef(null);
@@ -66,14 +95,17 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       const res = await fetchApi(`/api/ha/todo/${encodeURIComponent(ENTITY_ID)}`);
       const fetched = res?.items || [];
       setItems(fetched);
+      setError(null);
       setLoading(false);
     } catch (err) {
       console.error('Shopping list fetch error:', err);
+      setError(t.shoppingList.loadError);
       setLoading(false);
     }
   }, []);
 
-  // Fetch on open + poll
+  // Fetch on open + poll (poll is a fallback safety net; real-time sync
+  // happens via the 'ha:state_changed' socket event below)
   useEffect(() => {
     if (!visible) return;
     setLoading(true);
@@ -82,6 +114,28 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+  }, [visible, fetchItems]);
+
+  // Real-time sync with Home Assistant — reflect changes made from the HA
+  // app / other clients (and our own writes) the moment HA broadcasts them,
+  // instead of waiting up to POLL_INTERVAL for the next poll.
+  useEffect(() => {
+    if (!visible) return;
+    const sock = getSocket();
+
+    function handleStateChanged(data) {
+      if (!data?.entity_id || data.entity_id !== ENTITY_ID) return;
+      const newItems = data.new_state?.attributes?.items;
+      if (Array.isArray(newItems)) {
+        setItems(newItems);
+        setError(null);
+      } else {
+        fetchItems();
+      }
+    }
+
+    sock.on('ha:state_changed', handleStateChanged);
+    return () => sock.off('ha:state_changed', handleStateChanged);
   }, [visible, fetchItems]);
 
   // Focus input on open
@@ -129,46 +183,63 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         body: JSON.stringify({ item: trimmed }),
       });
       setNewItem('');
+      setError(null);
       // Optimistic add
       setItems((prev) => [...prev, { summary: trimmed, status: 'needs_action', uid: Date.now().toString() }]);
-      // Refresh to get real data
+      // Refresh to get real data (uid/order assigned by HA)
       setTimeout(fetchItems, 500);
     } catch (err) {
       console.error('Add item error:', err);
+      setError(t.shoppingList.addError);
     } finally {
       setAdding(false);
     }
   }, [newItem, adding, fetchItems]);
 
-  // Toggle item completion
-  const handleToggleItem = useCallback(async (item) => {
+  // Toggle item completion — referenced by index into the source `items`
+  // array (not summary+uid) since HA items can share a summary and some
+  // don't carry a uid at all, which previously caused every matching item
+  // to toggle together.
+  const handleToggleItem = useCallback(async (idx) => {
+    const item = items[idx];
+    if (!item) return;
     const newStatus = item.status === 'completed' ? 'needs_action' : 'completed';
-    // Optimistic update
-    setItems((prev) =>
-      prev.map((i) =>
-        i.summary === item.summary && i.uid === item.uid
-          ? { ...i, status: newStatus }
-          : i
-      )
-    );
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, status: newStatus } : it)));
     try {
       await fetchApi(`/api/ha/todo/${encodeURIComponent(ENTITY_ID)}/update`, {
         method: 'POST',
         body: JSON.stringify({ item: item.summary, status: newStatus }),
       });
+      setError(null);
       setTimeout(fetchItems, 500);
     } catch (err) {
       console.error('Update item error:', err);
+      setError(t.shoppingList.updateError);
       // Revert
-      setItems((prev) =>
-        prev.map((i) =>
-          i.summary === item.summary && i.uid === item.uid
-            ? { ...i, status: item.status }
-            : i
-        )
-      );
+      setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, status: item.status } : it)));
     }
-  }, [fetchItems]);
+  }, [items, fetchItems]);
+
+  // Remove item permanently
+  const handleRemoveItem = useCallback(async (idx, e) => {
+    e.stopPropagation();
+    const item = items[idx];
+    if (!item) return;
+    const prevItems = items;
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+    try {
+      await fetchApi(`/api/ha/todo/${encodeURIComponent(ENTITY_ID)}/remove`, {
+        method: 'POST',
+        body: JSON.stringify({ item: item.summary }),
+      });
+      setError(null);
+      setTimeout(fetchItems, 500);
+    } catch (err) {
+      console.error('Remove item error:', err);
+      setError(t.shoppingList.removeError);
+      setItems(prevItems);
+    }
+  }, [items, fetchItems]);
 
   if (!visible) return null;
 
@@ -198,8 +269,9 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
     style.right = `${right}px`;
   }
 
-  const activeItems = items.filter((i) => i.status !== 'completed');
-  const completedItems = items.filter((i) => i.status === 'completed');
+  const withIdx = items.map((item, idx) => ({ item, idx }));
+  const activeItems = withIdx.filter((x) => x.item.status !== 'completed');
+  const completedItems = withIdx.filter((x) => x.item.status === 'completed');
   const itemCount = activeItems.length;
 
   return (

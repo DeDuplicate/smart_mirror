@@ -483,7 +483,8 @@
     "itemAdded": "פריט נוסף",
     "loadError": "טעינת רשימה נכשלה",
     "addError": "הוספת פריט נכשלה",
-    "updateError": "עדכון פריט נכשל"
+    "updateError": "עדכון פריט נכשל",
+    "removeError": "מחיקת פריט נכשלה"
   },
   "presence": {
     "home": "בבית",
