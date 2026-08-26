@@ -996,7 +996,6 @@ function TasksSection() {
   const col1 = settings.taskCol1 || t.tasks.todo;
   const col2 = settings.taskCol2 || t.tasks.inProgress;
   const col3 = settings.taskCol3 || t.tasks.done;
-  const cleanup = settings.taskCleanupInterval || '7';
 
   return (
     <Section title={t.settings.tasks}>
@@ -1031,19 +1030,6 @@ function TasksSection() {
             className="flex-1"
           />
         </div>
-        <SelectRow
-          label={t.settings.cleanupInterval}
-          value={cleanup}
-          onChange={(e) => {
-            setSettings({ taskCleanupInterval: e.target.value });
-            updateSettings({ taskCleanupInterval: e.target.value });
-          }}
-          options={[
-            { value: 'never', label: t.settings.cleanupNever },
-            { value: '7',     label: t.settings.cleanup7 },
-            { value: '30',    label: t.settings.cleanup30 },
-          ]}
-        />
       </div>
     </Section>
   );
