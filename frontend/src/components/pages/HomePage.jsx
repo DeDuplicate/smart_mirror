@@ -775,8 +775,9 @@ function ControlPopup({ entity, anchorRect, onClose, ha }) {
         </span>
         <button
           onClick={onClose}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-tm hover:bg-s2
-                     transition-colors active:scale-90"
+          aria-label={t.common.close}
+          className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
+                     hover:bg-s2 transition-colors active:scale-90"
         >
           <CloseIcon className="w-4 h-4" />
         </button>
@@ -990,7 +991,7 @@ function CurtainPopup({ entity, anchorRect, onClose, ha }) {
     <div ref={popupRef} className="bg-surf border border-bd rounded-2xl shadow-2xl animate-popup-in" style={style} dir="rtl">
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <span className="text-sm font-semibold text-tp">{t.home.curtain}</span>
-        <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center text-tm hover:bg-s2 transition-colors active:scale-90">
+        <button onClick={onClose} aria-label={t.common.close} className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm hover:bg-s2 transition-colors active:scale-90">
           <CloseIcon className="w-4 h-4" />
         </button>
       </div>

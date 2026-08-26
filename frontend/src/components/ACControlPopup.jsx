@@ -199,8 +199,9 @@ export default function ACControlPopup({ visible, onClose, callService }) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-tm hover:bg-s2
-                       transition-colors active:scale-90"
+            aria-label={t.common.close}
+            className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
+                       hover:bg-s2 transition-colors active:scale-90"
           >
             <CloseIcon className="w-4 h-4" />
           </button>

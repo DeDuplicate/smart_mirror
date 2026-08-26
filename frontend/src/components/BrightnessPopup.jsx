@@ -174,7 +174,7 @@ export default function BrightnessPopup({ visible, onClose, anchorRef }) {
       <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-surf border-t border-l border-bd rotate-45 rounded-sm" />
 
       {/* Card */}
-      <div className="bg-surf border border-bd rounded-2xl shadow-xl p-5 flex flex-col items-center gap-4 min-w-[80px]">
+      <div className="bg-surf border border-bd rounded-2xl shadow-popover p-5 flex flex-col items-center gap-4 min-w-[80px]">
         {/* Sun icon at top */}
         <SunIcon className="w-6 h-6 text-gold-d" />
 
@@ -197,7 +197,7 @@ export default function BrightnessPopup({ visible, onClose, anchorRef }) {
 
           {/* Thumb */}
           <div
-            className="absolute left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-white border-2 border-acc shadow-md"
+            className="absolute left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-white border-2 border-acc shadow-card"
             style={{
               bottom: `calc(${brightness}% - 14px)`,
               transition: isDragging.current ? 'none' : 'bottom var(--dur-fast) var(--ease)',

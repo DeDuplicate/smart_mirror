@@ -73,7 +73,7 @@ export default function ToastContainer() {
             className={`
               pointer-events-auto cursor-pointer select-none
               flex items-center gap-3 px-5 py-3.5
-              bg-surf border border-bd rounded-xl shadow-lg
+              bg-surf border border-bd rounded-xl shadow-popover
               min-w-[320px] max-w-[480px]
               ${toast.exiting ? 'animate-toast-out' : 'animate-toast-in'}
             `}

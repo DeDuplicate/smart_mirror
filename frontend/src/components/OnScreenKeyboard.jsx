@@ -53,7 +53,7 @@ function Key({ label, onPress, flex = 1, variant = 'default', icon, ariaLabel })
       onMouseLeave={() => setPressed(false)}
       className={`
         ${variants[variant]}
-        border rounded-lg
+        border rounded-xl
         flex items-center justify-center
         min-w-[48px] h-[52px]
         font-heebo font-medium text-base
@@ -127,7 +127,7 @@ function BackspaceKey({ onBackspace }) {
       onMouseUp={stopRepeat}
       onMouseLeave={stopRepeat}
       className="
-        bg-s2 border border-bd text-ts rounded-lg
+        bg-s2 border border-bd text-ts rounded-xl
         flex items-center justify-center
         min-w-[48px] h-[52px]
         select-none transition-transform
@@ -202,7 +202,7 @@ export default function OnScreenKeyboard({
   );
 
   const enterIcon = (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
       <path d="M9 10l-5 5 5 5" />
       <path d="M20 4v7a4 4 0 01-4 4H4" />
     </svg>

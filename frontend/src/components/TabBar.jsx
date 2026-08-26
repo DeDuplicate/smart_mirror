@@ -95,7 +95,7 @@ export default function TabBar() {
               rounded-xl transition-all duration-[var(--dur-normal)]
               text-sm select-none
               ${isActive
-                ? 'bg-lav text-acc font-bold shadow-sm'
+                ? 'bg-lav text-acc font-bold shadow-card'
                 : 'text-ts font-medium hover:bg-s2 hover:text-tp active:scale-95'
               }
             `}

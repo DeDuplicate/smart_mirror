@@ -59,7 +59,7 @@ export default function WeatherPopup({ anchorRef, onClose }) {
         {/* Arrow / nub */}
         <div className="absolute -top-2 right-8 w-4 h-4 bg-surf border-t border-r border-bd rotate-[-45deg] rounded-sm" />
 
-        <div className="bg-surf border border-bd rounded-2xl shadow-xl p-5 relative">
+        <div className="bg-surf border border-bd rounded-2xl shadow-popover p-5 relative">
           {/* Current conditions */}
           <div className="flex items-center gap-4 mb-4 pb-4 border-b border-bd">
             <WeatherIcon code={cur.code} size={80} />

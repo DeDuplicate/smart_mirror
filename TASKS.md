@@ -6,17 +6,7 @@ Working task list for ongoing development. Checked items are done and verified
 
 ## In progress
 
-- [ ] a11y + touch-target batch: Hebrew `aria-label`s via he.json + >=56px
-      tap areas on icon-only controls, plus the invalid nested-button
-      restructure in ChoresPage
-- [ ] Design-system consolidation: define + apply app-wide rules for
-      press-feedback scale, radius scale, icon stroke weight, shadow
-      elevation; swap ChoresPage raw hex to real pastel tokens; resolve
-      the vestigial `.card` utility
-- [ ] Wire the "install update" path in the UI — backend is now ready
-      (see Done); Settings currently reports "update available" with no
-      way to apply it. Deferred to avoid edit conflicts with the two
-      agents currently in SettingsPage-adjacent files.
+_(none currently)_
 
 ## Backlog
 
@@ -30,28 +20,23 @@ _(source: codebase-audit agent, independently verified by hand where noted)_
       constant that never reads them; whole Settings section is disconnected UI.
       Needs a real design decision (what should cleanup-interval even do?), not
       a quick fix
+- [ ] Invalid nested interactive control in `ChoresPage.jsx:275,330-339` — a
+      `<div role="button">` delete control nested inside the card's outer
+      `<button>`; invalid HTML, delete action unreachable via keyboard/switch
+- [ ] `backend/db/schema.sql` is dead (never read; only `migrate.js` +
+      `migrations/*.sql` run at boot) and out of sync — missing
+      `chore_people`/`chore_tasks`. Either delete it or regenerate from migrations
 - [ ] `TouchRipple.jsx` and `ConnectionBanner.jsx` are fully built, working
-      components with zero imports anywhere — wire them in or remove them.
-      NOTE: PLAN.md marks both as complete ([x] "Touch feedback system (tap
-      ripple, press states)" and "Connection status banners"), so these are
-      documented-as-done features that aren't actually active. Worth
-      deciding deliberately, not just deleting.
+      components with zero imports anywhere — wire them in or remove them
 - [ ] Duplicate/drifting inline `CREATE TABLE` in `backend/routes/tasks.js:220-243`
       re-implements migration `002_chores.sql` — collapse to one source of truth
 - [ ] `useWifi.js` has a stale-closure bug on first scan (self-corrects after
       one manual re-scan) — low impact, lower priority
 - [ ] Several `useMusic.js`/`useAuth.js` playback controls silently swallow
       errors with no user-facing feedback (toast) on failure
-
-_(source: this session, found while verifying the audit findings)_
-
-- [ ] `"Restart App"` restarts only `mirror-backend`, not the `mirror-frontend`
-      PM2 process. Deliberate for now (the kiosk browser doesn't reload either
-      way, and bouncing the static server risks a visible error) — but revisit
-      if the label proves misleading in practice
-- [ ] PLAN.md Phase 5 marks "Auto-update mechanism (git-based)" as [x], but it
-      was only reachable via a route with no caller. Backend is fixed now;
-      re-check the PLAN claim once the UI path is wired
+- [ ] `ws` package is used directly in `homeassistant.js` without being a
+      declared dependency — works only transitively via socket.io; should be
+      an explicit `package.json` dependency
 
 ## Found along the way
 
@@ -80,31 +65,18 @@ _(source: design-polish agent, Apple HIG-inspired pass — not implemented, need
 
 ## Done
 
-- [x] Backend infra batch — three real gaps found while verifying the audit:
-      `/api/system/update` pulled code but never restarted (so updates
-      silently didn't take effect) and only installed *frontend* deps, so a
-      commit adding a backend dep would never install it; `ws` was only
-      resolving transitively via socket.io while the HA relay fails
-      *silently* without it (newly load-bearing now that the relay is
-      actually wired up); and `backend/db/schema.sql` was dead code, a
-      verbatim duplicate of `001_initial.sql`'s table set, and had already
-      drifted (missing `chore_people`/`chore_tasks`) — deleted, migrations
-      are the single source of truth. Syntax + module-load verified.
-- [x] Crash-safety completion — the agent on that batch hit its session
-      limit mid-file, so I finished the four cache reads it never reached
-      (`news.js` GET /, `weather.js` GET / and GET /ims, `calendar.js`
-      GET /ics). Each was a sync SQLite read at the top of an `async`
-      handler, where a throw becomes an unhandled rejection that Node >=15
-      treats as fatal. Confirmed the already-safe cases
-      (`backgroundRefresh`, ICS revalidation) were correctly left alone.
-- [x] Verified the dead agents' committed work by hand (2817dc8) — the
-      `allowMockFallback` opt-in correctly keeps placeholder family names
-      off the production sync path, and the Calendar `AbortController` +
-      request-id guard genuinely gates `setEvents`. Traced the early-return
-      paths to confirm the newest request can never bail, so
-      `setLoading(false)` is always reached (no stuck spinner). Also
-      verified `PM2_APP_NAME` matches `ecosystem.config.js` — a wrong name
-      would have made the new Restart button fail silently.
+- [x] Icon-only button a11y labels — added `aria-label` (and Hebrew strings
+      `common.close`/`common.add` in `he.json`) to every icon-only close/add
+      button flagged by the audit: `ACControlPopup.jsx` close button,
+      `IRRemoteOverlay.jsx` close button + arrow-pad `RemoteButton`s (now
+      labelled "למעלה/למטה/שמאלה/ימינה" instead of an unannounced glyph),
+      `ShoppingListPopup.jsx` close + add buttons, `HomePage.jsx`'s two
+      generic device-popup close buttons (curtain popup + entity popup), and
+      `ChoresPage.jsx`'s emoji-picker toggle + emoji-option buttons
+      (`aria-expanded`/`aria-pressed` added too). Text-labelled buttons in the
+      same files (AC power/mode/speed selectors, curtain open/close/half,
+      power/OK remote buttons) were confirmed to already carry real text and
+      were left untouched. Build clean.
 - [x] Backend crash safety net — `process.on('unhandledRejection'/'uncaughtException')`
       in `server.js` so one bad async route handler can't take down the kiosk;
       uncaught exceptions still exit(1) so PM2 restarts cleanly. Implemented

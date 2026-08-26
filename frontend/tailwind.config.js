@@ -26,6 +26,15 @@ export default {
         heebo: ['Heebo', 'sans-serif'],
         mono: ['DM Mono', 'monospace'],
       },
+      // Semantic elevation scale — see "rule 4" in styles/global.css.
+      // Named for meaning, not size, so `hover:shadow-raised` etc. work.
+      // Prefer these over shadow-sm/md/lg/xl/2xl everywhere.
+      boxShadow: {
+        card: 'var(--elev-card)',
+        raised: 'var(--elev-raised)',
+        popover: 'var(--elev-popover)',
+        modal: 'var(--elev-modal)',
+      },
       animation: {
         'fade-in': 'fadeIn var(--dur-normal) var(--ease) forwards',
         'fade-out': 'fadeOut var(--dur-normal) var(--ease) forwards',

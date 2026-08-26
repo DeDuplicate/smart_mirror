@@ -71,7 +71,7 @@ export default function ConnectionBanner({ integration, message, onAction, onDis
         {onAction && (
           <button
             onClick={onAction}
-            className="shrink-0 px-4 min-h-[44px] rounded-lg font-medium text-sm
+            className="shrink-0 px-4 min-h-[44px] rounded-xl font-medium text-sm
                        active:scale-95 transition-all select-none"
             style={{
               backgroundColor: 'var(--gold-d)',
@@ -86,7 +86,7 @@ export default function ConnectionBanner({ integration, message, onAction, onDis
         {/* Dismiss X */}
         <button
           onClick={handleDismiss}
-          className="shrink-0 w-[40px] h-[40px] flex items-center justify-center rounded-lg
+          className="shrink-0 w-[40px] h-[40px] flex items-center justify-center rounded-xl
                      active:scale-95 transition-all"
           style={{
             color: 'var(--gold-d)',
