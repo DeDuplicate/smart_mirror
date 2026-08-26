@@ -945,7 +945,10 @@ On boot, before serving any routes:
 - [x] Wi-Fi manager popup
 - [x] Screen brightness control (ddcutil / xrandr)
 - [x] Scheduled display power (wake/sleep times, per-day schedule)
-- [x] Auto-update mechanism (git-based)
+- [~] Auto-update mechanism (git-based) — backend `POST /api/system/update` works
+      (pulls, installs backend + frontend deps, rebuilds, then restarts via PM2),
+      but **no UI calls it**: Settings only calls `/check-update`, so it reports
+      "update available" with no way to install. UI path still to wire.
 - [x] System info panel (version, IP, uptime, restart)
 - [x] Log viewer in Settings
 - [x] Backup system (backup.sh + Settings "Backup Now" button)
@@ -960,7 +963,9 @@ On boot, before serving any routes:
 - [x] SD card protection (overlayfs read-only root, optional)
 - [x] PM2 auto-start on boot
 - [x] Pull-to-refresh gesture on synced tabs
-- [x] Fix all items in Known Issues table
+- [~] Fix all items in Known Issues table — all closed except #7 (Calendar month
+      view), which remains an open future enhancement. #5 (queue tap-to-play) was
+      still open despite this line claiming otherwise; it is genuinely fixed now.
 
 ---
 
