@@ -86,7 +86,7 @@ function ProgressRing({ progress, color, size = 68, strokeWidth = 4 }) {
         strokeDasharray={circumference}
         strokeDashoffset={offset}
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: 'stroke-dashoffset 600ms ease-out' }}
+        style={{ transition: 'stroke-dashoffset var(--dur-slow) var(--ease-out)' }}
         className={isComplete ? 'celebration-ring-pulse' : ''}
       />
     </svg>
@@ -138,7 +138,7 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
         className={`
           w-[60px] h-[60px] rounded-full flex items-center justify-center
           text-white text-xl font-bold select-none cursor-pointer
-          transition-shadow duration-500 overflow-hidden
+          transition-shadow duration-[var(--dur-slow)] overflow-hidden
           ${isComplete ? 'avatar-pulse-glow' : ''}
         `}
         style={{
@@ -279,7 +279,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
       className={`
         relative w-full flex items-center gap-3 p-3 rounded-xl
         border border-[var(--bd)]
-        transition-all duration-200
+        transition-all duration-[var(--dur-fast)]
         active:scale-[0.98]
         min-h-[56px]
         ${bgClass}
@@ -294,7 +294,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
         className={`
           relative flex-shrink-0 w-[44px] h-[44px] rounded-full
           flex items-center justify-center
-          border-2 transition-all duration-300
+          border-2 transition-all duration-[var(--dur-normal)]
           ${isComplete
             ? 'border-[var(--acc2)] bg-[var(--acc2)]'
             : 'border-[var(--tm)] bg-transparent'}
@@ -313,7 +313,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
           <span
             className={`
               text-sm font-medium text-right leading-snug truncate
-              transition-all duration-300
+              transition-all duration-[var(--dur-normal)]
               ${isComplete ? 'line-through text-[var(--ts)]' : 'text-[var(--tp)]'}
             `}
           >
@@ -451,7 +451,7 @@ function PersonColumn({
       {/* Progress bar */}
       <div className="mx-4 mb-3 h-[6px] rounded-full bg-[var(--s2)] overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500 ease-out"
+          className="h-full rounded-full transition-all duration-[var(--dur-slow)] ease-out"
           style={{
             width: `${progress * 100}%`,
             backgroundColor: person.color,
@@ -489,7 +489,7 @@ function PersonColumn({
             text-[var(--ts)] text-sm font-medium
             hover:bg-[var(--s2)] hover:text-[var(--tp)]
             active:scale-[0.98]
-            transition-all duration-200
+            transition-all duration-[var(--dur-fast)]
             min-h-[48px]
           "
         >
@@ -557,7 +557,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
           left: 0,
           right: 0,
           marginTop: showKeyboard ? undefined : 'auto',
-          transition: 'bottom 0.25s ease',
+          transition: 'bottom var(--dur-normal) var(--ease)',
         }}
       >
         {/* Emoji picker */}
@@ -571,7 +571,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
               onClick={() => setShowEmojiPicker(v => !v)}
               className="
                 w-16 h-16 rounded-2xl border-2 flex items-center justify-center
-                text-3xl transition-all duration-200 active:scale-95 shrink-0
+                text-3xl transition-all duration-[var(--dur-fast)] active:scale-95 shrink-0
               "
               style={{
                 borderColor: emoji ? personColor : 'var(--bd)',
@@ -597,7 +597,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
                   onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
                   className={`
                     w-11 h-11 rounded-xl flex items-center justify-center text-xl
-                    transition-all duration-150 active:scale-90
+                    transition-all duration-[var(--dur-fast)] active:scale-90
                     ${emoji === e ? 'bg-[var(--acc)]/20 ring-2 ring-[var(--acc)]' : 'hover:bg-[var(--bd)]'}
                   `}
                 >
@@ -626,7 +626,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
               border border-[var(--bd)]
               placeholder-[var(--tm)]
               focus:outline-none focus:border-[var(--acc)]
-              transition-colors duration-200
+              transition-colors duration-[var(--dur-fast)]
             "
             dir="rtl"
             autoFocus
@@ -645,7 +645,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
                 onClick={() => setRecurrence(option.value)}
                 className={`
                   flex-1 py-2.5 px-3 rounded-xl text-sm font-medium
-                  border transition-all duration-200
+                  border transition-all duration-[var(--dur-fast)]
                   ${recurrence === option.value
                     ? 'border-[var(--acc)] bg-[var(--acc)]/10 text-[var(--acc)]'
                     : 'border-[var(--bd)] bg-[var(--s2)] text-[var(--ts)]'
@@ -665,7 +665,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
             disabled={!title.trim()}
             className="
               flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white
-              transition-all duration-200
+              transition-all duration-[var(--dur-fast)]
               disabled:opacity-40 disabled:cursor-not-allowed
               active:scale-[0.98]
             "
@@ -680,7 +680,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
               bg-[var(--s2)] text-[var(--ts)]
               border border-[var(--bd)]
               active:scale-[0.98]
-              transition-all duration-200
+              transition-all duration-[var(--dur-fast)]
             "
           >
             {t.common.cancel}
@@ -778,7 +778,7 @@ export default function TasksPage() {
           onClick={toggleHideCompleted}
           className={`
             flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium
-            border transition-all duration-200
+            border transition-all duration-[var(--dur-fast)]
             active:scale-[0.98]
             ${hideCompleted
               ? 'border-[var(--acc)] bg-[var(--acc)]/10 text-[var(--acc)]'

@@ -444,7 +444,7 @@ function DeviceTile({ entity, onToggle, onLongPress, offline }) {
   return (
     <div
       className={`relative card flex flex-col items-center justify-center gap-2.5
-                   rounded-[20px] cursor-pointer select-none overflow-hidden
+                   rounded-2xl cursor-pointer select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]
                    ${pressing ? 'scale-[0.97]' : 'scale-100'}
@@ -842,7 +842,7 @@ function ElectricityTile({ allStates }) {
   return (
     <div
       className={`relative card flex flex-col items-center justify-center gap-2.5
-                   rounded-[20px] select-none overflow-hidden
+                   rounded-2xl select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]`}
       style={{ minHeight: '140px', minWidth: '180px' }}
@@ -926,7 +926,7 @@ function CurtainTile({ allStates, ha, onLongPress }) {
   return (
     <div
       className={`relative card flex flex-col items-center justify-center gap-2.5
-                   rounded-[20px] cursor-pointer select-none overflow-hidden
+                   rounded-2xl cursor-pointer select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]
                    ${pressing ? 'scale-[0.97]' : 'scale-100'}
@@ -1042,7 +1042,7 @@ function IRRemoteTile({ entityId, label, onTap }) {
   return (
     <div
       className="relative card flex flex-col items-center justify-center gap-2.5
-                 rounded-[20px] cursor-pointer select-none overflow-hidden
+                 rounded-2xl cursor-pointer select-none overflow-hidden
                  border-2 border-bd hover:shadow-md
                  transition-all duration-[var(--dur-fast)] active:scale-[0.97]"
       style={{ minHeight: '140px', minWidth: '180px' }}
@@ -1167,7 +1167,7 @@ export default function HomePage() {
         {/* AC Control tile — spans 2 columns */}
         <div
           className="col-span-2 card flex flex-col items-center justify-center gap-2.5
-                     rounded-[20px] cursor-pointer select-none overflow-hidden
+                     rounded-2xl cursor-pointer select-none overflow-hidden
                      border-2 border-bd hover:shadow-md
                      transition-all duration-[var(--dur-fast)]
                      hover:border-acc2 active:scale-[0.97]"
@@ -1224,7 +1224,7 @@ export default function HomePage() {
             <div
               key={`empty-${i}`}
               className="card flex flex-col items-center justify-center gap-2
-                         rounded-[20px] border-2 border-dashed border-bd
+                         rounded-2xl border-2 border-dashed border-bd
                          min-h-[140px] min-w-[180px] opacity-30"
             >
               <div className="w-10 h-10 rounded-full bg-s2 flex items-center justify-center">
