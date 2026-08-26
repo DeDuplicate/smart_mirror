@@ -76,9 +76,16 @@ router.get('/', async (req, res) => {
   const logger = req.app.locals.logger;
 
   const cacheKey = 'news:headlines';
-  const cached = getCached(db, cacheKey, NEWS_CACHE_TTL_MS);
-  if (cached) {
-    return res.json({ articles: cached, source: 'cache' });
+  try {
+    const cached = getCached(db, cacheKey, NEWS_CACHE_TTL_MS);
+    if (cached) {
+      return res.json({ articles: cached, source: 'cache' });
+    }
+  } catch (err) {
+    // A failed cache read must not reject out of this async handler (Express 4
+    // does not catch that, and Node >=15 kills the process) — just log and
+    // continue on to fetch fresh data.
+    logger.error('News cache read error: %s', err.message);
   }
 
   // Determine sources from settings or use defaults

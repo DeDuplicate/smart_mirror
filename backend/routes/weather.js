@@ -230,7 +230,16 @@ router.get('/', async (req, res) => {
   });
 
   // ── Check cache ────────────────────────────────────────────────────────────
-  const { data: cached, isStale } = getCacheRow(db, cacheKey);
+  // A failed cache read must not reject out of this async handler (Express 4
+  // does not catch that, and Node >=15 kills the process) — degrade to a
+  // cache miss and fetch fresh data instead.
+  let cached = null;
+  let isStale = false;
+  try {
+    ({ data: cached, isStale } = getCacheRow(db, cacheKey));
+  } catch (err) {
+    logger.error('Weather cache read error: %s', err.message);
+  }
 
   if (cached && !isStale) {
     // Fresh cache hit — return immediately
@@ -282,8 +291,15 @@ router.get('/ims', async (req, res) => {
   const units = (req.query.units || 'C').toUpperCase() === 'F' ? 'fahrenheit' : 'celsius';
   const cacheKey = `weather:ims:${units}`;
 
-  // Check cache
-  const { data: cached, isStale } = getCacheRow(db, cacheKey);
+  // Check cache — see the note in GET / above: a throw here would reject out
+  // of this async handler and take down the process.
+  let cached = null;
+  let isStale = false;
+  try {
+    ({ data: cached, isStale } = getCacheRow(db, cacheKey));
+  } catch (err) {
+    logger.error('IMS weather cache read error: %s', err.message);
+  }
 
   if (cached && !isStale) {
     return res.json({ ...cached, source: 'cache' });
