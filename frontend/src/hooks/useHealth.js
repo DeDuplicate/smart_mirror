@@ -44,10 +44,6 @@ export default function useHealth() {
 
         const statuses = {};
 
-        if (health.integrations?.google) {
-          statuses.google = deriveStatus(health.integrations.google);
-        }
-
         if (health.integrations?.spotify) {
           statuses.spotify = deriveStatus(health.integrations.spotify);
         }

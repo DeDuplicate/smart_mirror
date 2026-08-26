@@ -157,7 +157,6 @@ const weatherSlice = (set) => ({
 
 const connectionSlice = (set) => ({
   connections: {
-    google: 'not_configured',
     ha: 'not_configured',
     spotify: 'not_configured',
     wifi: 'not_configured',

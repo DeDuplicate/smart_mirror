@@ -8,6 +8,11 @@ import WifiPopup from './WifiPopup.jsx';
 import ShoppingListPopup, { useShoppingListCount } from './ShoppingListPopup.jsx';
 import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
 import useHomeAssistant from '../hooks/useHomeAssistant.js';
+import { useMusicContext } from '../context/MusicContext.jsx';
+
+// Index of the Music tab in TABS/PAGES — kept in one place so the mini-player
+// can hide itself while that tab is already showing the full player.
+const MUSIC_TAB_INDEX = 4;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -484,6 +489,120 @@ function ShoppingListButton() {
   );
 }
 
+/** Small icons for the mini-player transport controls */
+function MiniPrevIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+    </svg>
+  );
+}
+function MiniNextIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
+    </svg>
+  );
+}
+function MiniPlayIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+function MiniPauseIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M6 5h4v14H6zm8 0h4v14h-4z" />
+    </svg>
+  );
+}
+function MiniNoteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
+
+/**
+ * Music mini-player — shown in the TopBar whenever a track is loaded and the
+ * user has navigated away from the Music tab, so playback (which keeps
+ * running in the background via MusicProvider) stays visible/controllable.
+ * Uses the static `imageUrl` thumbnail rather than the live video, since the
+ * real YouTube iframe is docked full-size into MusicPage while that tab is
+ * active (kept off-screen but still playing otherwise).
+ */
+function MusicMiniPlayer() {
+  const { currentTrack, isPlaying, playPause, next, previous } = useMusicContext();
+  const activeTab = useStore((s) => s.activeTab);
+  const setActiveTab = useStore((s) => s.setActiveTab);
+
+  if (!currentTrack || activeTab === MUSIC_TAB_INDEX) return null;
+
+  return (
+    <div
+      className="flex items-center gap-2 ps-1.5 pe-2 py-1 rounded-2xl bg-s1"
+      role="group"
+      aria-label={t.music.nowPlaying}
+    >
+      <button
+        onClick={() => setActiveTab(MUSIC_TAB_INDEX)}
+        className="flex items-center gap-2 min-w-0 min-h-[56px] rounded-xl hover:bg-s2 active:scale-[0.98]
+                   transition-all duration-[var(--dur-fast)] py-1 ps-1 pe-1.5"
+        aria-label={t.music.backToMusic}
+      >
+        <div className="w-10 h-10 rounded-xl overflow-hidden bg-s2 shrink-0 flex items-center justify-center">
+          {currentTrack.imageUrl ? (
+            <img src={currentTrack.imageUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <MiniNoteIcon className="text-ts" />
+          )}
+        </div>
+        <div className="flex flex-col items-start min-w-0 leading-tight">
+          <span className="text-xs font-semibold text-tp truncate max-w-[140px]">
+            {currentTrack.title}
+          </span>
+          <span className="text-[11px] text-ts truncate max-w-[140px]">
+            {currentTrack.artist}
+          </span>
+        </div>
+      </button>
+
+      <div className="flex items-center shrink-0">
+        <button
+          onClick={previous}
+          className="w-[56px] h-[56px] flex items-center justify-center rounded-full text-ts
+                     hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
+          aria-label={t.music.prev}
+        >
+          <MiniPrevIcon className="w-5 h-5" />
+        </button>
+        <button
+          onClick={playPause}
+          className="w-[56px] h-[56px] flex items-center justify-center rounded-full text-tp
+                     bg-acc/10 hover:bg-acc/20 active:scale-95 transition-all duration-[var(--dur-fast)]"
+          aria-label={isPlaying ? t.music.pause : t.music.play}
+        >
+          {isPlaying ? <MiniPauseIcon className="w-6 h-6" /> : <MiniPlayIcon className="w-6 h-6" />}
+        </button>
+        <button
+          onClick={next}
+          className="w-[56px] h-[56px] flex items-center justify-center rounded-full text-ts
+                     hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
+          aria-label={t.music.next}
+        >
+          <MiniNextIcon className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Settings gear — switches to Settings tab (index 5) */
 function SettingsButton() {
   const setActiveTab = useStore((s) => s.setActiveTab);
@@ -537,6 +656,7 @@ export default function TopBar() {
 
       {/* Left side in RTL: Utility buttons */}
       <div className="flex items-center gap-1">
+        <MusicMiniPlayer />
         <PersonPresence />
         <ShoppingListButton />
         <DarkModeToggle />

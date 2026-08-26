@@ -6,6 +6,9 @@ backend/db/*.db-shm
 backend/db/*.db-wal
 logs/
 dist/
+backend/cache/
+# PM2 runtime logs (ecosystem.config.js writes these next to the backend)
+backend/*.log
 .DS_Store
 home assistant connection details
 .playwright-mcp/

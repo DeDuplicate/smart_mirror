@@ -10,31 +10,7 @@ source note.
 
 ## Requested
 
-- [ ] **Music: keep playback running in the background when leaving the
-      Music tab, and show a mini-player in the TopBar (user-reported).**
-      Today the player lives inside `MusicPage.jsx`, so switching tabs (or
-      opening Settings) unmounts it — Spotify playback survives (it's
-      server-side via Spotify Connect), but the YouTube player
-      (`useYoutubePlayer.js`, iframe-based) stops the moment its component
-      unmounts. Fix has two halves:
-      1. **Keep the player alive across tab switches.** Hoist the YouTube
-         player element (or its mount point) above the tab level — e.g.
-         keep `MusicPage` mounted-but-hidden instead of unmounting, or move
-         the player into a persistent host near the App root and render it
-         visually inside MusicPage when that tab is active. Whichever
-         approach: audio must not glitch when switching tabs, and the
-         hidden player must not intercept touches or break the kiosk layout.
-      2. **TopBar mini-player.** When music is playing (or paused with an
-         active track) and the Music tab is NOT active, show a compact
-         strip in/alongside the TopBar: track title + artist (truncating,
-         Hebrew RTL), play/pause + next/prev controls (≥56px touch
-         targets), and tapping the strip itself navigates back to the Music
-         tab. Reads the existing playback state (useMusic store/polling —
-         check whether polling currently only runs while the tab is active;
-         it may need to stay warm when a track is loaded so the mini-player
-         doesn't go stale). Strings via `he.json`; design-system rules in
-         the `global.css` header apply (rounded-xl controls,
-         active:scale-95, shadow tokens).
+_(none)_
 
 ## In progress
 
@@ -55,6 +31,89 @@ _(none)_
 
 ## Done
 
+- [x] **Fix Google account connection → Google integration fully removed;
+      family calendar via ICS; Tasks tab converted to local SQLite (user
+      request).** Root cause of the original failure: `GOOGLE_CLIENT_ID` /
+      `GOOGLE_CLIENT_SECRET` in `backend/.env` were empty (verified live:
+      `/api/system/health` → `google.configured=false`,
+      `/api/auth/google/url` → 503). The "calendar not syncing" report was
+      actually a working ICS pipeline with an empty calendar — the family
+      feed's last event is 2026-07-22 (verified via `/api/calendar/ics`
+      returning 13 June–July events). Per user decision, ALL Google OAuth
+      code was removed instead of re-credentialed:
+      backend — Google routes/helpers/exports stripped from `auth.js`
+      (Spotify + token encryption kept), Google `/calendar/events`
+      read+write routes removed from `calendar.js` (ICS kept), `google`
+      dropped from `/api/system/health` and `server.js` OPTIONAL_VARS,
+      empty `GOOGLE_*` vars removed from `.env` + `.env.example`;
+      `backend/routes/tasks.js` rewritten from Google Tasks API to local
+      SQLite (new migration `003_kanban_tasks.sql`, `kanban_tasks` table) —
+      this also fixed a latent contract mismatch where the Google-shaped
+      responses never matched the kanban UI's expected shape. Frontend —
+      wizard's Google step + `GoogleAccountCard` removed (steps
+      renumbered), Settings Google-accounts section removed, CalendarPage's
+      Google write path removed (event editor/plus button/slot-click/detail
+      actions; orphaned `EventEditor.jsx` deleted), `useAuth` reduced to
+      Spotify-only, `connections.google` dropped from store + `useHealth`,
+      dead i18n keys removed from `he.json`. Verified: `node --check` all
+      touched backend files, `npx vite build` clean, backend restarted and
+      live-tested — health shows no `google`, tasks CRUD round-trip passes
+      (POST→PATCH→DELETE), `/api/calendar/ics` returns family events,
+      `/api/auth/google/*` → 404, chores routes unaffected. Note: ICS feeds
+      are read-only, so calendar events are now view-only on the mirror
+      (add/edit in Google Calendar directly).
+
+- [x] **Music: keep playback running in the background when leaving the
+      Music tab, and show a mini-player in the TopBar (user-reported).**
+      Root cause: `useMusic()` (and the YouTube iframe it owns via
+      `useYoutubePlayer.js`) was only ever instantiated inside
+      `MusicPage.jsx`, which fully unmounts on tab switch (`App.jsx`'s
+      `TabContent` only renders the single active tab) — this destroyed the
+      iframe (`playerRef.current?.destroy?.()` in the cleanup) and killed
+      YouTube playback. Fixed by lifting the player to a persistent
+      app-root provider instead of duplicating/rebuilding it per tab:
+      - New `frontend/src/context/MusicContext.jsx`: `MusicProvider` calls
+        `useMusic()` exactly once and renders the single real player `<div>`
+        permanently, positioned via `position: fixed` to "dock" wherever a
+        consumer currently claims it (`registerDock(ownerId, rect)` /
+        `unregisterDock`), or off-screen (1×1 at -9999,-9999) when nothing
+        claims it — the iframe itself is never destroyed/recreated, so
+        playback continues uninterrupted. Mounted once in `App.jsx`,
+        wrapping `TopBar`/`TabBar`/`TabContent` (survives all tab switches).
+      - `MusicPage.jsx` no longer calls `useMusic()` directly — it consumes
+        `useMusicContext()` and its old player `<div>` became a measuring
+        placeholder (`dockAnchorRef`) that registers/re-measures
+        (`ResizeObserver` + window resize) its `getBoundingClientRect()` so
+        the real player docks into the visible 400×400 "album art" box
+        while that tab is active, and releases on unmount.
+      - New `MusicMiniPlayer` in `TopBar.jsx`: shown whenever a track is
+        loaded and the Music tab (index 4) isn't already active — static
+        `imageUrl` thumbnail (not the live video, since the real iframe
+        stays docked/hidden elsewhere), truncated title/artist (RTL), and
+        prev/play-pause/next controls reading from the shared context;
+        tapping the strip navigates back to the Music tab.
+      - Verified live end-to-end with a real headless-Chromium run
+        (Playwright, installed temporarily and removed after — confirmed
+        `backend/package.json` has no leftover diff): started a real
+        YouTube track from the "recommended" playlist, confirmed exactly
+        one `<iframe>` exists throughout, confirmed its bounding rect
+        matches MusicPage's 400×400 box while active (`top:620,left:1182,
+        400x400`) and moves to the off-screen dock (`1x1 @ -9999,-9998`)
+        immediately after switching to the Calendar tab (same iframe
+        instance — never recreated), confirmed the TopBar mini-player
+        renders the correct track/artist while away from Music, and
+        confirmed tapping the mini-player returns to the Music tab.
+      - Frontend build (`npx vite build`) verified clean throughout.
+- [x] **News: Globes source was showing English headlines in the Hebrew RTL
+      news feed (user-reported).** Root cause: the Globes RSS URL used
+      `iID=1725`, which is `en.globes.co.il`'s English-language feed
+      (`<language>en</language>`, links to `en.globes.co.il`) — verified live
+      by fetching the raw feed. Found the correct Hebrew feed by inspecting
+      `<link rel="alternate" type="application/rss+xml">` tags on
+      globes.co.il's homepage; switched to `iID=9917` ("בארץ" — Globes'
+      general Hebrew business/economy feed, confirmed `<language>he</language>`
+      live). Verified live: headlines now return real Hebrew text (e.g. "טראמפ
+      חושף פרטים על מצבו של ח'אמנאי..."). No frontend changes needed.
 - [x] **Calendar month view** (PLAN.md Known Issues #7) — new `MonthGrid`
       component (Sunday-first Israeli week, up to 3 event chips per cell,
       "+N עוד" overflow, today ring, dimmed adjacent-month days); week/month

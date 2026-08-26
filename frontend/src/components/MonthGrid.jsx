@@ -75,7 +75,7 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
   return (
     <div
       className="flex-1 flex flex-col overflow-hidden"
-      style={{ direction: 'ltr' /* Grid is always LTR (Sun→Sat) */ }}
+      style={{ direction: 'rtl' /* Sunday on the right, days flow left */ }}
     >
       {/* ── Day-name header ── */}
       <div className="shrink-0 grid grid-cols-7 gap-px bg-bd border-b border-bd">

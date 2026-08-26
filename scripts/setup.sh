@@ -37,8 +37,31 @@ success "System packages updated."
 # ---------------------------------------------------------------------------
 # 3. Install dependencies
 # ---------------------------------------------------------------------------
-info "Installing system dependencies (git, ddcutil, xdotool)..."
-sudo apt-get install -y git ddcutil xdotool curl gnupg
+info "Installing system dependencies (git, ddcutil, xdotool, ffmpeg)..."
+sudo apt-get install -y git ddcutil xdotool curl gnupg ffmpeg
+
+info "Installing yt-dlp (YouTube audio extraction for Nest/Google Home casting)..."
+if command -v yt-dlp &>/dev/null; then
+  sudo yt-dlp -U || true
+  success "yt-dlp $(yt-dlp --version) is already installed."
+else
+  # Prefer the standalone binary — it self-updates and avoids stale distro pins.
+  sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    -o /usr/local/bin/yt-dlp
+  sudo chmod a+rx /usr/local/bin/yt-dlp
+  success "yt-dlp $(yt-dlp --version) installed to /usr/local/bin/yt-dlp."
+fi
+
+# YouTube frequently changes its signature scheme, which breaks older yt-dlp
+# builds and stops Nest/Google Home casting. Keep it fresh with a weekly cron.
+info "Scheduling weekly yt-dlp self-update..."
+YTDLP_CRON="0 4 * * 1 /usr/local/bin/yt-dlp -U >/dev/null 2>&1"
+if ! sudo crontab -l 2>/dev/null | grep -qF "/usr/local/bin/yt-dlp -U"; then
+  (sudo crontab -l 2>/dev/null; echo "${YTDLP_CRON}") | sudo crontab -
+  success "Weekly yt-dlp update scheduled (Mondays 04:00)."
+else
+  info "yt-dlp update cron already present."
+fi
 
 info "Installing Node.js 20 LTS via NodeSource..."
 if ! command -v node &>/dev/null || [[ "$(node --version | cut -d. -f1 | tr -d 'v')" -lt 20 ]]; then

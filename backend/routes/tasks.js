@@ -3,213 +3,199 @@
 const { Router } = require('express');
 const router = Router();
 
-const { getValidGoogleToken, getAccountsByProvider } = require('./auth');
-
-const GOOGLE_TASKS_API = 'https://tasks.googleapis.com/tasks/v1';
-
 // ---------------------------------------------------------------------------
-// Helper: get the first linked Google account's token
+// Local kanban tasks (SQLite — table created by migrations/003_kanban_tasks.sql)
+// Field names match the frontend kanban model: id, title, description,
+// status ('todo' | 'inProgress' | 'done'), priority, starred, dueDate,
+// listName, listColor, position.
 // ---------------------------------------------------------------------------
-async function getTasksToken(db, logger) {
-  const accounts = getAccountsByProvider(db, 'google');
-  if (accounts.length === 0) throw new Error('No Google account linked');
-  return getValidGoogleToken(db, accounts[0].email, logger);
+
+const VALID_STATUSES = new Set(['todo', 'inProgress', 'done']);
+const VALID_PRIORITIES = new Set(['none', 'low', 'medium', 'high']);
+
+function rowToTask(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description || '',
+    status: r.status,
+    priority: r.priority || 'none',
+    starred: r.starred === 1,
+    dueDate: r.due_date || null,
+    listName: r.list_name || null,
+    listColor: r.list_color || null,
+    position: r.position,
+    updated: r.updated_at,
+  };
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/tasks/lists — available task lists
+// GET /api/tasks — all kanban tasks (array, as the frontend expects)
 // ---------------------------------------------------------------------------
-router.get('/lists', async (req, res) => {
+router.get('/', (req, res) => {
   const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
 
   try {
-    const token = await getTasksToken(db, logger);
-    const response = await fetch(`${GOOGLE_TASKS_API}/users/@me/lists`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Google Tasks API ${response.status}: ${text}`);
-    }
-
-    const data = await response.json();
-    res.json({ lists: data.items || [] });
+    const rows = db
+      .prepare('SELECT * FROM kanban_tasks ORDER BY position, rowid')
+      .all();
+    res.json(rows.map(rowToTask));
   } catch (err) {
-    logger.error('Tasks lists error: %s', err.message);
-    res.status(502).json({ error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/tasks?listId= — all tasks from a task list
-// ---------------------------------------------------------------------------
-router.get('/', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    const token = await getTasksToken(db, logger);
-    const listId = req.query.listId || '@default';
-
-    const params = new URLSearchParams({
-      maxResults: '100',
-      showCompleted: req.query.showCompleted || 'true',
-      showHidden: 'false',
-    });
-
-    const response = await fetch(
-      `${GOOGLE_TASKS_API}/lists/${encodeURIComponent(listId)}/tasks?${params}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Google Tasks API ${response.status}: ${text}`);
-    }
-
-    const data = await response.json();
-    const tasks = (data.items || []).map((t) => ({
-      id: t.id,
-      title: t.title,
-      notes: t.notes || '',
-      status: t.status,
-      due: t.due || null,
-      completed: t.completed || null,
-      parent: t.parent || null,
-      position: t.position,
-      updated: t.updated,
-    }));
-
-    res.json({ tasks });
-  } catch (err) {
-    logger.error('Tasks fetch error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    req.app.locals.logger.error('Tasks fetch error: %s', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/tasks — create a new task
 // ---------------------------------------------------------------------------
-router.post('/', async (req, res) => {
+router.post('/', (req, res) => {
   const db = req.app.locals.db;
   const logger = req.app.locals.logger;
 
   try {
-    const token = await getTasksToken(db, logger);
-    const listId = req.body.listId || '@default';
-
-    const taskBody = {
-      title: req.body.title,
-      notes: req.body.notes || '',
-      due: req.body.due || undefined,
-    };
-
-    const response = await fetch(
-      `${GOOGLE_TASKS_API}/lists/${encodeURIComponent(listId)}/tasks`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(taskBody),
-      }
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Google Tasks API ${response.status}: ${text}`);
+    const body = req.body || {};
+    const title = String(body.title || '').trim();
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
     }
 
-    const task = await response.json();
-    logger.info('Task created: %s', task.id);
-    res.status(201).json({ task });
+    const id = `kt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const status = VALID_STATUSES.has(body.status) ? body.status : 'todo';
+    const priority = VALID_PRIORITIES.has(body.priority) ? body.priority : 'none';
+    const pos = db
+      .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM kanban_tasks')
+      .get().pos;
+
+    db.prepare(
+      `INSERT INTO kanban_tasks
+         (id, title, description, status, priority, starred, due_date, list_name, list_color, position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id,
+      title,
+      body.description || '',
+      status,
+      priority,
+      body.starred ? 1 : 0,
+      body.dueDate || null,
+      body.listName || null,
+      body.listColor || null,
+      pos
+    );
+
+    const row = db.prepare('SELECT * FROM kanban_tasks WHERE id = ?').get(id);
+    logger.info('Task created: %s', id);
+    res.status(201).json(rowToTask(row));
   } catch (err) {
     logger.error('Task create error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
 // ---------------------------------------------------------------------------
-// PUT /api/tasks/:id — update a task
+// PATCH /api/tasks/:id — update a task (PUT kept as an alias)
 // ---------------------------------------------------------------------------
-router.put('/:id', async (req, res) => {
+function updateTaskHandler(req, res) {
   const db = req.app.locals.db;
   const logger = req.app.locals.logger;
 
   try {
-    const token = await getTasksToken(db, logger);
-    const listId = req.body.listId || '@default';
     const taskId = req.params.id;
+    const existing = db
+      .prepare('SELECT * FROM kanban_tasks WHERE id = ?')
+      .get(taskId);
+    if (!existing) return res.status(404).json({ error: 'Task not found' });
 
-    const updates = {};
-    if (req.body.title !== undefined) updates.title = req.body.title;
-    if (req.body.notes !== undefined) updates.notes = req.body.notes;
-    if (req.body.status !== undefined) updates.status = req.body.status;
-    if (req.body.due !== undefined) updates.due = req.body.due;
-    // Google Tasks requires "completed" field when marking as completed
-    if (req.body.status === 'completed') {
-      updates.completed = new Date().toISOString();
+    const body = req.body || {};
+    const sets = [];
+    const values = [];
+
+    if (body.title !== undefined) {
+      const title = String(body.title).trim();
+      if (!title) return res.status(400).json({ error: 'Title cannot be empty' });
+      sets.push('title = ?');
+      values.push(title);
+    }
+    if (body.description !== undefined) {
+      sets.push('description = ?');
+      values.push(String(body.description));
+    }
+    if (body.status !== undefined) {
+      if (!VALID_STATUSES.has(body.status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      sets.push('status = ?');
+      values.push(body.status);
+    }
+    if (body.priority !== undefined) {
+      if (!VALID_PRIORITIES.has(body.priority)) {
+        return res.status(400).json({ error: 'Invalid priority' });
+      }
+      sets.push('priority = ?');
+      values.push(body.priority);
+    }
+    if (body.starred !== undefined) {
+      sets.push('starred = ?');
+      values.push(body.starred ? 1 : 0);
+    }
+    if (body.dueDate !== undefined) {
+      sets.push('due_date = ?');
+      values.push(body.dueDate || null);
+    }
+    if (body.listName !== undefined) {
+      sets.push('list_name = ?');
+      values.push(body.listName || null);
+    }
+    if (body.listColor !== undefined) {
+      sets.push('list_color = ?');
+      values.push(body.listColor || null);
+    }
+    if (body.position !== undefined) {
+      sets.push('position = ?');
+      values.push(Number(body.position) || 0);
     }
 
-    const response = await fetch(
-      `${GOOGLE_TASKS_API}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      }
+    if (sets.length === 0) {
+      return res.json(rowToTask(existing));
+    }
+
+    sets.push("updated_at = datetime('now')");
+    values.push(taskId);
+    db.prepare(`UPDATE kanban_tasks SET ${sets.join(', ')} WHERE id = ?`).run(
+      ...values
     );
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Google Tasks API ${response.status}: ${text}`);
-    }
-
-    const task = await response.json();
-    logger.info('Task updated: %s', task.id);
-    res.json({ task });
+    const row = db.prepare('SELECT * FROM kanban_tasks WHERE id = ?').get(taskId);
+    logger.info('Task updated: %s', taskId);
+    res.json(rowToTask(row));
   } catch (err) {
     logger.error('Task update error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
-});
+}
+router.patch('/:id', updateTaskHandler);
+router.put('/:id', updateTaskHandler);
 
 // ---------------------------------------------------------------------------
 // DELETE /api/tasks/:id — delete a task
 // ---------------------------------------------------------------------------
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', (req, res) => {
   const db = req.app.locals.db;
   const logger = req.app.locals.logger;
 
   try {
-    const token = await getTasksToken(db, logger);
-    const listId = req.query.listId || '@default';
     const taskId = req.params.id;
-
-    const response = await fetch(
-      `${GOOGLE_TASKS_API}/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`,
-      {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Google Tasks API ${response.status}: ${text}`);
+    const result = db.prepare('DELETE FROM kanban_tasks WHERE id = ?').run(taskId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Task not found' });
     }
 
     logger.info('Task deleted: %s', taskId);
     res.json({ ok: true });
   } catch (err) {
     logger.error('Task delete error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

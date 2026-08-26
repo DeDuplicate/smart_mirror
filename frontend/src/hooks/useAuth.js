@@ -75,18 +75,6 @@ export default function useAuth() {
   useEffect(() => {
     const sock = getSocket();
 
-    const handleGoogleLinked = (data) => {
-      setConnectionStatus('google', 'connected');
-      if (callbackRef.current) {
-        callbackRef.current(data);
-        callbackRef.current = null;
-      }
-      closePopup();
-      setIsAuthenticating(false);
-      setProvider(null);
-      setAuthUrl(null);
-    };
-
     const handleSpotifyLinked = (data) => {
       setConnectionStatus('spotify', 'connected');
       if (callbackRef.current) {
@@ -99,18 +87,10 @@ export default function useAuth() {
       setAuthUrl(null);
     };
 
-    const handleGoogleUnlinked = () => {
-      setConnectionStatus('google', 'not_configured');
-    };
-
-    sock.on('auth:google:linked', handleGoogleLinked);
     sock.on('auth:spotify:linked', handleSpotifyLinked);
-    sock.on('auth:google:unlinked', handleGoogleUnlinked);
 
     return () => {
-      sock.off('auth:google:linked', handleGoogleLinked);
       sock.off('auth:spotify:linked', handleSpotifyLinked);
-      sock.off('auth:google:unlinked', handleGoogleUnlinked);
     };
   }, [setConnectionStatus, closePopup]);
 
@@ -133,28 +113,6 @@ export default function useAuth() {
 
     return () => clearInterval(interval);
   }, [authUrl]);
-
-  // Start Google OAuth flow
-  const startGoogleAuth = useCallback(async (onSuccess) => {
-    // Open the popup SYNCHRONOUSLY on the click — after any await, browsers
-    // treat window.open as a blocked popup and kiosk Chromium does nothing.
-    const popup = openAuthPopup('about:blank');
-    setError(null);
-    setIsAuthenticating(true);
-    setProvider('google');
-    callbackRef.current = onSuccess || null;
-
-    try {
-      const data = await fetchApi('/api/auth/google/url');
-      popupRef.current = await launchOAuth(data.url, popup);
-      setAuthUrl(data.url);
-    } catch (err) {
-      if (popup && !popup.closed) popup.close();
-      setError(err.message || 'Failed to get Google auth URL');
-      setIsAuthenticating(false);
-      setProvider(null);
-    }
-  }, []);
 
   // Start Spotify OAuth flow
   const startSpotifyAuth = useCallback(async (onSuccess) => {
@@ -193,31 +151,6 @@ export default function useAuth() {
     }
   }, [provider, closePopup]);
 
-  // Get linked Google accounts
-  const getGoogleAccounts = useCallback(async () => {
-    try {
-      const data = await fetchApi('/api/auth/google/accounts');
-      return data.accounts || [];
-    } catch {
-      return [];
-    }
-  }, []);
-
-  // Remove a Google account by email
-  const removeGoogleAccount = useCallback(
-    async (email) => {
-      try {
-        await fetchApi(`/api/auth/google/${encodeURIComponent(email)}`, {
-          method: 'DELETE',
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    []
-  );
-
   // Remove Spotify account
   const removeSpotifyAccount = useCallback(async () => {
     try {
@@ -245,11 +178,8 @@ export default function useAuth() {
     provider,
     authUrl,
     error,
-    startGoogleAuth,
     startSpotifyAuth,
     retryAuth,
-    getGoogleAccounts,
-    removeGoogleAccount,
     removeSpotifyAccount,
     cancelAuth,
   };

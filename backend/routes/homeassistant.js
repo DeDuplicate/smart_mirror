@@ -303,6 +303,36 @@ router.post('/todo/:entity_id/remove', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/ha/state/:entity_id — fetch a single entity state (lightweight;
+// used e.g. to poll media_player position while casting without pulling all
+// ~383 entity states each tick).
+// ---------------------------------------------------------------------------
+router.get('/state/:entity_id', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const entityId = req.params.entity_id;
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(
+      `${host}/api/states/${encodeURIComponent(entityId)}`,
+      { headers: haHeaders() }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HA API ${response.status}: ${text}`);
+    }
+
+    const state = await response.json();
+    res.json({ state });
+  } catch (err) {
+    logger.error('HA state entity error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/ha/weather/:entity_id — fetch weather entity state (for IMS)
 // ---------------------------------------------------------------------------
 router.get('/weather/:entity_id', async (req, res) => {

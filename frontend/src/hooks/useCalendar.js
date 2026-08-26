@@ -53,13 +53,14 @@ export function groupEventsByDay(events) {
   };
 
   for (const ev of events) {
-    if (ev.allDay) {
-      const s = new Date(ev.start + 'T00:00:00');
-      const e = new Date(ev.end + 'T00:00:00');
-      if (e < s) {
-        push(s, ev);
-        continue;
-      }
+    if (ev.allDay || /^\d{4}-\d{2}-\d{2}$/.test(String(ev.start || ''))) {
+      const startKey = eventDateKey(ev.start);
+      const endKey = eventDateKey(ev.end || ev.start);
+      if (!startKey) continue;
+      const s = new Date(`${startKey}T00:00:00`);
+      let e = new Date(`${(endKey || startKey)}T00:00:00`);
+      if (e > s) e.setDate(e.getDate() - 1);
+      if (e < s) e = new Date(s);
       for (const d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
         push(d, ev);
       }
@@ -80,9 +81,36 @@ export function groupEventsByDay(events) {
   return map;
 }
 
-/** Format date as YYYY-MM-DD for API queries. */
+/** Format date as YYYY-MM-DD for API queries (local timezone, not UTC). */
 function toISODate(date) {
-  return date.toISOString().split('T')[0];
+  return toLocalDateKey(date);
+}
+
+export function normalizeCalendarColor(key) {
+  if (key === 'lavender') return 'lav';
+  return key && CALENDAR_COLORS[key] ? key : 'mint';
+}
+
+export function eventDateKey(value) {
+  const raw = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return raw.slice(0, 10);
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? '' : toLocalDateKey(d);
+}
+
+/** Inclusive local-day check. Google all-day `end` is exclusive. */
+export function eventFallsOnDay(event, date) {
+  const key = toLocalDateKey(date);
+  const allDay = event.allDay || /^\d{4}-\d{2}-\d{2}$/.test(String(event.start || ''));
+  if (allDay) {
+    const startKey = eventDateKey(event.start);
+    const endKey = eventDateKey(event.end || event.start);
+    if (!startKey) return false;
+    if (!endKey || endKey <= startKey) return key === startKey;
+    return key >= startKey && key < endKey;
+  }
+  return eventDateKey(event.start) === key;
 }
 
 /** Local-timezone YYYY-MM-DD key (toISODate shifts via UTC — wrong for
@@ -125,36 +153,13 @@ export default function useCalendar(rangeStart, rangeEnd) {
     abortControllerRef.current = controller;
     const requestId = ++requestIdRef.current;
 
-    const start = toISODate(rangeStart);
-    const end = toISODate(rangeEnd);
+    const start = rangeStart.toISOString();
+    const end = rangeEnd.toISOString();
 
-    let googleEvents = [];
     let icsEvents = [];
-    let gotGoogle = false;
     let gotIcs = false;
 
-    // Try Google OAuth calendar first
-    try {
-      const res = await fetch(`/api/calendar/events?start=${start}&end=${end}`, {
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.events && data.events.length > 0) {
-          googleEvents = data.events.map((ev) => ({
-            ...ev,
-            title: ev.title || ev.summary || '(No title)',
-            source: 'google',
-          }));
-          gotGoogle = true;
-        }
-      }
-    } catch (err) {
-      if (err?.name === 'AbortError') return; // superseded — bail before touching state
-      // Google OAuth not available — continue
-    }
-
-    // Try ICS calendars (always, to merge with Google if available)
+    // Fetch configured ICS calendars
     try {
       const res = await fetch(`/api/calendar/ics?start=${start}&end=${end}`, {
         signal: controller.signal,
@@ -180,15 +185,13 @@ export default function useCalendar(rangeStart, rangeEnd) {
     // with an out-of-order (older) week's events.
     if (requestId !== requestIdRef.current) return;
 
-    // Merge results from both sources
-    if (gotGoogle || gotIcs) {
-      const merged = [...googleEvents, ...icsEvents];
+    if (gotIcs) {
       // Sort by start time
-      merged.sort((a, b) => new Date(a.start) - new Date(b.start));
-      setEvents(merged);
+      icsEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+      setEvents(icsEvents);
       setError(null);
     } else {
-      // Neither source returned data — show empty calendar
+      // No source returned data — show empty calendar
       setEvents([]);
       setError(null);
     }
