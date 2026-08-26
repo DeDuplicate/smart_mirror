@@ -312,9 +312,10 @@ export default function OnScreenKeyboard({
 
             {/* Space bar */}
             <Key
-              label=" "
+              label="רווח"
               onPress={() => onInput(' ')}
               flex={5}
+              variant="special"
               ariaLabel="רווח"
             />
 

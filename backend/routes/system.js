@@ -56,10 +56,12 @@ router.get('/health', async (req, res) => {
     linkedAccounts: googleAccounts.cnt,
   };
 
-  // Check Spotify
+  // Check Spotify — credentials may live in .env or in the settings table
+  const { getSpotifyCredentials } = require('./auth');
+  const spotifyCreds = getSpotifyCredentials(db);
   const spotifyAccounts = db.prepare("SELECT COUNT(*) AS cnt FROM tokens WHERE provider = 'spotify'").get();
   health.integrations.spotify = {
-    configured: !!process.env.SPOTIFY_CLIENT_ID,
+    configured: Boolean(spotifyCreds.clientId),
     linkedAccounts: spotifyAccounts.cnt,
   };
 

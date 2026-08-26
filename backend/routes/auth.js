@@ -101,10 +101,96 @@ function googleRedirectUri(req) {
   return `${proto}://${host}/api/auth/callback`;
 }
 
+function getConfigValue(db, key) {
+  try {
+    const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
+    if (!row || row.value == null) return '';
+    try {
+      const parsed = JSON.parse(row.value);
+      return typeof parsed === 'string' ? parsed : String(row.value);
+    } catch {
+      return String(row.value);
+    }
+  } catch {
+    return '';
+  }
+}
+
+function getSpotifyCredentials(db) {
+  const clientId = (
+    process.env.SPOTIFY_CLIENT_ID ||
+    getConfigValue(db, 'spotifyClientId') ||
+    ''
+  ).trim();
+  const clientSecret = (
+    process.env.SPOTIFY_CLIENT_SECRET ||
+    getConfigValue(db, 'spotifyClientSecret') ||
+    ''
+  ).trim();
+  return { clientId, clientSecret };
+}
+
 function spotifyRedirectUri(req) {
+  if (process.env.SPOTIFY_REDIRECT_URI) {
+    return process.env.SPOTIFY_REDIRECT_URI;
+  }
   const proto = req.protocol;
   const host = req.get('host');
   return `${proto}://${host}/api/auth/spotify/callback`;
+}
+
+function frontendReturnUrl(req, query) {
+  const qs = query ? `?${query}` : '';
+  if (process.env.NODE_ENV !== 'production') {
+    return `http://localhost:3000/${qs}`;
+  }
+  const proto = req.protocol;
+  const host = req.get('host');
+  // Callback hits /api/... — send the user back to the app root, not the API path.
+  return `${proto}://${host}/${qs}`;
+}
+
+/**
+ * Render a minimal, self-closing HTML page for the OAuth popup window.
+ * The popup was opened by useAuth's window.open() call, so window.close()
+ * is allowed. The real-time connection status update reaches the main app
+ * window via the Socket.io "auth:*:linked" event, not this page — this is
+ * just a friendly confirmation for the tiny popup itself.
+ */
+function renderPopupResultPage({ success, title, message, continueUrl = '/' }) {
+  const color = success ? '#2ab58a' : '#e0625a';
+  return `<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>${title}</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; color: #1a1c2e;
+         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  .card { text-align: center; padding: 32px; max-width: 360px; }
+  .dot { width: 48px; height: 48px; border-radius: 50%; background: ${color}22; color: ${color};
+         display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  p { font-size: 14px; color: #7b7f9e; margin: 0; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="dot">${success ? '✓' : '✕'}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+  </div>
+  <script>
+    setTimeout(function () {
+      if (window.opener && !window.opener.closed) {
+        window.close();
+        return;
+      }
+      window.location.replace(${JSON.stringify(continueUrl)});
+    }, ${success ? 1200 : 2500});
+  </script>
+</body>
+</html>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,8 +308,9 @@ async function refreshSpotifyToken(db, email, logger) {
     refresh_token: row.refresh_token,
   });
 
+  const { clientId, clientSecret } = getSpotifyCredentials(db);
   const credentials = Buffer.from(
-    `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+    `${clientId}:${clientSecret}`
   ).toString('base64');
 
   const res = await fetch(SPOTIFY_TOKEN_ENDPOINT, {
@@ -305,10 +392,18 @@ router.get('/callback', async (req, res) => {
 
   if (oauthError) {
     logger.error('Google OAuth error: %s', oauthError);
-    return res.status(400).json({ error: oauthError });
+    return res.status(400).send(renderPopupResultPage({
+      success: false,
+      title: 'החיבור לגוגל נכשל',
+      message: String(oauthError),
+    }));
   }
   if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
+    return res.status(400).send(renderPopupResultPage({
+      success: false,
+      title: 'החיבור לגוגל נכשל',
+      message: 'קוד אישור חסר',
+    }));
   }
 
   try {
@@ -330,7 +425,11 @@ router.get('/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
       logger.error('Google token exchange failed: %s', text);
-      return res.status(502).json({ error: 'Token exchange failed' });
+      return res.status(502).send(renderPopupResultPage({
+        success: false,
+        title: 'החיבור לגוגל נכשל',
+        message: 'החלפת קוד האישור בטוקן נכשלה',
+      }));
     }
 
     const tokenData = await tokenRes.json();
@@ -342,7 +441,11 @@ router.get('/callback', async (req, res) => {
     });
 
     if (!userRes.ok) {
-      return res.status(502).json({ error: 'Failed to fetch user info' });
+      return res.status(502).send(renderPopupResultPage({
+        success: false,
+        title: 'החיבור לגוגל נכשל',
+        message: 'שליפת פרטי המשתמש נכשלה',
+      }));
     }
 
     const userInfo = await userRes.json();
@@ -361,16 +464,20 @@ router.get('/callback', async (req, res) => {
       io.emit('auth:google:linked', { email, name: userInfo.name });
     }
 
-    // Redirect back to the frontend settings page
-    const frontendUrl =
-      process.env.NODE_ENV !== 'production'
-        ? 'http://localhost:3000/settings?google=linked'
-        : '/settings?google=linked';
-
-    res.redirect(frontendUrl);
+    // The popup closes itself — the main app window is notified via the
+    // Socket.io event above, not via this response.
+    res.send(renderPopupResultPage({
+      success: true,
+      title: 'חשבון גוגל חובר בהצלחה',
+      message: 'ניתן לסגור חלון זה',
+    }));
   } catch (err) {
     logger.error('Google OAuth callback error: %s', err.message);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).send(renderPopupResultPage({
+      success: false,
+      title: 'החיבור לגוגל נכשל',
+      message: 'שגיאת שרת פנימית',
+    }));
   }
 });
 
@@ -409,23 +516,41 @@ router.delete('/google/:email', (req, res) => {
 // Spotify OAuth routes
 // ---------------------------------------------------------------------------
 
+// GET /api/auth/spotify/status — configured? linked? what redirect URI to register
+router.get('/spotify/status', (req, res) => {
+  const db = req.app.locals.db;
+  const { clientId } = getSpotifyCredentials(db);
+  const accounts = getAccountsByProvider(db, 'spotify');
+  res.json({
+    configured: Boolean(clientId),
+    linked: accounts.length > 0,
+    email: accounts[0]?.email || null,
+    redirectUri: spotifyRedirectUri(req),
+  });
+});
+
 // GET /api/auth/spotify/url
 router.get('/spotify/url', (req, res) => {
-  const { SPOTIFY_CLIENT_ID } = process.env;
-  if (!SPOTIFY_CLIENT_ID) {
-    return res.status(503).json({ error: 'Spotify OAuth not configured' });
+  const db = req.app.locals.db;
+  const { clientId } = getSpotifyCredentials(db);
+  if (!clientId) {
+    return res.status(503).json({
+      error: 'Spotify OAuth not configured — set Client ID and Secret in Settings',
+    });
   }
 
   const params = new URLSearchParams({
-    client_id: SPOTIFY_CLIENT_ID,
+    client_id: clientId,
     response_type: 'code',
     redirect_uri: spotifyRedirectUri(req),
     scope: [
       'user-read-playback-state',
       'user-modify-playback-state',
       'user-read-currently-playing',
+      'user-read-email',
       'streaming',
     ].join(' '),
+    show_dialog: 'false',
   });
 
   res.json({ url: `${SPOTIFY_AUTH_ENDPOINT}?${params}` });
@@ -437,18 +562,30 @@ router.get('/spotify/callback', async (req, res) => {
   const db = req.app.locals.db;
   const logger = req.app.locals.logger;
   const io = req.app.locals.io;
+  const continueUrl = frontendReturnUrl(req, 'spotify=linked');
 
   if (oauthError) {
     logger.error('Spotify OAuth error: %s', oauthError);
-    return res.status(400).json({ error: oauthError });
+    return res.status(400).send(renderPopupResultPage({
+      success: false,
+      title: 'החיבור לספוטיפיי נכשל',
+      message: String(oauthError),
+      continueUrl,
+    }));
   }
   if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
+    return res.status(400).send(renderPopupResultPage({
+      success: false,
+      title: 'החיבור לספוטיפיי נכשל',
+      message: 'קוד אישור חסר',
+      continueUrl,
+    }));
   }
 
   try {
+    const { clientId, clientSecret } = getSpotifyCredentials(db);
     const credentials = Buffer.from(
-      `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+      `${clientId}:${clientSecret}`
     ).toString('base64');
 
     const tokenBody = new URLSearchParams({
@@ -469,7 +606,12 @@ router.get('/spotify/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
       logger.error('Spotify token exchange failed: %s', text);
-      return res.status(502).json({ error: 'Token exchange failed' });
+      return res.status(502).send(renderPopupResultPage({
+        success: false,
+        title: 'החיבור לספוטיפיי נכשל',
+        message: 'החלפת קוד האישור בטוקן נכשלה',
+        continueUrl,
+      }));
     }
 
     const tokenData = await tokenRes.json();
@@ -495,15 +637,22 @@ router.get('/spotify/callback', async (req, res) => {
       io.emit('auth:spotify:linked', { email, displayName: meData.display_name });
     }
 
-    const frontendUrl =
-      process.env.NODE_ENV !== 'production'
-        ? 'http://localhost:3000/settings?spotify=linked'
-        : '/settings?spotify=linked';
-
-    res.redirect(frontendUrl);
+    // The popup closes itself — the main app window is notified via the
+    // Socket.io event above, not via this response.
+    res.send(renderPopupResultPage({
+      success: true,
+      title: 'ספוטיפיי חובר בהצלחה',
+      message: 'ניתן לסגור חלון זה',
+      continueUrl,
+    }));
   } catch (err) {
     logger.error('Spotify OAuth callback error: %s', err.message);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).send(renderPopupResultPage({
+      success: false,
+      title: 'החיבור לספוטיפיי נכשל',
+      message: 'שגיאת שרת פנימית',
+      continueUrl,
+    }));
   }
 });
 
@@ -528,6 +677,7 @@ module.exports = router;
 // Named exports for token utilities used by other route modules
 module.exports.getValidGoogleToken = getValidGoogleToken;
 module.exports.getValidSpotifyToken = getValidSpotifyToken;
+module.exports.getSpotifyCredentials = getSpotifyCredentials;
 module.exports.getAccountsByProvider = getAccountsByProvider;
 module.exports.refreshGoogleToken = refreshGoogleToken;
 module.exports.refreshSpotifyToken = refreshSpotifyToken;
