@@ -7,9 +7,11 @@
  *   animate  – enable animations (default true)
  */
 
+import t from '../i18n/he.json';
+
 // ─── Condition resolver ────────────────────────────────────────────────────
 
-function getCondition(code) {
+export function getCondition(code) {
   if (code === 0) return 'clear';
   if (code >= 1 && code <= 3) return 'partly-cloudy';
   if (code >= 45 && code <= 48) return 'fog';
@@ -260,6 +262,12 @@ const SCENES = {
   thunderstorm: ThunderstormScene,
 };
 
+/** Hebrew name for a WMO code's condition — the app is RTL/Hebrew-only. */
+export function getConditionLabel(code) {
+  const condition = getCondition(code);
+  return t.weather.conditions[condition] || condition;
+}
+
 export default function WeatherIcon({ code, size = 48, animate = true }) {
   const condition = getCondition(code);
   const Scene = SCENES[condition] || PartlyCloudyScene;
@@ -269,7 +277,7 @@ export default function WeatherIcon({ code, size = 48, animate = true }) {
       className="inline-flex items-center justify-center shrink-0"
       style={{ width: size, height: size }}
       role="img"
-      aria-label={condition}
+      aria-label={getConditionLabel(code)}
     >
       <Scene animate={animate} />
     </span>
