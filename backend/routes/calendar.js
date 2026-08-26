@@ -426,8 +426,16 @@ router.get('/ics', async (req, res) => {
 
   const cacheKey = `ics:${start}:${end}`;
 
-  // Check cache (5 min)
-  const cached = getCached(db, cacheKey, 5 * 60 * 1000);
+  // Check cache (5 min). A throw here would reject out of this async handler,
+  // which Express 4 does not catch and Node >=15 treats as fatal — degrade to
+  // a cache miss instead.
+  let cached = null;
+  try {
+    cached = getCached(db, cacheKey, 5 * 60 * 1000);
+  } catch (err) {
+    logger.error('ICS cache read error: %s', err.message);
+  }
+
   if (cached) {
     // Background revalidation
     fetchAllIcsEvents(logger, icsUrls, start, end)
