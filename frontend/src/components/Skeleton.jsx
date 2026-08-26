@@ -54,6 +54,37 @@ export function CalendarSkeleton() {
   );
 }
 
+// ─── Month Grid Skeleton ────────────────────────────────────────────────────
+
+export function MonthGridSkeleton() {
+  return (
+    <div className="flex flex-col h-full p-6 gap-4">
+      {/* Navigation bar */}
+      <div className="flex items-center gap-4">
+        <SkeletonBlock width="40px" height="40px" borderRadius="12px" />
+        <SkeletonBlock width="120px" height="32px" borderRadius="8px" />
+        <SkeletonBlock width="40px" height="40px" borderRadius="12px" />
+        <div className="flex-1" />
+        <SkeletonBlock width="160px" height="56px" borderRadius="12px" />
+        <SkeletonBlock width="80px" height="36px" borderRadius="12px" />
+      </div>
+
+      {/* 7-column month grid, 5 rows of day cells */}
+      <div className="flex-1 grid grid-cols-7 grid-rows-5 gap-2">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-2">
+            <SkeletonBlock width="28px" height="28px" borderRadius="50%" />
+            <SkeletonBlock width="100%" height="20px" borderRadius="9999px" />
+            {i % 3 === 0 && (
+              <SkeletonBlock width="100%" height="20px" borderRadius="9999px" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tasks Skeleton ─────────────────────────────────────────────────────────
 
 export function TasksSkeleton() {
