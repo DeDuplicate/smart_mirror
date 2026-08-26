@@ -80,6 +80,38 @@ router.post('/play', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/music/play-track — start playing one specific track immediately
+// { uri: "spotify:track:..." }
+//
+// Spotify's Web API has no "jump to this queue item" endpoint — repeatedly
+// calling /next until the target track comes up is slow and unreliable, so
+// instead we replace current playback with just this track via the same
+// /me/player/play endpoint used by /play, passing a single-item `uris` array.
+// ---------------------------------------------------------------------------
+router.post('/play-track', async (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    const uri = req.body.uri;
+    if (!uri || typeof uri !== 'string') {
+      return res.status(400).json({ error: 'uri is required' });
+    }
+
+    await spotifyFetch(db, logger, '/play', {
+      method: 'PUT',
+      body: JSON.stringify({ uris: [uri] }),
+    });
+
+    logger.info('Music: play track %s', uri);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Music play-track error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/music/pause
 // ---------------------------------------------------------------------------
 router.post('/pause', async (req, res) => {

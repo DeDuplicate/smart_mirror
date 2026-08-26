@@ -19,11 +19,11 @@ const MOCK_TRACK = {
 };
 
 const MOCK_QUEUE = [
-  { id: 'q1', name: 'שיר ישראלי', artist: 'אריק איינשטיין', album: 'שירים שבלב', albumArt: null, duration: 225000 },
-  { id: 'q2', name: 'עוד', artist: 'עידן רייכל', album: 'ממעמקים', albumArt: null, duration: 248000 },
-  { id: 'q3', name: 'יש לי סיבה', artist: 'שלמה ארצי', album: 'מופע חי', albumArt: null, duration: 312000 },
-  { id: 'q4', name: 'תמיד עולה', artist: 'עברי לידר', album: 'לצאת מפה', albumArt: null, duration: 195000 },
-  { id: 'q5', name: 'הכל פתוח', artist: 'אסף אמדורסקי', album: 'פסקול', albumArt: null, duration: 274000 },
+  { id: 'q1', uri: 'spotify:track:mock1', name: 'שיר ישראלי', artist: 'אריק איינשטיין', album: 'שירים שבלב', albumArt: null, duration: 225000 },
+  { id: 'q2', uri: 'spotify:track:mock2', name: 'עוד', artist: 'עידן רייכל', album: 'ממעמקים', albumArt: null, duration: 248000 },
+  { id: 'q3', uri: 'spotify:track:mock3', name: 'יש לי סיבה', artist: 'שלמה ארצי', album: 'מופע חי', albumArt: null, duration: 312000 },
+  { id: 'q4', uri: 'spotify:track:mock4', name: 'תמיד עולה', artist: 'עברי לידר', album: 'לצאת מפה', albumArt: null, duration: 195000 },
+  { id: 'q5', uri: 'spotify:track:mock5', name: 'הכל פתוח', artist: 'אסף אמדורסקי', album: 'פסקול', albumArt: null, duration: 274000 },
 ];
 
 const MOCK_STATE = {
@@ -78,6 +78,7 @@ function parseSpotifyQueue(data) {
   if (!data || !data.queue) return [];
   return data.queue.slice(0, 20).map((item, i) => ({
     id: item.id || `q-${i}`,
+    uri: item.uri || null,
     name: item.name || '',
     artist: (item.artists || []).map((a) => a.name).join(', '),
     album: item.album?.name || '',
@@ -237,6 +238,44 @@ export default function useMusic(active = true) {
     setTimeout(fetchState, 500);
   }, [fetchState]);
 
+  // Play one specific track immediately (tap-to-play from the queue).
+  // Spotify's Web API has no "jump to this queue item" endpoint, so the
+  // backend replaces current playback with just this track's URI — see
+  // backend/routes/music.js POST /play-track for details.
+  const playTrack = useCallback(
+    async (track) => {
+      if (!track) return;
+
+      // Optimistic update: show the tapped track as "now playing" right away
+      setCurrentTrack({
+        name: track.name,
+        artist: track.artist,
+        album: track.album,
+        albumArt: track.albumArt,
+        duration: track.duration,
+        progress: 0,
+      });
+      setIsPlaying(true);
+
+      // Dev mode / mock queue has no real Spotify track to start — the
+      // optimistic UI update above is all we can (and need to) do locally.
+      if (isDev || !track.uri) return;
+
+      try {
+        await musicApi('/play-track', {
+          method: 'POST',
+          body: JSON.stringify({ uri: track.uri }),
+        });
+      } catch {
+        /* ignore — reconciled by the refetch below / next poll */
+      }
+      // Spotify needs a moment to propagate the change; reconcile with
+      // the real state shortly after instead of trusting the optimistic guess.
+      setTimeout(fetchState, 700);
+    },
+    [fetchState]
+  );
+
   const setVolume = useCallback((v) => {
     const clamped = Math.max(0, Math.min(100, Math.round(v)));
     setVolumeState(clamped);
@@ -317,6 +356,7 @@ export default function useMusic(active = true) {
     pause,
     next,
     prev,
+    playTrack,
     setVolume,
     toggleShuffle,
     toggleRepeat,
