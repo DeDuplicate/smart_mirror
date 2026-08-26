@@ -2,6 +2,30 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 let apiPromise = null;
 
+function disableCaptions(player) {
+  if (!player) return;
+  try { player.unloadModule?.('captions'); } catch { /* ignore */ }
+  try { player.unloadModule?.('cc'); } catch { /* ignore */ }
+  try { player.setOption?.('captions', 'track', {}); } catch { /* ignore */ }
+}
+
+function fitPlayer(player) {
+  if (!player) return;
+  try {
+    const iframe = player.getIframe?.();
+    if (!iframe) return;
+    iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;';
+    iframe.setAttribute('width', '100%');
+    iframe.setAttribute('height', '100%');
+    iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+  } catch { /* ignore */ }
+}
+
+function applyVolume(player, volume) {
+  if (!player) return;
+  try { player.setVolume?.(Math.round(volume)); } catch { /* ignore */ }
+}
+
 function loadYouTubeApi() {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (apiPromise) return apiPromise;
@@ -29,9 +53,10 @@ function loadYouTubeApi() {
   return apiPromise;
 }
 
-export default function useYoutubePlayer({ onEnded, onError } = {}) {
-  const containerRef = useRef(null);
+export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 } = {}) {
   const playerRef = useRef(null);
+  const containerNodeRef = useRef(null);
+  const volumeRef = useRef(Math.round(initialVolume));
   const onEndedRef = useRef(onEnded);
   const onErrorRef = useRef(onError);
   const [ready, setReady] = useState(false);
@@ -42,17 +67,29 @@ export default function useYoutubePlayer({ onEnded, onError } = {}) {
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
+  // Persistent host lives in MusicProvider. Never reparent the iframe —
+  // moving it (or shrinking it to 2px) makes YouTube pause.
+  const containerRef = useCallback((node) => {
+    containerNodeRef.current = node;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    let volumeTimer = 0;
+
+    const syncVolume = (player) => {
+      applyVolume(player, volumeRef.current);
+      window.clearTimeout(volumeTimer);
+      volumeTimer = window.setTimeout(() => applyVolume(player, volumeRef.current), 150);
+    };
 
     loadYouTubeApi()
       .then((YT) => {
-        if (cancelled || !containerRef.current || playerRef.current) return;
-        const host = document.createElement('div');
-        host.style.width = '100%';
-        host.style.height = '100%';
-        containerRef.current.replaceChildren(host);
-        playerRef.current = new YT.Player(host, {
+        if (cancelled || playerRef.current || !containerNodeRef.current) return;
+        const mount = document.createElement('div');
+        mount.style.cssText = 'width:100%;height:100%;';
+        containerNodeRef.current.replaceChildren(mount);
+        playerRef.current = new YT.Player(mount, {
           width: '100%',
           height: '100%',
           playerVars: {
@@ -63,10 +100,16 @@ export default function useYoutubePlayer({ onEnded, onError } = {}) {
             modestbranding: 1,
             rel: 0,
             playsinline: 1,
+            cc_load_policy: 0,
+            iv_load_policy: 3,
             origin: window.location.origin,
+            widget_referrer: window.location.href,
           },
           events: {
-            onReady: () => {
+            onReady: (event) => {
+              disableCaptions(event.target);
+              fitPlayer(event.target);
+              syncVolume(event.target);
               if (!cancelled) setReady(true);
             },
             onStateChange: (event) => {
@@ -75,12 +118,17 @@ export default function useYoutubePlayer({ onEnded, onError } = {}) {
                 setPlaying(false);
                 onEndedRef.current?.();
               } else if (state === YT.PlayerState.PLAYING) {
+                disableCaptions(event.target);
+                fitPlayer(event.target);
+                syncVolume(event.target);
                 setPlaying(true);
                 try {
                   setDuration(playerRef.current?.getDuration?.() || 0);
                 } catch { /* ignore */ }
               } else if (state === YT.PlayerState.PAUSED) {
                 setPlaying(false);
+              } else if (state === YT.PlayerState.CUED) {
+                syncVolume(event.target);
               }
             },
             onError: (event) => {
@@ -97,6 +145,7 @@ export default function useYoutubePlayer({ onEnded, onError } = {}) {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(volumeTimer);
       try { playerRef.current?.destroy?.(); } catch { /* ignore */ }
       playerRef.current = null;
       setReady(false);
@@ -123,6 +172,9 @@ export default function useYoutubePlayer({ onEnded, onError } = {}) {
     try {
       if (autoplay && player.loadVideoById) player.loadVideoById(videoId);
       else if (player.cueVideoById) player.cueVideoById(videoId);
+      fitPlayer(player);
+      applyVolume(player, volumeRef.current);
+      window.setTimeout(() => applyVolume(player, volumeRef.current), 150);
     } catch (err) {
       console.error('[music] load failed:', err);
     }
@@ -144,7 +196,8 @@ export default function useYoutubePlayer({ onEnded, onError } = {}) {
   }, []);
 
   const setVolume = useCallback((value) => {
-    try { playerRef.current?.setVolume?.(Math.round(value)); } catch { /* ignore */ }
+    volumeRef.current = Math.round(value);
+    applyVolume(playerRef.current, volumeRef.current);
   }, []);
 
   return {

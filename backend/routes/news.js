@@ -65,7 +65,10 @@ const DEFAULT_SOURCES = [
   {
     id: 'globes',
     name: 'גלובס',
-    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=1725',
+    // iID=9917 is Globes' Hebrew "בארץ" (general business/economy) feed —
+    // iID=1725 (previously used) is en.globes.co.il's English-language feed
+    // and was showing English headlines in the Hebrew RTL news UI.
+    url: 'https://www.globes.co.il/webservice/rss/rssfeeder.asmx/FeederNode?iID=9917',
     type: 'rss',
     category: 'finance',
   },

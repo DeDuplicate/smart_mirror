@@ -489,123 +489,6 @@ function LocationSection() {
   );
 }
 
-// ─── Section: Google Accounts ────────────────────────────────────────────────
-
-function GoogleSection() {
-  const {
-    startGoogleAuth,
-    getGoogleAccounts,
-    removeGoogleAccount,
-    isAuthenticating,
-    provider,
-    authUrl,
-    error,
-    retryAuth,
-    cancelAuth,
-  } = useAuth();
-  const [accounts, setAccounts] = useState([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const addToast = useStore((s) => s.addToast);
-
-  // Load accounts on mount
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoadingAccounts(true);
-      const list = await getGoogleAccounts();
-      if (!cancelled) {
-        setAccounts(list);
-        setLoadingAccounts(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [getGoogleAccounts]);
-
-  const handleAdd = useCallback(() => {
-    startGoogleAuth(async () => {
-      // Refresh accounts list after successful auth
-      const list = await getGoogleAccounts();
-      setAccounts(list);
-      addToast('success', t.settings.accountAdded);
-    });
-  }, [startGoogleAuth, getGoogleAccounts, addToast]);
-
-  const handleRemove = useCallback(
-    async (email) => {
-      const ok = await removeGoogleAccount(email);
-      if (ok) {
-        setAccounts((prev) => prev.filter((a) => a.email !== email));
-        addToast('success', t.settings.accountRemoved);
-      } else {
-        addToast('error', t.settings.accountRemoveFailed);
-      }
-    },
-    [removeGoogleAccount, addToast]
-  );
-
-  return (
-    <>
-      <Section title={t.settings.googleAccounts}>
-        <div className="flex flex-col gap-4">
-          {/* Show error if auth not configured */}
-          {error && provider === 'google' && (
-            <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm">
-              <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
-              <p className="text-[var(--ts)] text-xs">
-                הגדר GOOGLE_CLIENT_ID ו-GOOGLE_CLIENT_SECRET בקובץ .env בשרת
-              </p>
-            </div>
-          )}
-          <Btn
-            variant="primary"
-            icon={isAuthenticating && provider === 'google' ? <Spinner /> : <PlusIcon />}
-            onClick={handleAdd}
-            disabled={isAuthenticating}
-          >
-            {t.settings.addAccount}
-          </Btn>
-
-          {loadingAccounts ? (
-            <div className="flex items-center gap-2 text-sm text-tm">
-              <Spinner className="w-4 h-4" />
-              {t.common.loading}
-            </div>
-          ) : accounts.length === 0 ? (
-            <p className="text-sm text-tm">{t.settings.linkedAccounts}: &mdash;</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {accounts.map((acc) => (
-                <li key={acc.email}
-                  className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
-                  <span className="text-sm text-tp">{acc.email}</span>
-                  <Btn variant="danger" icon={<TrashIcon />} onClick={() => handleRemove(acc.email)}>
-                    {t.settings.removeAccount}
-                  </Btn>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Section>
-
-      {isAuthenticating && authUrl && (
-        <OAuthOverlay
-          provider={provider}
-          authUrl={authUrl}
-          onSuccess={async () => {
-            const list = await getGoogleAccounts();
-            setAccounts(list);
-            addToast('success', t.settings.accountAdded);
-          }}
-          onClose={cancelAuth}
-          onRetry={retryAuth}
-        />
-      )}
-    </>
-  );
-}
-
 
 // ─── Section: ICS Calendar URLs ─────────────────────────────────────────────
 
@@ -1609,7 +1492,6 @@ export default function SettingsPage() {
 
         {/* Column B (left in RTL) */}
         <div>
-          <GoogleSection />
           <IcsCalendarSection />
           <SpotifySection />
           <FamilySection />

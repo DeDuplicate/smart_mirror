@@ -7,17 +7,18 @@ import useCalendar, {
   getMonthGridRange,
   groupEventsByDay,
   toLocalDateKey,
+  eventFallsOnDay,
+  normalizeCalendarColor,
   CALENDAR_COLORS,
 } from '../../hooks/useCalendar.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 import { CalendarSkeleton, MonthGridSkeleton } from '../Skeleton.jsx';
 import MonthGrid from '../MonthGrid.jsx';
-import ConnectionBanner from '../ConnectionBanner.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const HOUR_START = 7;
-const HOUR_END = 22;
+const HOUR_START = 6;
+const HOUR_END = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START;
 const HOUR_HEIGHT = 56; // px per hour slot (min event height)
 const GRID_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
@@ -65,6 +66,16 @@ function CloseIcon({ className = 'w-5 h-5' }) {
   );
 }
 
+function PlusIcon({ className = 'w-6 h-6' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
 function UsersIcon({ className = 'w-4 h-4' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -104,14 +115,18 @@ function getEventPosition(event) {
   const start = new Date(event.start);
   const end = new Date(event.end);
 
-  const startHour = start.getHours() + start.getMinutes() / 60;
-  const endHour = end.getHours() + end.getMinutes() / 60;
+  let startHour = start.getHours() + start.getMinutes() / 60;
+  let endHour = end.getHours() + end.getMinutes() / 60;
+  if (Number.isNaN(startHour)) startHour = HOUR_START;
+  if (Number.isNaN(endHour) || endHour <= startHour) {
+    endHour = end.getDate() !== start.getDate() ? HOUR_END : startHour + 1;
+  }
 
-  const clampedStart = Math.max(startHour, HOUR_START);
-  const clampedEnd = Math.min(endHour, HOUR_END);
+  const clampedStart = Math.min(Math.max(startHour, HOUR_START), HOUR_END - 0.25);
+  const clampedEnd = Math.max(Math.min(endHour, HOUR_END), clampedStart + 0.25);
 
   const top = (clampedStart - HOUR_START) * HOUR_HEIGHT;
-  const height = Math.max((clampedEnd - clampedStart) * HOUR_HEIGHT, HOUR_HEIGHT);
+  const height = Math.max((clampedEnd - clampedStart) * HOUR_HEIGHT, HOUR_HEIGHT / 2);
 
   return { top, height };
 }
@@ -190,7 +205,7 @@ function computeOverlapLayout(events) {
 
 // ─── Event Detail Popup ─────────────────────────────────────────────────────
 
-function EventDetailPopup({ event, onClose, anchorRect }) {
+function EventDetailPopup({ event, onClose }) {
   const popupRef = useRef(null);
   const [visible, setVisible] = useState(false);
 
@@ -294,10 +309,11 @@ function EventDetailPopup({ event, onClose, anchorRect }) {
             </div>
           )}
 
-          {/* Close button */}
+          <p className="text-xs text-tm text-center">{t.calendar.readOnlyEvent}</p>
+
           <button
             onClick={handleClose}
-            className="ripple mt-1 self-center flex items-center gap-2 px-5 py-2.5 rounded-xl
+            className="ripple self-center flex items-center gap-2 px-5 min-h-[56px] rounded-xl
                        bg-s2 text-ts text-sm font-medium hover:bg-bd
                        active:scale-95 transition-all duration-[var(--dur-fast)]"
           >
@@ -417,7 +433,6 @@ const VIEW_STORAGE_KEY = 'calendar_view';
 
 export default function CalendarPage() {
   const showWeekend = useStore((s) => s.settings.showWeekend);
-  const googleStatus = useStore((s) => s.connections.google);
 
   // ── Week navigation state ──
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStart(new Date()));
@@ -471,7 +486,16 @@ export default function CalendarPage() {
         : { start: currentWeekStart, end: getWeekEnd(currentWeekStart) },
     [view, currentMonth, currentWeekStart]
   );
-  const { events, loading, refetch } = useCalendar(fetchRange.start, fetchRange.end);
+  const { events: rawEvents, loading, refetch } =
+    useCalendar(fetchRange.start, fetchRange.end);
+
+  const events = useMemo(
+    () => rawEvents.map((ev) => ({
+      ...ev,
+      color: normalizeCalendarColor(ev.color),
+    })),
+    [rawEvents]
+  );
 
   // ── Pull to refresh ──
   const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
@@ -591,22 +615,19 @@ export default function CalendarPage() {
     for (let i = 0; i < colCount; i++) timed[i] = [];
 
     for (const ev of events) {
-      if (ev.allDay) {
-        const startDate = new Date(ev.start + 'T00:00:00');
-        const endDate = new Date(ev.end + 'T00:00:00');
-
-        if (startDate.getTime() !== endDate.getTime()) {
-          multi.push(ev);
-        } else {
-          allDay.push(ev);
-        }
+      const isAllDay = ev.allDay || /^\d{4}-\d{2}-\d{2}$/.test(String(ev.start || ''));
+      if (isAllDay) {
+        const startKey = String(ev.start || '').slice(0, 10);
+        const endKey = String(ev.end || ev.start || '').slice(0, 10);
+        if (endKey && endKey > startKey) multi.push(ev);
+        else allDay.push(ev);
       } else {
-        const dayIdx = getEventDayIndex(ev);
-        // Only include if this day is visible
-        if (dayIdx < colCount) {
-          timed[dayIdx] = timed[dayIdx] || [];
-          timed[dayIdx].push(ev);
-        }
+        dayColumns.forEach((date, idx) => {
+          if (eventFallsOnDay(ev, date)) {
+            timed[idx] = timed[idx] || [];
+            timed[idx].push(ev);
+          }
+        });
       }
 
       // Collect upcoming events (future from now)
@@ -629,7 +650,7 @@ export default function CalendarPage() {
       multiDayEvents: multi,
       upcoming: upcomingList.slice(0, 4),
     };
-  }, [events, colCount]);
+  }, [events, colCount, dayColumns]);
 
   // ── Overlap layouts per day ──
   const overlapLayouts = useMemo(() => {
@@ -640,8 +661,7 @@ export default function CalendarPage() {
     return layouts;
   }, [timedByDay, colCount]);
 
-  // ── Event tap handler ──
-  function handleEventTap(event, rect) {
+  function handleEventTap(event) {
     setSelectedEvent(event);
   }
 
@@ -690,42 +710,15 @@ export default function CalendarPage() {
   // ── All-day row data ──
   const allDayRowItems = useMemo(() => {
     const items = [];
-
-    // Single all-day events
-    for (const ev of allDayEvents) {
-      const d = new Date(ev.start + 'T00:00:00');
-      const dayIdx = d.getDay();
-      if (dayIdx < colCount) {
-        items.push({ event: ev, startCol: dayIdx, span: 1 });
-      }
+    for (const ev of [...allDayEvents, ...multiDayEvents]) {
+      const hits = dayColumns
+        .map((date, idx) => (eventFallsOnDay(ev, date) ? idx : -1))
+        .filter((idx) => idx >= 0);
+      if (!hits.length) continue;
+      items.push({ event: ev, startCol: hits[0], span: hits[hits.length - 1] - hits[0] + 1 });
     }
-
-    // Multi-day events
-    for (const ev of multiDayEvents) {
-      const startDate = new Date(ev.start + 'T00:00:00');
-      const endDate = new Date(ev.end + 'T00:00:00');
-      const wsTime = currentWeekStart.getTime();
-      const weTime = getWeekEnd(currentWeekStart).getTime();
-
-      let startIdx = startDate.getDay();
-      let endIdx = endDate.getDay();
-
-      // Clamp to visible week
-      if (startDate.getTime() < wsTime) startIdx = 0;
-      if (endDate.getTime() > weTime) endIdx = colCount - 1;
-
-      // Clamp to visible columns
-      startIdx = Math.max(0, Math.min(startIdx, colCount - 1));
-      endIdx = Math.max(0, Math.min(endIdx, colCount - 1));
-
-      const span = endIdx - startIdx + 1;
-      if (span > 0) {
-        items.push({ event: ev, startCol: startIdx, span });
-      }
-    }
-
     return items;
-  }, [allDayEvents, multiDayEvents, colCount, currentWeekStart]);
+  }, [allDayEvents, multiDayEvents, dayColumns]);
 
   // ── Loading state ──
   if (loading) return view === 'month' ? <MonthGridSkeleton /> : <CalendarSkeleton />;
@@ -739,15 +732,6 @@ export default function CalendarPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Degraded integration banner (Google Calendar not connected) ── */}
-      {googleStatus !== 'connected' && (
-        <ConnectionBanner
-          integration={t.connection.degraded}
-          message={t.connection.googleDegraded}
-          onAction={refetch}
-        />
-      )}
-
       {/* ── Navigation Bar ── */}
       <div className="flex items-center gap-3 px-6 py-3 shrink-0 border-b border-bd bg-surf">
         <button
@@ -796,7 +780,7 @@ export default function CalendarPage() {
 
         <button
           onClick={goToday}
-          className="ripple px-5 min-h-[44px] rounded-xl bg-acc text-white font-medium text-sm
+          className="ripple px-5 min-h-[56px] rounded-xl bg-acc text-white font-medium text-sm
                      hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
         >
           {t.calendar.today}
@@ -812,7 +796,7 @@ export default function CalendarPage() {
           onTouchStart={handleCalTouchStart}
           onTouchEnd={handleCalTouchEnd}
           style={{
-            direction: 'ltr', /* Calendar grid is always LTR (Sun→Sat) */
+            direction: 'rtl', /* Sunday on the right, days flow left */
             opacity: slideDir ? 0.4 : 1,
             transform: slideDir === 'left' ? 'translateX(-20px)' : slideDir === 'right' ? 'translateX(20px)' : 'translateX(0)',
             transition: 'opacity var(--dur-normal) var(--ease), transform var(--dur-normal) var(--ease)',
@@ -916,17 +900,16 @@ export default function CalendarPage() {
 
               {/* ── Day Columns ── */}
               {dayColumns.map((date, colIdx) => {
-                const dayIdx = date.getDay();
                 const today = isToday(date);
-                const dayEvents = timedByDay[dayIdx] || [];
-                const layout = overlapLayouts[dayIdx] || new Map();
+                const dayEvents = timedByDay[colIdx] || [];
+                const layout = overlapLayouts[colIdx] || new Map();
                 const isEmpty = dayEvents.length === 0;
                 const MAX_VISIBLE = 3;
 
                 return (
                   <div
                     key={colIdx}
-                    className={`relative border-l border-bd
+                    className={`relative border-s border-bd
                       ${today ? 'bg-acc/[0.03]' : 'bg-bg'}`}
                   >
                     {/* Hour grid lines */}

@@ -51,8 +51,6 @@ if (!fs.existsSync(envPath)) {
 
 const REQUIRED_VARS = [];
 const OPTIONAL_VARS = [
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
   'SPOTIFY_CLIENT_ID',
   'SPOTIFY_CLIENT_SECRET',
   'HA_HOST',
@@ -141,6 +139,11 @@ function getOrCreateApiToken() {
 
 const API_TOKEN = getOrCreateApiToken();
 
+// Music streaming routes expose a helper to verify the HMAC signature carried
+// by public MP3 stream URLs (fetched by cast devices that cannot send the
+// bearer token). Loaded here so authMiddleware can grant those requests.
+const musicRoutes = require('./routes/music');
+
 function authMiddleware(req, res, next) {
   // Bypass for localhost / loopback
   const ip = req.ip || req.connection.remoteAddress || '';
@@ -150,6 +153,14 @@ function authMiddleware(req, res, next) {
     ip === '::ffff:127.0.0.1' ||
     ip === 'localhost'
   ) {
+    return next();
+  }
+
+  // Bypass for signed music stream URLs. These are fetched directly by Google
+  // Cast / Nest devices over the LAN and cannot carry the bearer token, so they
+  // are protected by an HMAC signature of the video id instead.
+  const streamMatch = req.path.match(/^\/music\/stream\/([a-zA-Z0-9_-]{11})\.mp3$/);
+  if (streamMatch && musicRoutes.verifyStreamToken(API_TOKEN, streamMatch[1], req.query.token)) {
     return next();
   }
 
@@ -182,7 +193,7 @@ app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/weather', require('./routes/weather'));
 app.use('/api/ha', homeAssistantRoutes);
-app.use('/api/music', require('./routes/music'));
+app.use('/api/music', musicRoutes);
 app.use('/api/news', require('./routes/news'));
 app.use('/api/wifi', require('./routes/wifi'));
 app.use('/api/settings', require('./routes/settings'));

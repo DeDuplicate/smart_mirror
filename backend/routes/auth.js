@@ -87,19 +87,9 @@ function decryptToken(db, encrypted) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-const GOOGLE_USERINFO_ENDPOINT = 'https://www.googleapis.com/oauth2/v2/userinfo';
-
 const SPOTIFY_AUTH_ENDPOINT = 'https://accounts.spotify.com/authorize';
 const SPOTIFY_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_ME_ENDPOINT = 'https://api.spotify.com/v1/me';
-
-function googleRedirectUri(req) {
-  const proto = req.protocol;
-  const host = req.get('host');
-  return `${proto}://${host}/api/auth/callback`;
-}
 
 function getConfigValue(db, key) {
   try {
@@ -240,61 +230,6 @@ function getAccountsByProvider(db, provider) {
 }
 
 /**
- * Refresh a Google access token using the stored refresh token.
- * Returns the new access_token or throws.
- */
-async function refreshGoogleToken(db, email, logger) {
-  const row = getTokens(db, 'google', email);
-  if (!row || !row.refresh_token) {
-    throw new Error(`No refresh token for Google account ${email}`);
-  }
-
-  const body = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET,
-    refresh_token: row.refresh_token,
-    grant_type: 'refresh_token',
-  });
-
-  const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Google token refresh failed (${res.status}): ${text}`);
-  }
-
-  const data = await res.json();
-  const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
-
-  storeTokens(db, 'google', email, {
-    access_token: data.access_token,
-    refresh_token: row.refresh_token, // keep existing refresh token
-    expires_at: expiresAt,
-  });
-
-  if (logger) logger.info('Refreshed Google token for %s', email);
-  return data.access_token;
-}
-
-/**
- * Get a valid Google access token, refreshing if necessary.
- */
-async function getValidGoogleToken(db, email, logger) {
-  const row = getTokens(db, 'google', email);
-  if (!row) throw new Error(`No Google tokens for ${email}`);
-
-  // Refresh if within 5 minutes of expiry
-  if (row.expires_at && Date.now() > row.expires_at - 5 * 60 * 1000) {
-    return refreshGoogleToken(db, email, logger);
-  }
-  return row.access_token;
-}
-
-/**
  * Refresh a Spotify access token.
  */
 async function refreshSpotifyToken(db, email, logger) {
@@ -353,164 +288,6 @@ async function getValidSpotifyToken(db, logger) {
   }
   return row.access_token;
 }
-
-// ---------------------------------------------------------------------------
-// Google OAuth routes
-// ---------------------------------------------------------------------------
-
-// GET /api/auth/google/url — return the consent URL
-router.get('/google/url', (req, res) => {
-  const { GOOGLE_CLIENT_ID } = process.env;
-  if (!GOOGLE_CLIENT_ID) {
-    return res.status(503).json({ error: 'Google OAuth not configured' });
-  }
-
-  const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: googleRedirectUri(req),
-    response_type: 'code',
-    scope: [
-      'openid',
-      'email',
-      'profile',
-      'https://www.googleapis.com/auth/calendar.readonly',
-      'https://www.googleapis.com/auth/tasks',
-    ].join(' '),
-    access_type: 'offline',
-    prompt: 'consent',
-  });
-
-  res.json({ url: `${GOOGLE_AUTH_ENDPOINT}?${params}` });
-});
-
-// GET /api/auth/callback — Google OAuth callback
-router.get('/callback', async (req, res) => {
-  const { code, error: oauthError } = req.query;
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-  const io = req.app.locals.io;
-
-  if (oauthError) {
-    logger.error('Google OAuth error: %s', oauthError);
-    return res.status(400).send(renderPopupResultPage({
-      success: false,
-      title: 'החיבור לגוגל נכשל',
-      message: String(oauthError),
-    }));
-  }
-  if (!code) {
-    return res.status(400).send(renderPopupResultPage({
-      success: false,
-      title: 'החיבור לגוגל נכשל',
-      message: 'קוד אישור חסר',
-    }));
-  }
-
-  try {
-    // Exchange code for tokens
-    const tokenBody = new URLSearchParams({
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect_uri: googleRedirectUri(req),
-      grant_type: 'authorization_code',
-    });
-
-    const tokenRes = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: tokenBody,
-    });
-
-    if (!tokenRes.ok) {
-      const text = await tokenRes.text();
-      logger.error('Google token exchange failed: %s', text);
-      return res.status(502).send(renderPopupResultPage({
-        success: false,
-        title: 'החיבור לגוגל נכשל',
-        message: 'החלפת קוד האישור בטוקן נכשלה',
-      }));
-    }
-
-    const tokenData = await tokenRes.json();
-    const expiresAt = Date.now() + (tokenData.expires_in || 3600) * 1000;
-
-    // Get user info (email)
-    const userRes = await fetch(GOOGLE_USERINFO_ENDPOINT, {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-
-    if (!userRes.ok) {
-      return res.status(502).send(renderPopupResultPage({
-        success: false,
-        title: 'החיבור לגוגל נכשל',
-        message: 'שליפת פרטי המשתמש נכשלה',
-      }));
-    }
-
-    const userInfo = await userRes.json();
-    const email = userInfo.email;
-
-    storeTokens(db, 'google', email, {
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
-      expires_at: expiresAt,
-    });
-
-    logger.info('Google account linked: %s', email);
-
-    // Emit socket event
-    if (io) {
-      io.emit('auth:google:linked', { email, name: userInfo.name });
-    }
-
-    // The popup closes itself — the main app window is notified via the
-    // Socket.io event above, not via this response.
-    res.send(renderPopupResultPage({
-      success: true,
-      title: 'חשבון גוגל חובר בהצלחה',
-      message: 'ניתן לסגור חלון זה',
-    }));
-  } catch (err) {
-    logger.error('Google OAuth callback error: %s', err.message);
-    res.status(500).send(renderPopupResultPage({
-      success: false,
-      title: 'החיבור לגוגל נכשל',
-      message: 'שגיאת שרת פנימית',
-    }));
-  }
-});
-
-// GET /api/auth/google/accounts — list linked Google accounts
-router.get('/google/accounts', (req, res) => {
-  const db = req.app.locals.db;
-  const accounts = getAccountsByProvider(db, 'google').map((row) => ({
-    email: row.email,
-    hasRefreshToken: !!row.refresh_token,
-    expiresAt: row.expires_at,
-  }));
-  res.json({ accounts });
-});
-
-// DELETE /api/auth/google/:email — remove a linked Google account
-router.delete('/google/:email', (req, res) => {
-  const db = req.app.locals.db;
-  const { email } = req.params;
-
-  const result = db
-    .prepare('DELETE FROM tokens WHERE provider = ? AND email = ?')
-    .run('google', email);
-
-  if (result.changes === 0) {
-    return res.status(404).json({ error: 'Account not found' });
-  }
-
-  const io = req.app.locals.io;
-  if (io) io.emit('auth:google:unlinked', { email });
-
-  req.app.locals.logger.info('Google account removed: %s', email);
-  res.json({ ok: true });
-});
 
 // ---------------------------------------------------------------------------
 // Spotify OAuth routes
@@ -675,9 +452,7 @@ router.delete('/spotify', (req, res) => {
 module.exports = router;
 
 // Named exports for token utilities used by other route modules
-module.exports.getValidGoogleToken = getValidGoogleToken;
 module.exports.getValidSpotifyToken = getValidSpotifyToken;
 module.exports.getSpotifyCredentials = getSpotifyCredentials;
 module.exports.getAccountsByProvider = getAccountsByProvider;
-module.exports.refreshGoogleToken = refreshGoogleToken;
 module.exports.refreshSpotifyToken = refreshSpotifyToken;
