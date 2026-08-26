@@ -182,6 +182,62 @@ async function backgroundRefresh(db, logger, cacheKey, params) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/weather/geocode?q=<city name> — city search for the Settings
+// location picker. Proxies Open-Meteo's free geocoding API (no key needed)
+// so the frontend can resolve a typed city name to real coordinates instead
+// of the user having to hand-enter latitude/longitude.
+// ---------------------------------------------------------------------------
+const GEOCODE_API = 'https://geocoding-api.open-meteo.com/v1/search';
+const GEOCODE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h — city coordinates don't change
+const geocodeCache = new Map();
+
+router.get('/geocode', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const query = (req.query.q || '').toString().trim();
+
+  if (query.length < 2) {
+    return res.json({ results: [] });
+  }
+
+  const cacheKey = query.toLowerCase();
+  const cached = geocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.time < GEOCODE_CACHE_TTL_MS) {
+    return res.json({ results: cached.results });
+  }
+
+  try {
+    const params = new URLSearchParams({
+      name: query,
+      count: '8',
+      language: 'he',
+      format: 'json',
+    });
+    const response = await fetch(`${GEOCODE_API}?${params}`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Open-Meteo geocoding ${response.status}: ${text}`);
+    }
+    const data = await response.json();
+    const results = (data.results || []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      admin1: r.admin1 || null,
+      country: r.country || null,
+      countryCode: r.country_code || null,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      timezone: r.timezone || null,
+    }));
+
+    geocodeCache.set(cacheKey, { results, time: Date.now() });
+    res.json({ results });
+  } catch (err) {
+    logger.error('Geocode search error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/weather?lat=&lon=&units=C|F
 // ---------------------------------------------------------------------------
 router.get('/', async (req, res) => {
@@ -343,8 +399,36 @@ router.get('/ims', async (req, res) => {
       if (feelsLike != null) feelsLike = Math.round(feelsLike * 9 / 5 + 32);
     }
 
-    // Build forecast from HA forecast attribute if available
-    const forecast = (attrs.forecast || []).slice(0, 5).map((day, i) => {
+    // Modern HA (2024.6+) no longer exposes a `forecast` attribute on the
+    // weather entity's state — it must be fetched via the weather.get_forecasts
+    // service call (with return_response). Fetch it separately; if it fails,
+    // fall back to an empty forecast rather than failing the whole request,
+    // since current conditions are still valid and useful on their own.
+    let rawForecast = [];
+    try {
+      const forecastResponse = await fetch(
+        `${haHost.replace(/\/+$/, '')}/api/services/weather/get_forecasts?return_response`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${haToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ entity_id: entityId, type: 'daily' }),
+        }
+      );
+      if (forecastResponse.ok) {
+        const forecastData = await forecastResponse.json();
+        rawForecast = forecastData?.service_response?.[entityId]?.forecast || [];
+      } else {
+        logger.warn('IMS forecast service call failed: HA API %s', forecastResponse.status);
+      }
+    } catch (forecastErr) {
+      logger.warn('IMS forecast service call error: %s', forecastErr.message);
+    }
+
+    // Build forecast from the weather.get_forecasts service response
+    const forecast = rawForecast.slice(0, 7).map((day, i) => {
       const dayCode = imsConditionToWmo(day.condition);
       let high = day.temperature ?? null;
       let low = day.templow ?? null;
