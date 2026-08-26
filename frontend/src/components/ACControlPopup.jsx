@@ -248,7 +248,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                 data-selected={temp === t_val}
                 onClick={() => setTemp(t_val)}
                 disabled={!isOn}
-                className={`shrink-0 w-11 h-11 rounded-xl text-sm font-bold
+                className={`shrink-0 w-14 h-14 rounded-xl text-sm font-bold
                   transition-all duration-[var(--dur-fast)] active:scale-95
                   ${temp === t_val
                     ? 'bg-acc2 text-white shadow-card'
@@ -273,7 +273,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                   key={m.key}
                   onClick={() => setMode(m.key)}
                   disabled={!isOn}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium
+                  className={`flex-1 flex items-center justify-center gap-2 min-h-[56px] rounded-xl text-sm font-medium
                     transition-all duration-[var(--dur-fast)] active:scale-95
                     ${mode === m.key
                       ? 'bg-acc2 text-white shadow-card'
@@ -298,7 +298,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                 key={s.key}
                 onClick={() => setSpeed(s.key)}
                 disabled={!isOn}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium
+                className={`flex-1 min-h-[56px] rounded-xl text-sm font-medium
                   transition-all duration-[var(--dur-fast)] active:scale-95
                   ${speed === s.key
                     ? 'bg-acc text-white shadow-card'
