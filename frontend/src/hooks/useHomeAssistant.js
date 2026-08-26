@@ -21,6 +21,11 @@ function getSocket() {
 
 // ─── Mock Data (dev fallback) ───────────────────────────────────────────────
 
+const isDev =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
+  import.meta.env.DEV;
+
 const MOCK_ENTITIES = [
   {
     entity_id: 'light.living_room',
@@ -137,15 +142,6 @@ const MOCK_PERSONS = [
   },
 ];
 
-// ─── Scene Mock Data ────────────────────────────────────────────────────────
-
-export const MOCK_SCENES = [
-  { entity_id: 'scene.good_morning', name: 'בוקר טוב' },
-  { entity_id: 'scene.movie_mode', name: 'מצב סרט' },
-  { entity_id: 'scene.good_night', name: 'לילה טוב' },
-  { entity_id: 'scene.leaving_home', name: 'יציאה מהבית' },
-];
-
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
 const POLL_INTERVAL = 60_000; // 1 minute
@@ -199,8 +195,14 @@ export default function useHomeAssistant() {
       // fetch. A transient failure after real data was already loaded should
       // keep showing the last known-good real state, not revert to mocks.
       if (!hasRealDataRef.current) {
-        setEntities(MOCK_ENTITIES);
-        setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
+        // Dev-only mock fallback so the UI has something to show without
+        // real credentials. In production, leave entities empty — HomePage
+        // already renders a per-tile "offline" state from `connected`/`error`
+        // instead of fabricating fake device states.
+        if (isDev) {
+          setEntities(MOCK_ENTITIES);
+          setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
+        }
       } else if (lastKnownStatesRef.current) {
         setEntities(lastKnownStatesRef.current);
       }
@@ -216,9 +218,14 @@ export default function useHomeAssistant() {
     mountedRef.current = true;
 
     if (!isConfigured) {
-      // Not configured: use mock data
-      setEntities(MOCK_ENTITIES);
-      setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
+      // Not configured: dev gets mock data to look at; production shows the
+      // real "not configured" state (empty entities) so HomePage's
+      // configure-in-Settings prompt is reachable instead of always being
+      // masked by fake devices.
+      if (isDev) {
+        setEntities(MOCK_ENTITIES);
+        setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
+      }
       setLoading(false);
       setConnected(false);
       return;
