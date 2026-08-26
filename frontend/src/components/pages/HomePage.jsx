@@ -591,7 +591,7 @@ function ClimateModeSelector({ currentMode, modes, onChange }) {
           <button
             key={mode}
             onClick={() => onChange(mode)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-[var(--dur-fast)]
+            className={`px-3 min-h-[56px] flex items-center justify-center rounded-full text-xs font-medium transition-all duration-[var(--dur-fast)]
               active:scale-95 ${
               currentMode === mode
                 ? 'bg-acc2 text-white'

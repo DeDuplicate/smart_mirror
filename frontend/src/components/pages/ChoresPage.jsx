@@ -512,7 +512,7 @@ function PersonColumn({
             hover:bg-[var(--s2)] hover:text-[var(--tp)]
             active:scale-[0.98]
             transition-all duration-[var(--dur-fast)]
-            min-h-[48px]
+            min-h-[56px]
           "
         >
           <PlusIcon className="w-4 h-4" />
