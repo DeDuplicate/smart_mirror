@@ -224,7 +224,7 @@ function FeaturedCard({ article, onClick }) {
   return (
     <div
       onClick={() => onClick(article)}
-      className="shrink-0 relative rounded-[20px] overflow-hidden h-[280px] cursor-pointer
+      className="shrink-0 relative rounded-2xl overflow-hidden h-[280px] cursor-pointer
                  hover:shadow-xl transition-shadow duration-[var(--dur-normal)]"
       style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}
     >
