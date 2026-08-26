@@ -110,7 +110,17 @@
     "celsius": "°C",
     "fahrenheit": "°F",
     "kmh": "קמ\"ש",
-    "percent": "%"
+    "percent": "%",
+    "conditions": {
+      "clear": "בהיר",
+      "partly-cloudy": "מעונן חלקית",
+      "fog": "ערפל",
+      "drizzle": "טפטוף",
+      "rain": "גשם",
+      "snow": "שלג",
+      "showers": "ממטרים",
+      "thunderstorm": "סופת רעמים"
+    }
   },
   "calendar": {
     "today": "היום",

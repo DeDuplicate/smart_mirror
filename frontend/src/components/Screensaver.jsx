@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import useStore from '../store/index.js';
+import t from '../i18n/he.json';
+import WeatherIcon, { getConditionLabel } from './WeatherIcon.jsx';
 
 // ─── Screensaver Component ───────────────────────────────────────────────────
 // Two modes: "clock" (full-screen dark clock) or "slideshow" (Ken Burns photos).
@@ -50,6 +53,49 @@ function formatHebrewDate(date) {
   }
 }
 
+// ─── Weather line ────────────────────────────────────────────────────────────
+// Animated condition icon + temperature + Hebrew condition name. Reads the
+// store that App.jsx already keeps polling while the screensaver is up, so
+// this needs no fetching of its own.
+
+function ScreensaverWeather({ iconSize = 44 }) {
+  const weather = useStore((s) => s.weather.current);
+  const temperatureUnit = useStore((s) => s.settings.temperatureUnit) || 'celsius';
+
+  // Nothing until the first successful weather fetch — better an absent row
+  // than a placeholder dash on a full-screen display.
+  if (weather.temp == null && weather.code == null) return null;
+
+  const unitLabel =
+    temperatureUnit === 'celsius' ? t.weather.celsius : t.weather.fahrenheit;
+
+  return (
+    <div className="flex items-center gap-3 select-none" dir="rtl">
+      {weather.code != null && (
+        <WeatherIcon code={weather.code} size={iconSize} />
+      )}
+      {weather.temp != null && (
+        <span
+          className="text-white/70 font-light"
+          style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: `${Math.round(iconSize * 0.64)}px`,
+            lineHeight: 1,
+          }}
+        >
+          {Math.round(weather.temp)}
+          {unitLabel}
+        </span>
+      )}
+      {weather.code != null && (
+        <span className="text-white/40 text-lg font-light">
+          {getConditionLabel(weather.code)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ─── Clock Mode ──────────────────────────────────────────────────────────────
 
 function ClockMode() {
@@ -86,6 +132,11 @@ function ClockMode() {
       >
         {dateStr}
       </p>
+
+      {/* Current weather */}
+      <div className="mt-8">
+        <ScreensaverWeather />
+      </div>
     </div>
   );
 }
