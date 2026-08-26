@@ -74,7 +74,7 @@ function ClockMode() {
         <span>{hh}</span>
         <span style={{ opacity: 0.6 }}>:</span>
         <span>{mm}</span>
-        <span style={{ fontSize: '60px', opacity: 0.4, marginInlineStart: '8px' }}>
+        <span style={{ fontSize: '60px', opacity: 0.4, marginInlineStart: '24px' }}>
           {ss}
         </span>
       </div>

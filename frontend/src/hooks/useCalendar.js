@@ -274,9 +274,8 @@ export default function useCalendar(weekStart) {
       setEvents(merged);
       setError(null);
     } else {
-      // Neither source returned data — fall back to mock in dev
-      const mock = generateMockEvents(weekStart);
-      setEvents(mock);
+      // Neither source returned data — show empty calendar
+      setEvents([]);
       setError(null);
     }
 

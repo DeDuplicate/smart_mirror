@@ -172,14 +172,30 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
 
   if (!visible) return null;
 
-  // Position relative to anchor (top bar icon)
+  // Position relative to anchor (top bar icon) with viewport bounds checking
   const style = {};
   if (anchorRef?.current) {
     const rect = anchorRef.current.getBoundingClientRect();
+    const popupWidth = 320;
+    const popupMaxHeight = 460;
+
     style.position = 'fixed';
-    style.top = `${rect.bottom + 8}px`;
-    style.right = `${window.innerWidth - rect.right}px`;
     style.zIndex = 50;
+
+    // Vertical: below the button, but clamp to viewport
+    let top = rect.bottom + 8;
+    if (top + popupMaxHeight > window.innerHeight) {
+      top = Math.max(8, window.innerHeight - popupMaxHeight - 8);
+    }
+    style.top = `${top}px`;
+
+    // Horizontal: align right edge with button, but clamp to viewport
+    let right = window.innerWidth - rect.right;
+    if (right < 8) right = 8;
+    if (right + popupWidth > window.innerWidth - 8) {
+      right = window.innerWidth - popupWidth - 8;
+    }
+    style.right = `${right}px`;
   }
 
   const activeItems = items.filter((i) => i.status !== 'completed');
