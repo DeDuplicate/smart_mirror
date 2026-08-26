@@ -163,6 +163,11 @@ export default function useHomeAssistant() {
 
   const mountedRef = useRef(true);
   const pollRef = useRef(null);
+  // Freshest known-good state, tracked via refs so the polling closure (bound
+  // once at mount) always reads current values instead of stale ones captured
+  // at the time setInterval(fetchStates, ...) was first created.
+  const lastKnownStatesRef = useRef(null);
+  const hasRealDataRef = useRef(false);
 
   // ── Fetch all states ──────────────────────────────────────────────────────
 
@@ -183,23 +188,27 @@ export default function useHomeAssistant() {
 
       setEntities(relevant);
       setLastKnownStates(relevant);
+      lastKnownStatesRef.current = relevant;
+      hasRealDataRef.current = true;
       setConnected(true);
       setError(null);
       setLoading(false);
     } catch (err) {
       if (!mountedRef.current) return;
-      // Use mock data in dev when API is unavailable
-      if (entities.length === 0 && !lastKnownStates) {
+      // Only fall back to mock data if we have NEVER had a successful real
+      // fetch. A transient failure after real data was already loaded should
+      // keep showing the last known-good real state, not revert to mocks.
+      if (!hasRealDataRef.current) {
         setEntities(MOCK_ENTITIES);
         setAllStates([...MOCK_ENTITIES, ...MOCK_PERSONS]);
-      } else if (lastKnownStates) {
-        setEntities(lastKnownStates);
+      } else if (lastKnownStatesRef.current) {
+        setEntities(lastKnownStatesRef.current);
       }
       setConnected(false);
       setError(err.message);
       setLoading(false);
     }
-  }, [entities.length, lastKnownStates]);
+  }, []);
 
   // ── Initial fetch + polling ───────────────────────────────────────────────
 
@@ -224,7 +233,7 @@ export default function useHomeAssistant() {
       mountedRef.current = false;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [isConfigured]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isConfigured, fetchStates]);
 
   // ── Socket.io real-time updates ───────────────────────────────────────────
 
@@ -333,12 +342,17 @@ export default function useHomeAssistant() {
             : e
         )
       );
-      await callService('light', 'turn_on', {
-        entity_id: entityId,
-        brightness_pct: value,
-      });
+      try {
+        await callService('light', 'turn_on', {
+          entity_id: entityId,
+          brightness_pct: value,
+        });
+      } catch {
+        // Revert on failure
+        fetchStates();
+      }
     },
-    [callService]
+    [callService, fetchStates]
   );
 
   const setColorTemp = useCallback(
@@ -350,12 +364,17 @@ export default function useHomeAssistant() {
             : e
         )
       );
-      await callService('light', 'turn_on', {
-        entity_id: entityId,
-        color_temp: mireds,
-      });
+      try {
+        await callService('light', 'turn_on', {
+          entity_id: entityId,
+          color_temp: mireds,
+        });
+      } catch {
+        // Revert on failure
+        fetchStates();
+      }
     },
-    [callService]
+    [callService, fetchStates]
   );
 
   const setTemperature = useCallback(
@@ -367,12 +386,17 @@ export default function useHomeAssistant() {
             : e
         )
       );
-      await callService('climate', 'set_temperature', {
-        entity_id: entityId,
-        temperature: temp,
-      });
+      try {
+        await callService('climate', 'set_temperature', {
+          entity_id: entityId,
+          temperature: temp,
+        });
+      } catch {
+        // Revert on failure
+        fetchStates();
+      }
     },
-    [callService]
+    [callService, fetchStates]
   );
 
   const setHvacMode = useCallback(
@@ -382,12 +406,17 @@ export default function useHomeAssistant() {
           e.entity_id === entityId ? { ...e, state: mode } : e
         )
       );
-      await callService('climate', 'set_hvac_mode', {
-        entity_id: entityId,
-        hvac_mode: mode,
-      });
+      try {
+        await callService('climate', 'set_hvac_mode', {
+          entity_id: entityId,
+          hvac_mode: mode,
+        });
+      } catch {
+        // Revert on failure
+        fetchStates();
+      }
     },
-    [callService]
+    [callService, fetchStates]
   );
 
   const setVolume = useCallback(
@@ -399,12 +428,17 @@ export default function useHomeAssistant() {
             : e
         )
       );
-      await callService('media_player', 'volume_set', {
-        entity_id: entityId,
-        volume_level: volume / 100,
-      });
+      try {
+        await callService('media_player', 'volume_set', {
+          entity_id: entityId,
+          volume_level: volume / 100,
+        });
+      } catch {
+        // Revert on failure
+        fetchStates();
+      }
     },
-    [callService]
+    [callService, fetchStates]
   );
 
   const setCoverPosition = useCallback(
@@ -420,12 +454,17 @@ export default function useHomeAssistant() {
             : e
         )
       );
-      await callService('cover', 'set_cover_position', {
-        entity_id: entityId,
-        position,
-      });
+      try {
+        await callService('cover', 'set_cover_position', {
+          entity_id: entityId,
+          position,
+        });
+      } catch {
+        // Revert on failure
+        fetchStates();
+      }
     },
-    [callService]
+    [callService, fetchStates]
   );
 
   const activateScene = useCallback(

@@ -160,11 +160,13 @@ app.locals.logger = logger;
 // ---------------------------------------------------------------------------
 // 9. Mount route files
 // ---------------------------------------------------------------------------
+const homeAssistantRoutes = require('./routes/homeassistant');
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/weather', require('./routes/weather'));
-app.use('/api/ha', require('./routes/homeassistant'));
+app.use('/api/ha', homeAssistantRoutes);
 app.use('/api/music', require('./routes/music'));
 app.use('/api/news', require('./routes/news'));
 app.use('/api/wifi', require('./routes/wifi'));
@@ -185,6 +187,12 @@ const io = new SocketIOServer(server, {
 
 // Expose io so route handlers can emit events
 app.locals.io = io;
+
+// Start the Home Assistant WebSocket relay now that io exists — forwards
+// HA state_changed events to connected Socket.io clients as 'ha:state_changed'.
+// Uses the same HA_HOST/HA_TOKEN env vars as the /api/ha routes (see getHAConfig
+// in routes/homeassistant.js).
+homeAssistantRoutes.setupHAWebSocketRelay(io, logger);
 
 io.on('connection', (socket) => {
   logger.info('Socket.io client connected: %s', socket.id);
@@ -227,6 +235,8 @@ cron.schedule('0 3 * * *', () => {
 // ---------------------------------------------------------------------------
 function shutdown(signal) {
   logger.info('Received %s — shutting down gracefully', signal);
+
+  homeAssistantRoutes.closeHAWebSocket();
 
   server.close(() => {
     logger.info('HTTP server closed');
