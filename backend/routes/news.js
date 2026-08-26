@@ -69,7 +69,21 @@ const DEFAULT_SOURCES = [
     type: 'rss',
     category: 'finance',
   },
+  {
+    id: 'themarker',
+    name: 'TheMarker',
+    url: 'https://www.themarker.com/srv/tm-all-articles',
+    type: 'rss',
+    category: 'finance',
+  },
 ];
+
+// Sport5 and Calcalist were investigated (user-requested sources) but have no
+// working public RSS feed as of this writing: sport5.co.il's feed endpoints
+// return HTTP 500 (server-side error, feed generator appears discontinued),
+// and calcalist.co.il returns HTTP 403 on every RSS path even with a full
+// browser User-Agent (bot-blocked at the edge). Sport1 is covered instead by
+// the 'one' source above (One/Sport1 share the same network + RSS feed).
 
 // ---------------------------------------------------------------------------
 // Cache helpers
@@ -224,6 +238,32 @@ function resolveSources(db) {
   }
   return { sources: DEFAULT_SOURCES, selectionKey: 'all' };
 }
+
+// ---------------------------------------------------------------------------
+// GET /api/news/sources - catalog of available sources + current selection,
+// for the Settings news-source picker (Section requires knowing both what
+// exists and what's currently enabled, without duplicating DEFAULT_SOURCES
+// in the frontend).
+// ---------------------------------------------------------------------------
+router.get('/sources', (req, res) => {
+  const db = req.app.locals.db;
+  let enabled = null; // null = all enabled (no selection saved yet)
+  try {
+    const row = db.prepare("SELECT value FROM config WHERE key = 'news_sources'").get();
+    if (row) {
+      const parsed = JSON.parse(row.value);
+      if (Array.isArray(parsed)) {
+        enabled = parsed.map((e) => (typeof e === 'string' ? e : e && e.id)).filter(Boolean);
+      }
+    }
+  } catch {
+    // treat as "all enabled"
+  }
+  res.json({
+    sources: DEFAULT_SOURCES.map((s) => ({ id: s.id, name: s.name, category: s.category || null })),
+    enabled: enabled === null ? DEFAULT_SOURCES.map((s) => s.id) : enabled,
+  });
+});
 
 router.get('/', async (req, res) => {
   const db = req.app.locals.db;
