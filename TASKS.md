@@ -10,7 +10,31 @@ source note.
 
 ## Requested
 
-_(none)_
+- [ ] **Music: keep playback running in the background when leaving the
+      Music tab, and show a mini-player in the TopBar (user-reported).**
+      Today the player lives inside `MusicPage.jsx`, so switching tabs (or
+      opening Settings) unmounts it — Spotify playback survives (it's
+      server-side via Spotify Connect), but the YouTube player
+      (`useYoutubePlayer.js`, iframe-based) stops the moment its component
+      unmounts. Fix has two halves:
+      1. **Keep the player alive across tab switches.** Hoist the YouTube
+         player element (or its mount point) above the tab level — e.g.
+         keep `MusicPage` mounted-but-hidden instead of unmounting, or move
+         the player into a persistent host near the App root and render it
+         visually inside MusicPage when that tab is active. Whichever
+         approach: audio must not glitch when switching tabs, and the
+         hidden player must not intercept touches or break the kiosk layout.
+      2. **TopBar mini-player.** When music is playing (or paused with an
+         active track) and the Music tab is NOT active, show a compact
+         strip in/alongside the TopBar: track title + artist (truncating,
+         Hebrew RTL), play/pause + next/prev controls (≥56px touch
+         targets), and tapping the strip itself navigates back to the Music
+         tab. Reads the existing playback state (useMusic store/polling —
+         check whether polling currently only runs while the tab is active;
+         it may need to stay warm when a track is loaded so the mini-player
+         doesn't go stale). Strings via `he.json`; design-system rules in
+         the `global.css` header apply (rounded-xl controls,
+         active:scale-95, shadow tokens).
 
 ## In progress
 
