@@ -1,0 +1,16 @@
+xserver-xorg
+xinit
+x11-xserver-utils
+chromium-browser
+unclutter
+git
+curl
+ca-certificates
+ffmpeg
+ddcutil
+xdotool
+build-essential
+python3
+fonts-noto-core
+fonts-noto-color-emoji
+network-manager

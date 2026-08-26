@@ -1,0 +1,20 @@
+# pi-gen configuration for the Smart Mirror OS image.
+# Used by image/build.sh — copied into the pi-gen checkout before building.
+
+IMG_NAME=smart-mirror
+RELEASE=bookworm
+DEPLOY_COMPRESSION=xz
+
+TARGET_HOSTNAME=smartmirror
+FIRST_USER_NAME=mirror
+FIRST_USER_PASS=mirror
+DISABLE_FIRST_BOOT_USER_RENAME=1
+
+ENABLE_SSH=1
+LOCALE_DEFAULT=en_US.UTF-8
+KEYBOARD_KEYMAP=us
+KEYBOARD_LAYOUT="English (US)"
+TIMEZONE_DEFAULT=Asia/Jerusalem
+
+# Lite base (stage0-2) + our kiosk appliance stage.
+STAGE_LIST="stage0 stage1 stage2 stage-smartmirror"

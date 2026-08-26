@@ -1,0 +1,13 @@
+#!/bin/sh
+# .xinitrc — Smart Mirror kiosk X session
+
+# Never blank the screen
+xset s off
+xset s noblank
+xset -dpms
+
+# Hide the mouse cursor when idle
+unclutter -idle 1 -root &
+
+# Launch Chromium kiosk (waits for the frontend, watchdog relaunch loop)
+exec bash /opt/smart-mirror/scripts/start-kiosk.sh

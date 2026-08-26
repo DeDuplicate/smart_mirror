@@ -116,6 +116,17 @@ Open **http://localhost:3000** in your browser.
 
 This script installs all dependencies, builds the frontend, configures PM2, and sets up Chromium kiosk mode.
 
+### Build a Flashable OS Image (Kiosk Appliance)
+
+Turn the whole thing into a dedicated OS: a flashable Raspberry Pi image that boots straight into the Smart Mirror — no desktop, no manual setup.
+
+```bash
+cd image
+./build.sh      # requires Linux/WSL2 + Docker; outputs deploy/<date>-smart-mirror.img.xz
+```
+
+Flash with Raspberry Pi Imager and power on. See **[image/README.md](image/README.md)** for full details (first boot, credentials, service management).
+
 ---
 
 ## Configuration
