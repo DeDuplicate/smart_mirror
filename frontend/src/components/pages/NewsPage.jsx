@@ -128,10 +128,62 @@ function CategoryBadge({ category, size = 'sm' }) {
   );
 }
 
+// ─── Article Blocks ─────────────────────────────────────────────────────────
+// Renders the article body as an ordered sequence of text/image blocks so
+// in-article photos appear at their original position, not just as a single
+// title image (per explicit user request). Falls back to a flat text blob
+// for sources where structural extraction wasn't available (e.g. mock data).
+
+function ArticleImageBlock({ src, caption }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <figure className="m-0">
+      <img
+        src={src}
+        alt={caption || ''}
+        className="w-full rounded-xl"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+      {caption && (
+        <figcaption className="mt-1.5 text-ts text-xs leading-snug">{caption}</figcaption>
+      )}
+    </figure>
+  );
+}
+
+function ArticleBlocks({ blocks, fallbackText, skipImageSrc }) {
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    return (
+      <div className="text-tp text-base leading-relaxed whitespace-pre-line">
+        {fallbackText}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {blocks.map((block, i) => {
+        if (block.type === 'image') {
+          if (skipImageSrc && block.src === skipImageSrc) return null;
+          return <ArticleImageBlock key={i} src={block.src} caption={block.caption} />;
+        }
+        return (
+          <p key={i} className="text-tp text-base leading-relaxed whitespace-pre-line">
+            {block.value}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Article Overlay ────────────────────────────────────────────────────────
 
 function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
   const [visible, setVisible] = useState(false);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
 
   // Trigger slide-up on mount
   useEffect(() => {
@@ -144,8 +196,12 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
     setTimeout(onClose, 400);
   }, [onClose]);
 
+  // Prefer the full-article's extracted image (og:image, more reliable) over
+  // the RSS-provided one, since it becomes available once loaded.
+  const heroImage = !heroImageFailed ? (fullArticle?.image || article.image || null) : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/40 transition-opacity"
@@ -156,22 +212,31 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
         onClick={handleClose}
       />
 
-      {/* Slide-up sheet — edge-anchored, so rounded-t-3xl + shadow-modal */}
+      {/* Slide-in panel — anchored to the physical left edge of the screen
+          regardless of RTL/LTR text direction (per explicit user request),
+          so it always uses literal left-0 / translateX, not logical start. */}
       <div
-        className="absolute bottom-0 inset-x-0 bg-surf rounded-t-3xl shadow-modal
+        className="absolute top-0 left-0 h-full w-[92%] max-w-[640px] bg-surf rounded-e-3xl shadow-modal
                    flex flex-col overflow-hidden transition-transform"
         style={{
-          maxHeight: '88%',
-          transform: visible ? 'translateY(0)' : 'translateY(100%)',
+          transform: visible ? 'translateX(0)' : 'translateX(-100%)',
           transitionDuration: 'var(--dur-slow)',
           transitionTimingFunction: 'var(--ease)',
         }}
       >
-        {/* Hero header — category gradient with legibility scrim */}
+        {/* Hero header — article image if available, else category gradient */}
         <div
           className="relative h-[220px] shrink-0"
-          style={categoryGradient(article.category)}
+          style={heroImage ? undefined : categoryGradient(article.category)}
         >
+          {heroImage && (
+            <img
+              src={heroImage}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={() => setHeroImageFailed(true)}
+            />
+          )}
           <div
             className="absolute inset-0"
             style={{
@@ -220,9 +285,11 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
           )}
 
           {!fullArticleLoading && fullArticle && (
-            <div className="text-tp text-base leading-relaxed whitespace-pre-line">
-              {fullArticle.content || article.description}
-            </div>
+            <ArticleBlocks
+              blocks={fullArticle.blocks}
+              fallbackText={fullArticle.content || article.description}
+              skipImageSrc={heroImage}
+            />
           )}
 
           {!fullArticleLoading && !fullArticle && (
@@ -263,6 +330,9 @@ function UnreadDot({ className = 'w-2 h-2' }) {
 // ─── Featured Card (hero) ───────────────────────────────────────────────────
 
 function FeaturedCard({ article, unread, onClick }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = article.image && !imageFailed;
+
   return (
     <div
       role="button"
@@ -279,8 +349,17 @@ function FeaturedCard({ article, unread, onClick }) {
                  cursor-pointer select-none
                  shadow-card hover:shadow-raised active:scale-[0.98]
                  transition-all duration-[var(--dur-normal)]"
-      style={categoryGradient(article.category)}
+      style={showImage ? undefined : categoryGradient(article.category)}
     >
+      {showImage && (
+        <img
+          src={article.image}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      )}
+
       {/* Legibility scrim */}
       <div
         className="absolute inset-0"
@@ -324,6 +403,21 @@ function FeaturedCard({ article, unread, onClick }) {
 // A repeated item in a scrolling list is a row, not a surface: rounded-xl,
 // hairline border at rest, raised elevation on hover, surface-tier press.
 
+function HeadlineThumb({ image, bg, fg }) {
+  const [failed, setFailed] = useState(false);
+  if (image && !failed) {
+    return (
+      <img
+        src={image}
+        alt=""
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <NewspaperGlyph className="w-7 h-7" />;
+}
+
 function HeadlineRow({ article, unread, onClick }) {
   const { bg, fg } = getCategoryStyle(article.category);
 
@@ -344,12 +438,12 @@ function HeadlineRow({ article, unread, onClick }) {
                  hover:shadow-raised hover:border-ts/40 active:scale-[0.98]
                  transition-all duration-[var(--dur-fast)]"
     >
-      {/* Category media thumb — nested block, rounded-xl */}
+      {/* Media thumb — article image if available, else category glyph */}
       <div
-        className={`w-[64px] h-[64px] shrink-0 rounded-xl flex items-center justify-center ${unread ? '' : 'opacity-60'}`}
+        className={`w-[64px] h-[64px] shrink-0 rounded-xl flex items-center justify-center overflow-hidden ${unread ? '' : 'opacity-60'}`}
         style={{ backgroundColor: bg, color: fg }}
       >
-        <NewspaperGlyph className="w-7 h-7" />
+        <HeadlineThumb image={article.image} bg={bg} fg={fg} />
       </div>
 
       {/* Text */}

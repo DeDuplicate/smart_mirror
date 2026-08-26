@@ -126,13 +126,27 @@ function generateMockFullArticle(article) {
 // ─── Category mapping (backend returns no category, we assign from source) ─
 
 const CATEGORY_KEYWORDS = {
-  sport: ['ספורט', 'כדורגל', 'כדורסל', 'ניצחון', 'ליגה', 'יורוליג', 'מכבי', 'הפועל', 'בית"ר'],
-  tech: ['טכנולוגיה', 'סטארטאפ', 'הייטק', 'אפליקציה', 'בינה מלאכותית', 'AI', 'סייבר'],
-  finance: ['בורסה', 'כלכלה', 'מניות', 'דולר', 'שקל', 'גיוס', 'מדד', 'ריבית'],
+  sport: ['ספורט', 'כדורגל', 'כדורסל', 'ניצחון', 'ליגה', 'יורוליג', 'מכבי', 'הפועל', 'בית"ר', 'שחקן', 'מאמן', 'אליפות', 'מונדיאל', 'אולימפיאדה'],
+  tech: ['טכנולוגיה', 'סטארטאפ', 'הייטק', 'אפליקציה', 'בינה מלאכותית', 'AI', 'סייבר', "גאדג'ט", 'סמארטפון', 'אנדרואיד', 'אייפון', 'מעבד', 'כרטיס מסך', 'גיימינג', 'משחקי מחשב'],
+  finance: ['בורסה', 'כלכלה', 'מניות', 'דולר', 'שקל', 'גיוס', 'מדד', 'ריבית', 'שוק', 'אינפלציה', 'נדל"ן', 'משכנתא', 'בנק'],
   entertainment: ['בידור', 'סרט', 'מוזיקה', 'פסטיבל', 'הופעה', 'סדרה', 'טלוויזיה'],
 };
 
-export function detectCategory(title = '', description = '') {
+// Single-topic sources: the source itself determines the category, no
+// keyword guesswork needed (e.g. one.co.il is always sport).
+const SOURCE_CATEGORY_HINTS = {
+  one: 'sport',
+  tgspot: 'tech',
+  geektime: 'tech',
+  gadgety: 'tech',
+  hwzone: 'tech',
+  globes: 'finance',
+};
+
+export function detectCategory(title = '', description = '', sourceId = '') {
+  if (sourceId && SOURCE_CATEGORY_HINTS[sourceId]) {
+    return SOURCE_CATEGORY_HINTS[sourceId];
+  }
   const text = (title + ' ' + description).toLowerCase();
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     for (const kw of keywords) {
@@ -177,7 +191,7 @@ export default function useNews() {
         // Enrich with categories if missing
         const enriched = res.articles.map((a) => ({
           ...a,
-          category: a.category || detectCategory(a.title, a.description),
+          category: a.category || detectCategory(a.title, a.description, a.sourceId),
         }));
         setArticles(enriched);
         setError(null);
