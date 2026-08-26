@@ -23,12 +23,7 @@ _(none known — verify the new 56px controls and popup clamps on the real
 
 ## Backlog — features / gaps
 
-- [ ] Calendar month view (PLAN.md Known Issues #7 — genuine future
-      enhancement, larger scope).
-- [ ] Task column names (`taskCol1/2/3`) and `taskCleanupInterval` in Settings
-      have no effect — `TasksPage.jsx`'s `COLUMNS` is a hardcoded constant that
-      never reads them. Needs a design decision (what should cleanup-interval
-      even do?), not a quick fix.
+_(none)_
 
 ## Backlog — design follow-ups
 
@@ -36,9 +31,173 @@ _(none)_
 
 ## Done
 
+- [x] **Calendar month view** (PLAN.md Known Issues #7) — new `MonthGrid`
+      component (Sunday-first Israeli week, up to 3 event chips per cell,
+      "+N עוד" overflow, today ring, dimmed adjacent-month days); week/month
+      segmented toggle persisted to localStorage; `useCalendar` now takes an
+      explicit range covering grid spillover (abort + request-id guards
+      preserved); day selection shows an agenda in the sidebar slot; month
+      nav, swipe, pull-to-refresh and a `MonthGridSkeleton` all work in both
+      views.
+- [x] **Task column names wired; dead cleanup setting removed** (user
+      decision) — `taskCol1/2/3` now rename the Tasks kanban columns (labels
+      read from store settings with i18n defaults); `taskCleanupInterval`
+      select removed from Settings since it never had an effect.
+- [x] **News: structural in-article images + noise filtering + 6 new
+      sources** — extraction emits ordered typed blocks (text/image) so
+      in-body photos render at their position; class-token-prefix noise
+      removal + line filters for credits/bylines/comment counters; JSON-LD
+      fallback-only. Added tgspot, geektime, gadgety, hwzone, one, globes
+      (verified live; full Chrome UA for all fetches — Globes 403s
+      otherwise). `news_sources` config filtering with all-on default and
+      selection-keyed cache. `detectCategory` gained a source hint +
+      sport/tech/finance keywords.
+
+- [x] **News: expand source list + real Settings news-source picker
+      (user-reported, two combined requests).** Note: the backend
+      `DEFAULT_SOURCES` catalog and per-selection cache-key invalidation in
+      `backend/routes/news.js` were already added by a concurrent process
+      before this pass (tgspot, geektime, gadgety, hwzone, one, globes) —
+      this pass verified each feed URL live, added the missing TheMarker
+      feed (`https://www.themarker.com/srv/tm-all-articles`, confirmed 200
+      + valid RSS/media namespaces), and built the actual picker UI:
+      1. **Sources verified live, one by one**, not guessed: Ynet, now14,
+         tgspot, geektime, gadgety, hwzone, one (covers Sport1 — one.co.il
+         and sport1.maariv.co.il share the same feed/network), globes, and
+         themarker all return real 200 RSS responses. **Sport5 and Calcalist
+         do not have a working public feed** as of this writing — sport5.co.il
+         returns HTTP 500 on every RSS path tried (server-side error, feed
+         generator appears discontinued) and calcalist.co.il returns HTTP 403
+         on every RSS path even with a full browser User-Agent (bot-blocked
+         at the edge) — documented in a code comment in `news.js` rather than
+         silently dropped, so this is discoverable if either site's feed
+         comes back later.
+      2. **`GET /api/news/sources`** (new route) returns the full catalog
+         (`id`, `name`, `category`) plus the currently-`enabled` id list, so
+         the frontend doesn't need to duplicate the source list.
+      3. **`SettingsPage.jsx`'s `NewsSection`** was rewritten from two dead
+         hardcoded toggles (`newsYnet`/`newsNow14`, which `backend/routes/
+         news.js` never actually read) into a dynamic list: fetches the
+         catalog on mount, renders one `ToggleRow` per source, and saves the
+         selected id array to the `news_sources` config key (the exact key
+         `resolveSources()` in `news.js` already reads) via `updateSettings`.
+         Guards against saving an empty selection (toast + no-op) so news
+         can't be silently disabled entirely by unchecking everything.
+      4. **The onboarding wizard's step 6** (`SetupWizard` in `App.jsx`) had
+         its own separate, equally-dead Ynet/now14-only toggle pair — fixed
+         the same way (dynamic catalog fetch, writes `news_sources` on
+         finish) so both places manage the exact same setting instead of two
+         different dead ones.
+      Verified end-to-end live: `PUT /api/settings` with `news_sources:
+      ['ynet','globes']` → `GET /api/news` returned articles from only those
+      two `sourceId`s; re-verified via a live headless-Chromium (Playwright)
+      render of the real Settings page showing all 9 source toggles
+      (Ynet, ערוץ 14, TGSpot, גיקטיים, גאדג'טי, HWZone, ONE, גלובס,
+      TheMarker) rendered and functional. Reset to all-sources-enabled after
+      testing. Frontend build clean.
+- [x] **Critical: onboarding wizard reopened on every page load, hiding the
+      real Settings page — root cause of "I cannot see the new news pickers"
+      and likely also of earlier "settings not saving" confusion (user-
+      reported).** Found via a live Playwright trace of the running app:
+      `App.jsx`'s initial `fetch('/api/settings')` handler treated the raw
+      response object as the settings payload, but `GET /api/settings`
+      actually returns `{ settings: {...} }` (verified via `useSettings.js`,
+      which correctly unwraps it). Because of the missing unwrap, `data.
+      firstRun` was always `undefined` (never the real saved `false`), and
+      the check `if (data.firstRun !== false) setShowWizard(true)` fired on
+      *every single load*, permanently re-showing the full-screen (`z-100`)
+      setup wizard overlay in front of the actual app — including its own,
+      separate, equally-dead `newsYnet`/`newsNow14` toggle pair on wizard
+      step 6 (a duplicate of the dead toggles already flagged in the Settings
+      task below). This also meant every other field this fetch spread onto
+      the store (`darkMode`, `calendarColors`, etc.) was silently dropped in
+      favor of hardcoded defaults on first paint — e.g. saved dark-mode
+      preference was being ignored and re-detected from system preference on
+      every reload, until some other component's fetch happened to overwrite
+      it later. Fixed by unwrapping `body.settings` before use in `App.jsx`.
+      Verified live with a real headless-Chromium (Playwright) run against
+      the dev server: before the fix, the wizard opened on load and blocked
+      all tab navigation; after the fix, the app opens straight to the last
+      active tab, and a News-tab check confirmed all 30 Ynet headline images
+      load successfully (HTTP 200, real natural widths) — the images were
+      never broken; the wizard overlay sitting on top of everything is what
+      the user's screenshots/described experience actually maps to. Frontend
+      build clean.
+- [x] **News: full-article extraction rewritten to be structural and noise-
+      free — fixes both "photographer/comments/writer noise" and "images not
+      shown at their position" (user-reported).** Installed `cheerio` (real
+      DOM parsing — the previous regex-based `<article>` scraping was the
+      root cause of both bugs) and rewrote `GET /api/news/:id/full` in
+      `backend/routes/news.js`:
+      1. **Noise removed at the source, not filtered after the fact.** Tries
+         the page's JSON-LD `NewsArticle.articleBody` first when present
+         (verified live on Ynet — completely clean plain text with zero
+         bylines/credits/comment-counts, since it's the same text schema.org
+         feeds to Google, not the rendered widget-laden page). Falls back to
+         DOM extraction for sites without it (verified live on now14/c14):
+         locates the article body container via class-substring matching
+         (`articleContent`/`article-content`/`entry-content`/`post-content`/
+         `<article>`, to survive hashed Next.js CSS-module class names),
+         strips known noise containers first (`[class*="comment"]`,
+         `[class*="related"]`, `[class*="byline"]`, `[class*="credit"]`,
+         `figcaption`, etc.), then drops any surviving noise lines by pattern
+         (`^צילום:`, comment-counter `^\d+\s*תגובות`, `כתבו תגובה`).
+      2. **In-article images now preserved at their real position** instead
+         of being stripped along with all other tags. The DOM-walk path
+         emits an ordered `blocks` array (`{type:'text'|'image', ...}`)
+         instead of one flattened string; `NewsPage.jsx`'s new
+         `ArticleBlocks` component renders paragraphs and inline photos
+         interleaved in original order (graceful per-image fallback on load
+         error). Filters out non-photo noise that slipped into the image
+         walk: UI icons (`.svg`, `_next/static/media` gallery-nav/maximize
+         icons) and WordPress `-150x150` thumbnail-sized images (used for
+         related-post widget cards, never real in-article photos).
+      Verified live end-to-end against real Ynet (JSON-LD path, 1 clean text
+      block) and now14 (DOM-walk path, 16 blocks — 5 real content photos
+      correctly interleaved with paragraph text, zero widget noise). Frontend
+      build clean.
 - [x] **WeatherPopup shows the configured city** — pin icon + `location`
       (+ country) row at the top of the popup, rendered only when the city
       picker has saved one.
+- [x] **News: article overlay now opens/slides in from the left** (user-
+      reported — was a bottom sheet). `ArticleOverlay` in `NewsPage.jsx`
+      changed from a `translateY(100%→0)` bottom sheet to a left-anchored
+      side panel (`translateX(-100%→0)`, `top-0 left-0 h-full w-[92%]
+      max-w-[640px]`, `rounded-e-3xl`). Deliberately uses literal `left-0`
+      rather than the logical `start-0` so it always opens from the physical
+      left edge regardless of RTL, per the explicit request. Verified via
+      build.
+- [x] **News: photos now shown on headlines and full articles** (user-
+      reported — no images anywhere). `backend/routes/news.js`:
+      `parseRSSItems()` now captures a lead image per item from
+      `<enclosure type="image/*">` / `<media:content>` / `<media:thumbnail>`,
+      falling back to the first `<img>` in the description HTML; the
+      `/:id/full` route now also extracts `og:image`/`twitter:image` from the
+      article page. `NewsPage.jsx` renders these: featured-card background,
+      headline-row 64px thumbnail (`HeadlineThumb` component with graceful
+      fallback to the category glyph on load error), and the article-overlay
+      hero (prefers the full-article's `og:image` once loaded). Verified live
+      against the real Ynet/now14 feeds — images now populate for articles
+      that have them.
+- [x] **News: garbled/mojibake text + unescaped HTML entities fixed** (user-
+      reported — e.g. a literal `&#034;` instead of a quote, and byte-soup
+      like mangled Hebrew text). Root-caused two distinct bugs in
+      `backend/routes/news.js`:
+      1. `parseRSSItems()` never decoded HTML entities in `title`/
+         `description` (only the separate full-article route did). Added a
+         shared `decodeEntities()` helper (named + numeric `&#NNN;`/`&#xHH;`
+         entities) applied to both headline parsing and full-article text.
+      2. Both the headline-feed fetch and the per-article HTML fetch always
+         decoded the response body as UTF-8 via `response.text()`, mangling
+         any source actually served in a legacy charset (`windows-1255`/
+         `ISO-8859-8`, still common on Israeli sites). Added
+         `fetchDecodedText()`: reads the raw `ArrayBuffer`, detects the real
+         charset from the `Content-Type` header (falling back to sniffing
+         `<meta charset>`/`<?xml encoding?>` in the first 2KB), and decodes
+         with the correct `TextDecoder` (confirmed Node's built-in
+         `TextDecoder` supports `windows-1255`/`iso-8859-8` natively — no new
+         dependency needed). Verified live: headlines now render clean Hebrew
+         with real punctuation, no byte-soup.
 - [x] **News section redesign** (the "Requested" item) — `NewsPage.jsx`
       reworked to the design-system rules deliberately: featured article is a
       full-width hero (340px, `rounded-3xl`, category-driven pastel gradient +
