@@ -224,7 +224,7 @@ function EventDetailPopup({ event, onClose, anchorRect }) {
       style={{ backgroundColor: visible ? 'rgba(0,0,0,0.25)' : 'transparent', transition: 'background-color 200ms' }}>
       <div
         ref={popupRef}
-        className="bg-surf rounded-2xl shadow-xl border border-bd w-[380px] max-h-[520px] overflow-y-auto"
+        className="bg-surf rounded-2xl shadow-popover border border-bd w-[380px] max-h-[520px] overflow-y-auto"
         style={{
           transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(12px)',
           opacity: visible ? 1 : 0,
@@ -362,7 +362,7 @@ function AllDayPill({ event, span = 1, startCol, onTap }) {
         e.stopPropagation();
         onTap(event, e.currentTarget.getBoundingClientRect());
       }}
-      className="rounded-lg px-3 py-1.5 text-xs font-medium truncate cursor-pointer
+      className="rounded-full px-3 py-1.5 text-xs font-medium truncate cursor-pointer
                  hover:brightness-95 active:scale-[0.98] transition-transform duration-[var(--dur-fast)]"
       style={{
         direction: 'rtl',

@@ -205,7 +205,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   return (
     <div
       ref={popupRef}
-      className="bg-surf border border-bd rounded-2xl shadow-2xl w-[320px] max-h-[460px] flex flex-col
+      className="bg-surf border border-bd rounded-2xl shadow-popover w-[320px] max-h-[460px] flex flex-col
                  overflow-hidden animate-popup-in"
       style={style}
       dir="rtl"
@@ -225,7 +225,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
           onClick={onClose}
           aria-label={t.common.close}
           className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
-                     hover:bg-s2 transition-colors active:scale-90"
+                     hover:bg-s2 transition-colors active:scale-95"
         >
           <CloseIcon className="w-4 h-4" />
         </button>

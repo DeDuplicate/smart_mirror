@@ -156,7 +156,7 @@ function AlbumArt({ src, size = 400 }) {
   if (src) {
     return (
       <div
-        className="rounded-3xl overflow-hidden shadow-lg"
+        className="rounded-3xl overflow-hidden shadow-raised"
         style={{ width: size, height: size }}
       >
         <img
@@ -172,7 +172,7 @@ function AlbumArt({ src, size = 400 }) {
   // Gradient fallback
   return (
     <div
-      className="rounded-3xl overflow-hidden shadow-lg flex items-center justify-center"
+      className="rounded-3xl overflow-hidden shadow-raised flex items-center justify-center"
       style={{
         width: size,
         height: size,
@@ -267,7 +267,7 @@ function QueueItem({ track, isCurrent, onTap }) {
                   ${isCurrent ? 'border-r-[3px] border-r-acc bg-s2/60' : ''}`}
     >
       {/* Album art thumbnail */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-s2">
+      <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-s2">
         {track.albumArt ? (
           <img src={track.albumArt} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -300,7 +300,7 @@ function QueueItem({ track, isCurrent, onTap }) {
 
 function ControlButton({ children, onClick, size = 56, active = false, primary = false, label }) {
   const bgClass = primary
-    ? 'bg-acc text-white shadow-md hover:bg-acc/90'
+    ? 'bg-acc text-white shadow-raised hover:bg-acc/90'
     : active
       ? 'bg-s2 text-acc'
       : 'bg-s2 text-ts hover:text-tp';
@@ -310,7 +310,7 @@ function ControlButton({ children, onClick, size = 56, active = false, primary =
       onClick={onClick}
       title={label}
       className={`ripple flex items-center justify-center rounded-full
-                  active:scale-90 transition-all duration-[var(--dur-fast)] ${bgClass}`}
+                  active:scale-95 transition-all duration-[var(--dur-fast)] ${bgClass}`}
       style={{ width: size, height: size }}
     >
       {children}
@@ -528,7 +528,7 @@ export default function MusicPage() {
           border-radius: 50%;
           background: var(--acc);
           border: 3px solid white;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+          box-shadow: var(--elev-card);
           cursor: pointer;
           transition: transform 150ms ease;
         }
@@ -544,7 +544,7 @@ export default function MusicPage() {
           border-radius: 50%;
           background: var(--acc);
           border: 3px solid white;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+          box-shadow: var(--elev-card);
           cursor: pointer;
         }
         .music-volume-slider::-moz-range-track {

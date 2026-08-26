@@ -203,7 +203,7 @@ export default function WifiPopup({ visible, onClose, anchorRef }) {
       <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-surf border-t border-l border-bd rotate-45 rounded-sm" />
 
       {/* Card */}
-      <div className="bg-surf border border-bd rounded-2xl shadow-xl min-w-[320px] max-w-[380px] max-h-[480px] flex flex-col relative overflow-hidden">
+      <div className="bg-surf border border-bd rounded-2xl shadow-popover min-w-[320px] max-w-[380px] max-h-[480px] flex flex-col relative overflow-hidden">
 
         {/* ── Header with refresh ── */}
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
@@ -211,7 +211,7 @@ export default function WifiPopup({ visible, onClose, anchorRef }) {
           <button
             onClick={() => scan()}
             disabled={scanning}
-            className="p-2 rounded-lg hover:bg-s2 active:scale-95 transition-all
+            className="p-2 rounded-xl hover:bg-s2 active:scale-95 transition-all
                        duration-[var(--dur-fast)] text-ts hover:text-tp disabled:opacity-50"
             aria-label={t.wifi.scan || 'Scan'}
           >
@@ -308,7 +308,7 @@ export default function WifiPopup({ visible, onClose, anchorRef }) {
                               }
                             }}
                             autoFocus
-                            className="flex-1 bg-s2 border border-bd rounded-lg px-3 py-2 text-sm
+                            className="flex-1 bg-s2 border border-bd rounded-xl px-3 py-2 text-sm
                                        text-tp placeholder:text-tm focus:outline-none focus:border-acc
                                        transition-colors duration-[var(--dur-fast)]"
                             dir="ltr"
@@ -316,7 +316,7 @@ export default function WifiPopup({ visible, onClose, anchorRef }) {
                           <button
                             onClick={() => handleConnect(network.ssid)}
                             disabled={!password || connecting}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl
                                        bg-acc text-white text-sm font-medium
                                        hover:bg-acc/90 active:scale-95 transition-all
                                        duration-[var(--dur-fast)] disabled:opacity-50
@@ -346,14 +346,14 @@ export default function WifiPopup({ visible, onClose, anchorRef }) {
                           <div className="flex gap-2">
                             <button
                               onClick={() => setForgetConfirm(null)}
-                              className="px-2.5 py-1 text-xs rounded-lg bg-s2 text-ts
+                              className="px-2.5 py-1 text-xs rounded-full bg-s2 text-ts
                                          hover:bg-bd transition-colors"
                             >
                               {t.common.cancel}
                             </button>
                             <button
                               onClick={() => handleForget(network.ssid)}
-                              className="px-2.5 py-1 text-xs rounded-lg bg-coral/30 text-coral-d
+                              className="px-2.5 py-1 text-xs rounded-full bg-coral/30 text-coral-d
                                          hover:bg-coral/50 transition-colors"
                             >
                               {t.wifi.forgetNetwork}
@@ -371,7 +371,7 @@ export default function WifiPopup({ visible, onClose, anchorRef }) {
         {/* ── Error display ── */}
         {error && (
           <div className="px-4 pb-3">
-            <p className="text-xs text-coral-d bg-coral/10 rounded-lg px-3 py-2">
+            <p className="text-xs text-coral-d bg-coral/10 rounded-xl px-3 py-2">
               {error.message || t.wifi.scanFailed}
             </p>
           </div>

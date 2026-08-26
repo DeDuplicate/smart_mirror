@@ -5,7 +5,7 @@ import t from '../i18n/he.json';
 
 function SnowflakeIcon({ className = 'w-5 h-5' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <line x1="12" y1="2" x2="12" y2="22" />
       <path d="M20 12H4" />
@@ -21,7 +21,7 @@ function SnowflakeIcon({ className = 'w-5 h-5' }) {
 
 function FlameIcon({ className = 'w-5 h-5' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 22c4-3.5 7-7.5 7-11a7 7 0 0 0-14 0c0 3.5 3 7.5 7 11z" />
       <path d="M12 22c-1.5-1.3-2.5-3-2.5-5a2.5 2.5 0 0 1 5 0c0 2-1 3.7-2.5 5z" />
@@ -187,7 +187,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div
         ref={popupRef}
-        className="bg-surf border border-bd rounded-2xl shadow-2xl w-[420px] max-h-[90vh] overflow-hidden
+        className="bg-surf border border-bd rounded-2xl shadow-modal w-[420px] max-h-[90vh] overflow-hidden
                    animate-popup-in"
         dir="rtl"
       >
@@ -200,8 +200,8 @@ export default function ACControlPopup({ visible, onClose, callService }) {
           <button
             onClick={onClose}
             aria-label={t.common.close}
-            className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
-                       hover:bg-s2 transition-colors active:scale-90"
+            className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm hover:bg-s2
+                       transition-colors active:scale-95"
           >
             <CloseIcon className="w-4 h-4" />
           </button>
@@ -251,7 +251,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                 className={`shrink-0 w-11 h-11 rounded-xl text-sm font-bold
                   transition-all duration-[var(--dur-fast)] active:scale-95
                   ${temp === t_val
-                    ? 'bg-acc2 text-white shadow-sm'
+                    ? 'bg-acc2 text-white shadow-card'
                     : 'bg-s2 text-ts hover:bg-bd'
                   }
                   disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -276,7 +276,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium
                     transition-all duration-[var(--dur-fast)] active:scale-95
                     ${mode === m.key
-                      ? 'bg-acc2 text-white shadow-sm'
+                      ? 'bg-acc2 text-white shadow-card'
                       : 'bg-s2 text-ts hover:bg-bd'
                     }
                     disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -301,7 +301,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium
                   transition-all duration-[var(--dur-fast)] active:scale-95
                   ${speed === s.key
-                    ? 'bg-acc text-white shadow-sm'
+                    ? 'bg-acc text-white shadow-card'
                     : 'bg-s2 text-ts hover:bg-bd'
                   }
                   disabled:opacity-40 disabled:cursor-not-allowed`}

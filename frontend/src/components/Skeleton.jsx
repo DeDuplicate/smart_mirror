@@ -29,7 +29,7 @@ export function CalendarSkeleton() {
         <SkeletonBlock width="120px" height="32px" borderRadius="8px" />
         <SkeletonBlock width="40px" height="40px" borderRadius="12px" />
         <div className="flex-1" />
-        <SkeletonBlock width="80px" height="36px" borderRadius="10px" />
+        <SkeletonBlock width="80px" height="36px" borderRadius="12px" />
       </div>
 
       {/* 5-column grid with 3 event blocks each */}
@@ -112,7 +112,7 @@ export function HomeSkeleton() {
             key={i}
             width="100%"
             height="100%"
-            borderRadius="20px"
+            borderRadius="16px"
           />
         ))}
       </div>
@@ -123,7 +123,7 @@ export function HomeSkeleton() {
             key={i}
             width="100%"
             height="56px"
-            borderRadius="14px"
+            borderRadius="12px"
           />
         ))}
       </div>
@@ -175,7 +175,7 @@ export function NewsSkeleton() {
   return (
     <div className="flex flex-col h-full p-6 gap-5">
       {/* Featured headline */}
-      <SkeletonBlock width="100%" height="220px" borderRadius="20px" />
+      <SkeletonBlock width="100%" height="220px" borderRadius="16px" />
       {/* 2x2 news cards */}
       <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (

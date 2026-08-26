@@ -44,10 +44,13 @@ _(source: design-polish agent, Apple HIG-inspired pass — not implemented, need
 
 - [ ] Icon stroke-weight is inconsistent across "families": HomePage device icons
       use `strokeWidth="1.8"`, TopBar/TabBar/Chores use `2`, Chores' Plus/Check
-      use `2.5` — pick one weight per icon class
+      use `2.5` — pick one weight per icon class (rule now documented in
+      `global.css` rule 3; call sites not yet re-verified against it)
 - [ ] Border-radius scale is mixed (`rounded-lg`/`xl`/`2xl`/`3xl`) for
       conceptually similar small elements (segmented buttons, pills, chips)
-      with no documented "which radius for which element" rule
+      with no documented "which radius for which element" rule (rule now
+      documented in `global.css` rule 2 — `rounded-lg`/`-md` banned; sweep
+      remaining call sites against it as a follow-up)
 - [ ] Shared `.card` utility in `global.css` (16px radius, 1px border, 16px
       padding) is nearly vestigial — most consumers override most of its
       properties with custom Tailwind classes; either make it the real
@@ -58,13 +61,30 @@ _(source: design-polish agent, Apple HIG-inspired pass — not implemented, need
       match, the real `--mint-bg`/`--coral-bg` pastel tokens — swap to the tokens
 - [ ] Press-feedback scale varies without a rule (`active:scale-95`,
       `active:scale-[0.97]`, `active:scale-[0.98]` all used for equivalent
-      "tap" feedback) — pick one value app-wide
+      "tap" feedback) — pick one value app-wide (rule now documented in
+      `global.css` rule 1 as a two-tier scale: `-95` controls / `-[0.98]`
+      surfaces; all `-90` instances migrated, `-[0.97]` tile instances not
+      yet re-verified against the two-tier rule)
 - [ ] Shadow elevation (`shadow-sm/md/lg/xl/2xl`) isn't tied to a defined
-      elevation scale (resting/hover/popover/modal) — currently ad hoc per
-      component
+      elevation scale — DONE: see `global.css` rule 4 and the "Design-system
+      consistency pass" entry above; all call sites migrated to
+      `shadow-card/raised/popover/modal`.
 
 ## Done
 
+- [x] Design-system consistency pass — finished migrating every remaining
+      call site to the 4 rules documented in `global.css` (press-feedback
+      tiers, radius scale, icon stroke, semantic elevation): all
+      `active:scale-90` → `active:scale-95` (controls tier); all
+      `shadow-sm/md/lg/xl/2xl` → the semantic `shadow-card` (resting/knob/
+      selected-segment) / `shadow-raised` (hover-lift tiles) / `shadow-popover`
+      (anchored popups: Shopping List, WiFi, device/curtain popups) /
+      `shadow-modal` (full-backdrop dialogs: AC control, IR remote, setup
+      wizard) aliases across `ACControlPopup`, `IRRemoteOverlay`,
+      `ShoppingListPopup`, `WifiPopup`, `HomePage`, `ChoresPage`, `App.jsx`
+      (setup wizard), `Skeleton.jsx` (placeholder radii realigned to match).
+      Verified with a repo-wide grep (zero remaining non-semantic matches)
+      and a clean production build.
 - [x] Icon-only button a11y labels — added `aria-label` (and Hebrew strings
       `common.close`/`common.add` in `he.json`) to every icon-only close/add
       button flagged by the audit: `ACControlPopup.jsx` close button,

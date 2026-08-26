@@ -58,7 +58,7 @@ function RemoteButton({ label, command, entityId, size = 'md', variant = 'defaul
       onClick={handlePress}
       aria-label={ariaLabel || COMMAND_LABELS[command] || (typeof label === 'string' ? label : command)}
       className={`flex items-center justify-center rounded-xl font-medium
-                  transition-all duration-[var(--dur-fast)] active:scale-90 select-none
+                  transition-all duration-[var(--dur-fast)] active:scale-95 select-none
                   ${sizeClasses[size] || sizeClasses.md}
                   ${variantClasses[variant] || variantClasses.default}
                   ${className}`}
@@ -101,7 +101,7 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-surf border border-bd rounded-3xl shadow-2xl p-6 w-[380px] max-h-[90vh] overflow-y-auto"
+        className="bg-surf border border-bd rounded-2xl shadow-modal p-6 w-[380px] max-h-[90vh] overflow-y-auto"
         style={{ animation: 'popupIn 250ms var(--ease) forwards' }}
         dir="rtl"
       >
@@ -114,7 +114,7 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
             onClick={onClose}
             aria-label={t.common.close}
             className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
-                       hover:bg-s2 transition-colors active:scale-90"
+                       hover:bg-s2 transition-colors active:scale-95"
           >
             <CloseIcon className="w-5 h-5" />
           </button>

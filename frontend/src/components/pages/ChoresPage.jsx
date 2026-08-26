@@ -28,7 +28,7 @@ function PlusIcon({ className = 'w-5 h-5' }) {
 
 function CheckIcon({ className = 'w-5 h-5' }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <polyline points="20 6 9 17 4 12" />
     </svg>
@@ -157,7 +157,7 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
       </button>
       {/* Small camera badge */}
       {!photo && (
-        <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 rounded-full bg-[var(--acc)] flex items-center justify-center shadow-sm">
+        <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 rounded-full bg-[var(--acc)] flex items-center justify-center shadow-card">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
             <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
             <circle cx="12" cy="13" r="4"/>
@@ -267,10 +267,14 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
     [onDelete, task.id]
   );
 
+  // Pastel tokens, not raw hex: --mint-bg / --coral-bg are redefined under
+  // [data-theme="dark"], so these follow the app's own theme toggle. A `dark:`
+  // variant would not — Tailwind's darkMode here is prefers-color-scheme, which
+  // tracks the OS rather than the toggle.
   const bgClass = isComplete
-    ? 'bg-[#edfaf6] dark:bg-[#1a3025]'
+    ? 'bg-[var(--mint-bg)]'
     : overdue
-      ? 'bg-[#fff0f0] dark:bg-[#3d1a1a]'
+      ? 'bg-[var(--coral-bg)]'
       : 'bg-[var(--surf)]';
 
   return (
@@ -344,9 +348,13 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
         aria-label={t.tasks.deleteChore.replace('{title}', task.title)}
         className="group flex-shrink-0 min-w-[56px] min-h-[56px] flex items-center justify-center"
       >
+        {/* No /opacity modifier on a var() colour: Tailwind cannot split a var()
+            into channels, so `bg-[var(--coral-bg)]/30` emits no rule at all. The
+            pastel token at full strength is already a soft wash, and it follows
+            data-theme the way the coral-d text beside it does. */}
         <span
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--tm)]
-                     group-hover:text-[var(--coral-d)] group-hover:bg-[var(--coral-bg)]/30
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--tm)]
+                     group-hover:text-[var(--coral-d)] group-hover:bg-[var(--coral-bg)]
                      transition-colors"
         >
           <TrashIcon />
@@ -563,7 +571,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
 
       {/* Sheet — sits above keyboard when keyboard is open */}
       <div
-        className="relative bg-[var(--surf)] rounded-t-2xl border-t border-[var(--bd)] p-5 pb-4 flex flex-col gap-4 celebration-sheet-slide-up"
+        className="relative bg-[var(--surf)] rounded-t-3xl border-t border-[var(--bd)] p-5 pb-4 flex flex-col gap-4 celebration-sheet-slide-up"
         style={{
           zIndex: 51,
           position: showKeyboard ? 'absolute' : 'relative',
@@ -619,7 +627,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
                   aria-pressed={emoji === e}
                   className={`
                     w-14 h-14 rounded-xl flex items-center justify-center text-xl
-                    transition-all duration-[var(--dur-fast)] active:scale-90
+                    transition-all duration-[var(--dur-fast)] active:scale-95
                     ${emoji === e ? 'bg-[var(--acc)]/20 ring-2 ring-[var(--acc)]' : 'hover:bg-[var(--bd)]'}
                   `}
                 >
@@ -801,7 +809,7 @@ export default function TasksPage() {
           className={`
             flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium
             border transition-all duration-[var(--dur-fast)]
-            active:scale-[0.98]
+            active:scale-95
             ${hideCompleted
               ? 'border-[var(--acc)] bg-[var(--acc)]/10 text-[var(--acc)]'
               : 'border-[var(--bd)] bg-[var(--s2)] text-[var(--ts)]'
