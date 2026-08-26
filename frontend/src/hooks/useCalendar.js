@@ -27,16 +27,78 @@ export function getWeekEnd(weekStart) {
   return d;
 }
 
+/**
+ * Get the fetch range for a month grid: the Sunday starting the week that
+ * contains the 1st of the month, through the Saturday ending the week that
+ * contains the last day — so adjacent-month spillover days are covered.
+ */
+export function getMonthGridRange(monthDate) {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const last = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+  const start = getWeekStart(first);
+  const end = getWeekEnd(getWeekStart(last));
+  return { start, end };
+}
+
+/** Group events by calendar day (YYYY-MM-DD key) for month-view rendering.
+ *  All-day events are added to every day they span (inclusive, matching the
+ *  week view's all-day row semantics); timed events go to their start day.
+ *  Each day's list is sorted: all-day first, then by start time. */
+export function groupEventsByDay(events) {
+  const map = new Map();
+  const push = (date, ev) => {
+    const key = toLocalDateKey(date);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(ev);
+  };
+
+  for (const ev of events) {
+    if (ev.allDay) {
+      const s = new Date(ev.start + 'T00:00:00');
+      const e = new Date(ev.end + 'T00:00:00');
+      if (e < s) {
+        push(s, ev);
+        continue;
+      }
+      for (const d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+        push(d, ev);
+      }
+    } else {
+      push(new Date(ev.start), ev);
+    }
+  }
+
+  for (const list of map.values()) {
+    list.sort((a, b) => {
+      if (!!a.allDay !== !!b.allDay) return a.allDay ? -1 : 1;
+      const at = a.allDay ? new Date(a.start + 'T00:00:00') : new Date(a.start);
+      const bt = b.allDay ? new Date(b.start + 'T00:00:00') : new Date(b.start);
+      return at - bt;
+    });
+  }
+
+  return map;
+}
+
 /** Format date as YYYY-MM-DD for API queries. */
 function toISODate(date) {
   return date.toISOString().split('T')[0];
+}
+
+/** Local-timezone YYYY-MM-DD key (toISODate shifts via UTC — wrong for
+ *  day-grouping keys around midnight in UTC+ timezones). */
+export function toLocalDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
-export default function useCalendar(weekStart) {
+export default function useCalendar(rangeStart, rangeEnd) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -53,7 +115,7 @@ export default function useCalendar(weekStart) {
   const requestIdRef = useRef(0);
 
   const fetchEvents = useCallback(async () => {
-    if (!weekStart) return;
+    if (!rangeStart || !rangeEnd) return;
 
     // Cancel any previous in-flight fetch — its result is now stale.
     if (abortControllerRef.current) {
@@ -63,8 +125,8 @@ export default function useCalendar(weekStart) {
     abortControllerRef.current = controller;
     const requestId = ++requestIdRef.current;
 
-    const start = toISODate(weekStart);
-    const end = toISODate(getWeekEnd(weekStart));
+    const start = toISODate(rangeStart);
+    const end = toISODate(rangeEnd);
 
     let googleEvents = [];
     let icsEvents = [];
@@ -132,9 +194,10 @@ export default function useCalendar(weekStart) {
     }
 
     setLoading(false);
-  }, [weekStart]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeStart?.getTime(), rangeEnd?.getTime()]);
 
-  // Initial fetch + refresh on weekStart change
+  // Initial fetch + refresh on range change
   useEffect(() => {
     setLoading(true);
     fetchEvents();

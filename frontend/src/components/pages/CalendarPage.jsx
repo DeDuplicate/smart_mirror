@@ -4,10 +4,14 @@ import useStore from '../../store/index.js';
 import useCalendar, {
   getWeekStart,
   getWeekEnd,
+  getMonthGridRange,
+  groupEventsByDay,
+  toLocalDateKey,
   CALENDAR_COLORS,
 } from '../../hooks/useCalendar.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
-import { CalendarSkeleton } from '../Skeleton.jsx';
+import { CalendarSkeleton, MonthGridSkeleton } from '../Skeleton.jsx';
+import MonthGrid from '../MonthGrid.jsx';
 import ConnectionBanner from '../ConnectionBanner.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -409,6 +413,8 @@ function UpcomingCard({ event, onTap }) {
 
 // ─── CalendarPage ───────────────────────────────────────────────────────────
 
+const VIEW_STORAGE_KEY = 'calendar_view';
+
 export default function CalendarPage() {
   const showWeekend = useStore((s) => s.settings.showWeekend);
   const googleStatus = useStore((s) => s.connections.google);
@@ -418,8 +424,54 @@ export default function CalendarPage() {
   const [slideDir, setSlideDir] = useState(null); // 'left' | 'right' | null
   const [animating, setAnimating] = useState(false);
 
-  // ── Data ──
-  const { events, loading, refetch } = useCalendar(currentWeekStart);
+  // ── Month navigation state ──
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+
+  // ── View toggle (week / month), persisted like other UI prefs ──
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem(VIEW_STORAGE_KEY) === 'month' ? 'month' : 'week';
+    } catch {
+      return 'week';
+    }
+  });
+  const switchView = useCallback((next) => {
+    setView(next);
+    if (next === 'month') {
+      // Select today if it's in the displayed month, else the 1st.
+      setSelectedDate((prev) => {
+        const inMonth =
+          prev.getFullYear() === currentMonth.getFullYear() &&
+          prev.getMonth() === currentMonth.getMonth();
+        if (inMonth) return prev;
+        const now = new Date();
+        return now.getFullYear() === currentMonth.getFullYear() &&
+          now.getMonth() === currentMonth.getMonth()
+          ? now
+          : new Date(currentMonth);
+      });
+    }
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // localStorage full — silently ignore
+    }
+  }, [currentMonth]);
+
+  // ── Data: fetch range covers the visible view (month range includes
+  //    adjacent-month spillover days) ──
+  const fetchRange = useMemo(
+    () =>
+      view === 'month'
+        ? getMonthGridRange(currentMonth)
+        : { start: currentWeekStart, end: getWeekEnd(currentWeekStart) },
+    [view, currentMonth, currentWeekStart]
+  );
+  const { events, loading, refetch } = useCalendar(fetchRange.start, fetchRange.end);
 
   // ── Pull to refresh ──
   const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
@@ -437,37 +489,63 @@ export default function CalendarPage() {
   const dayNames = showWeekend ? ALL_DAYS : WORK_DAYS;
 
   // ── Navigation ──
-  const goNextWeek = useCallback(() => {
+  const goNext = useCallback(() => {
     if (animating) return;
     setSlideDir('left');
     setAnimating(true);
     setTimeout(() => {
-      setCurrentWeekStart((prev) => {
-        const next = new Date(prev);
-        next.setDate(next.getDate() + 7);
-        return next;
-      });
+      if (view === 'month') {
+        const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+        setCurrentMonth(next);
+        setSelectedDate(new Date(next));
+      } else {
+        setCurrentWeekStart((prev) => {
+          const next = new Date(prev);
+          next.setDate(next.getDate() + 7);
+          return next;
+        });
+      }
       setSlideDir(null);
       setAnimating(false);
     }, 250);
-  }, [animating]);
+  }, [animating, view, currentMonth]);
 
-  const goPrevWeek = useCallback(() => {
+  const goPrev = useCallback(() => {
     if (animating) return;
     setSlideDir('right');
     setAnimating(true);
     setTimeout(() => {
-      setCurrentWeekStart((prev) => {
-        const next = new Date(prev);
-        next.setDate(next.getDate() - 7);
-        return next;
-      });
+      if (view === 'month') {
+        const prev = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+        setCurrentMonth(prev);
+        setSelectedDate(new Date(prev));
+      } else {
+        setCurrentWeekStart((prev) => {
+          const next = new Date(prev);
+          next.setDate(next.getDate() - 7);
+          return next;
+        });
+      }
       setSlideDir(null);
       setAnimating(false);
     }, 250);
-  }, [animating]);
+  }, [animating, view, currentMonth]);
 
   const goToday = useCallback(() => {
+    if (view === 'month') {
+      const now = new Date();
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      setSelectedDate(now);
+      if (thisMonth.getTime() === currentMonth.getTime()) return;
+      setSlideDir(thisMonth > currentMonth ? 'left' : 'right');
+      setAnimating(true);
+      setTimeout(() => {
+        setCurrentMonth(thisMonth);
+        setSlideDir(null);
+        setAnimating(false);
+      }, 250);
+      return;
+    }
     const todayWeek = getWeekStart(new Date());
     if (todayWeek.getTime() === currentWeekStart.getTime()) return;
     setSlideDir(todayWeek > currentWeekStart ? 'left' : 'right');
@@ -477,7 +555,7 @@ export default function CalendarPage() {
       setSlideDir(null);
       setAnimating(false);
     }, 250);
-  }, [currentWeekStart]);
+  }, [currentWeekStart, currentMonth, view]);
 
   // ── Swipe detection for week navigation ──
   const calTouchRef = useRef({ startX: 0, startY: 0 });
@@ -496,11 +574,11 @@ export default function CalendarPage() {
     if (Math.abs(dx) < 50 || dy > 30) return;
 
     if (dx < 0) {
-      goNextWeek();
+      goNext();
     } else {
-      goPrevWeek();
+      goPrev();
     }
-  }, [goNextWeek, goPrevWeek]);
+  }, [goNext, goPrev]);
 
   // ── Categorize events ──
   const { timedByDay, allDayEvents, multiDayEvents, upcoming } = useMemo(() => {
@@ -567,8 +645,27 @@ export default function CalendarPage() {
     setSelectedEvent(event);
   }
 
+  // ── Month view: events grouped by day + selected day's agenda ──
+  const eventsByDay = useMemo(
+    () => (view === 'month' ? groupEventsByDay(events) : null),
+    [view, events]
+  );
+
+  const selectedDayEvents = useMemo(() => {
+    if (view !== 'month' || !selectedDate) return [];
+    return eventsByDay?.get(toLocalDateKey(selectedDate)) || [];
+  }, [view, eventsByDay, selectedDate]);
+
+  const selectedDayLabel = useMemo(() => {
+    if (!selectedDate) return '';
+    return `${t.topBar.daysLong[selectedDate.getDay()]}, ${selectedDate.getDate()} ${t.topBar.months[selectedDate.getMonth()]}`;
+  }, [selectedDate]);
+
   // ── Month/year label ──
   const monthYearLabel = useMemo(() => {
+    if (view === 'month') {
+      return `${t.topBar.months[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
+    }
     // If the week spans two months, show both
     const first = dayColumns[0];
     const last = dayColumns[dayColumns.length - 1];
@@ -580,7 +677,7 @@ export default function CalendarPage() {
       return `${t.topBar.months[m1]} ${y}`;
     }
     return `${t.topBar.months[m1]} — ${t.topBar.months[m2]} ${y}`;
-  }, [dayColumns]);
+  }, [dayColumns, view, currentMonth]);
 
   // ── Hour labels ──
   const hourLabels = useMemo(() => {
@@ -631,7 +728,7 @@ export default function CalendarPage() {
   }, [allDayEvents, multiDayEvents, colCount, currentWeekStart]);
 
   // ── Loading state ──
-  if (loading) return <CalendarSkeleton />;
+  if (loading) return view === 'month' ? <MonthGridSkeleton /> : <CalendarSkeleton />;
 
   // ── Slide animation class ──
   const slideClass = slideDir === 'left'
@@ -651,13 +748,13 @@ export default function CalendarPage() {
         />
       )}
 
-      {/* ── Week Navigation Bar ── */}
+      {/* ── Navigation Bar ── */}
       <div className="flex items-center gap-3 px-6 py-3 shrink-0 border-b border-bd bg-surf">
         <button
-          onClick={goNextWeek}
+          onClick={goNext}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
                      text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
-          aria-label={t.calendar.nextWeek}
+          aria-label={view === 'month' ? t.calendar.nextMonth : t.calendar.nextWeek}
         >
           <ChevronRight />
         </button>
@@ -667,15 +764,35 @@ export default function CalendarPage() {
         </span>
 
         <button
-          onClick={goPrevWeek}
+          onClick={goPrev}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
                      text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
-          aria-label={t.calendar.prevWeek}
+          aria-label={view === 'month' ? t.calendar.prevMonth : t.calendar.prevWeek}
         >
           <ChevronLeft />
         </button>
 
         <div className="flex-1" />
+
+        {/* ── View toggle (segmented control) ── */}
+        <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
+          {[
+            { value: 'week', label: t.calendar.weekView },
+            { value: 'month', label: t.calendar.monthView },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => switchView(opt.value)}
+              className={`px-5 min-h-[56px] rounded-xl text-sm font-medium transition-all
+                          duration-[var(--dur-fast)] active:scale-95
+                          ${view === opt.value
+                            ? 'bg-acc text-white shadow-card'
+                            : 'text-ts hover:text-tp'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
 
         <button
           onClick={goToday}
@@ -688,7 +805,8 @@ export default function CalendarPage() {
 
       {/* ── Main Content ── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Day Column Grid ── */}
+        {/* ── Day Column Grid (week view) ── */}
+        {view === 'week' && (
         <div
           className="flex-1 flex flex-col overflow-hidden"
           onTouchStart={handleCalTouchStart}
@@ -890,15 +1008,67 @@ export default function CalendarPage() {
             </div>
           </div>
         </div>
+        )}
 
-        {/* ── Upcoming Sidebar ── */}
+        {/* ── Month Grid (month view) ── */}
+        {view === 'month' && (
+          <div
+            className="flex-1 flex flex-col overflow-hidden"
+            onTouchStart={handleCalTouchStart}
+            onTouchEnd={handleCalTouchEnd}
+            {...pullBind}
+            style={{
+              opacity: slideDir ? 0.4 : 1,
+              transform: slideDir === 'left' ? 'translateX(-20px)' : slideDir === 'right' ? 'translateX(20px)' : 'translateX(0)',
+              transition: 'opacity var(--dur-normal) var(--ease), transform var(--dur-normal) var(--ease)',
+            }}
+          >
+            {/* Pull-to-refresh indicator */}
+            {isPulling && (
+              <div
+                className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)] bg-surf"
+                style={{ height: `${pullDistance}px` }}
+              >
+                <div
+                  className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+                    ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+                />
+              </div>
+            )}
+
+            <MonthGrid
+              monthDate={currentMonth}
+              events={events}
+              selectedDate={selectedDate}
+              onSelectDay={setSelectedDate}
+              onEventTap={handleEventTap}
+            />
+          </div>
+        )}
+
+        {/* ── Sidebar: upcoming (week) / selected-day agenda (month) ── */}
         <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-bd shrink-0">
-            <h2 className="text-sm font-semibold text-tp">{t.calendar.upcoming}</h2>
+            <h2 className="text-sm font-semibold text-tp">
+              {view === 'month' ? selectedDayLabel : t.calendar.upcoming}
+            </h2>
           </div>
 
           <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
-            {upcoming.length > 0 ? (
+            {view === 'month' ? (
+              selectedDayEvents.length > 0 ? (
+                selectedDayEvents.map((ev) => (
+                  <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} />
+                ))
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center px-4">
+                  <div className="w-full border-2 border-dashed border-bd rounded-2xl
+                                  flex items-center justify-center py-10">
+                    <span className="text-sm text-tm">{t.calendar.noEventsThisDay}</span>
+                  </div>
+                </div>
+              )
+            ) : upcoming.length > 0 ? (
               upcoming.map((ev) => (
                 <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} />
               ))

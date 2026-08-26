@@ -136,7 +136,12 @@
     "calendar": "יומן",
     "attendees": "משתתפים",
     "close": "סגור",
-    "moreEvents": "עוד"
+    "moreEvents": "עוד",
+    "weekView": "שבוע",
+    "monthView": "חודש",
+    "nextMonth": "חודש הבא",
+    "prevMonth": "חודש קודם",
+    "noEventsThisDay": "אין אירועים ביום זה"
   },
   "tasks": {
     "todo": "לביצוע",
@@ -378,6 +383,13 @@
     "testConnection": "בדוק חיבור",
     "disconnectSpotify": "נתק ספוטיפיי",
     "connectedAs": "מחובר כ",
+    "spotifyClientId": "Spotify Client ID",
+    "spotifyClientSecret": "Spotify Client Secret",
+    "spotifyRedirectUri": "כתובת Redirect URI",
+    "spotifySetupHint": "צרו אפליקציה ב-developer.spotify.com, הדביקו את ה-Redirect URI ברשימת הכתובות המאושרות, ואז הזינו כאן את ה-Client ID וה-Secret.",
+    "spotifyCopyRedirect": "העתק כתובת",
+    "spotifyRedirectCopied": "הכתובת הועתקה",
+    "spotifySaveFirst": "שמרו תחילה את ה-Client ID וה-Secret, ואז לחצו על חיבור",
     "sourceYnet": "ynet",
     "sourceNow14": "ערוץ 14",
     "columnNames": "שמות עמודות",
