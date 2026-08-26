@@ -104,7 +104,12 @@ export default function useTasks() {
         await new Promise((r) => setTimeout(r, 800));
         setPeople(MOCK_PEOPLE.map((p) => ({ ...p, tasks: [...p.tasks] })));
       } else {
-        const data = await apiFetch('/api/tasks/people');
+        // Sync configured people to backend so it knows about them
+        const configured = getConfiguredPeople();
+        const syncParam = encodeURIComponent(JSON.stringify(configured.map(p => ({
+          id: p.id, name: p.name, color: p.color,
+        }))));
+        const data = await apiFetch(`/api/tasks/people?sync=${syncParam}`);
         setPeople(data);
       }
       setError(null);
