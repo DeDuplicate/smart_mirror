@@ -203,20 +203,68 @@ export function MusicSkeleton() {
 // ─── News Skeleton ──────────────────────────────────────────────────────────
 
 export function NewsSkeleton() {
+  // Mirrors the front-page layout exactly — lead, two seconds, timeline rail —
+  // so nothing shifts position when the articles arrive.
   return (
-    <div className="flex flex-col h-full p-6 gap-5">
-      {/* Featured headline */}
-      <SkeletonBlock width="100%" height="220px" borderRadius="16px" />
-      {/* 2x2 news cards */}
-      <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <SkeletonBlock
-            key={i}
-            width="100%"
-            height="100%"
-            borderRadius="16px"
-          />
-        ))}
+    <div className="flex h-full p-6 gap-6">
+      {/* Front page */}
+      <div className="flex-1 min-w-0 flex flex-col gap-6">
+        {/* Lead: banner plate over a wide headline */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-2xl bg-surf border border-bd">
+          <SkeletonBlock width="100%" height="100%" borderRadius="0" />
+          <div className="shrink-0 flex flex-col gap-3 p-7">
+            <SkeletonBlock width="110px" height="36px" borderRadius="9999px" />
+            <SkeletonBlock width="78%" height="46px" />
+            <SkeletonBlock width="52%" height="46px" />
+            <SkeletonBlock width="64%" height="31px" />
+            <SkeletonBlock width="220px" height="24px" />
+          </div>
+        </div>
+
+        {/* Two seconds: portrait plate beside the headline */}
+        <div className="h-[280px] shrink-0 flex gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex-1 min-w-0 flex overflow-hidden rounded-2xl bg-surf border border-bd"
+            >
+              <SkeletonBlock width="220px" height="100%" borderRadius="0" />
+              <div className="flex-1 flex flex-col gap-2 p-5">
+                <SkeletonBlock width="92px" height="28px" borderRadius="9999px" />
+                <SkeletonBlock width="100%" height="30px" />
+                <SkeletonBlock width="72%" height="30px" />
+                <div className="mt-auto">
+                  <SkeletonBlock width="60%" height="22px" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Timeline rail */}
+      <div className="w-[620px] shrink-0 flex flex-col overflow-hidden rounded-2xl bg-s2 border border-bd">
+        <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-bd">
+          <SkeletonBlock width="140px" height="28px" />
+          <SkeletonBlock width="38px" height="28px" borderRadius="9999px" />
+          <div className="flex-1" />
+          <SkeletonBlock width="56px" height="56px" borderRadius="50%" />
+        </div>
+        <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="shrink-0 flex items-center gap-4 min-h-[92px] p-3 rounded-xl bg-surf border border-bd"
+            >
+              <SkeletonBlock width="62px" height="24px" />
+              <SkeletonBlock width="12px" height="12px" borderRadius="50%" />
+              <div className="flex-1 flex flex-col gap-2">
+                <SkeletonBlock width="100%" height="26px" />
+                <SkeletonBlock width="42%" height="20px" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

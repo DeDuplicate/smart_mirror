@@ -5,9 +5,29 @@ import ConnectionBanner from '../ConnectionBanner.jsx';
 import useNews from '../../hooks/useNews.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 
+// ─── Reading model ──────────────────────────────────────────────────────────
+// This screen is a 1920x1080 wall panel read from 2-4 m away, operated by a
+// finger on an IR frame. Two consequences drive every size below:
+//
+//  1. TYPE IS DISTANCE-CALIBRATED. The HIG's 17pt body default describes a
+//     handheld at ~30 cm. At ~2.5 m the same angular size needs roughly 3x,
+//     so body copy in the reading view is 22px/1.8 and the smallest text on
+//     the page is 15px — never the 11-12px of a phone UI.
+//  2. IMAGES ONLY WHERE THEY RESOLVE. A 64px thumbnail is a smudge at 2.5 m,
+//     so photography is concentrated in the lead and second stories, where it
+//     is 200-1800px wide, and the rail is purely typographic. (Design
+//     Guideline — Images: scale artwork so important visual content remains
+//     visible.)
+//
+// Text never sits on top of a photograph here. Headlines live on opaque
+// surfaces, so contrast is a known quantity instead of a property of whatever
+// the newsroom published today. (Design Guideline — Color > Inclusive color:
+// "insufficient contrast can cause icons and text to blend with the
+// background and make content hard to read.")
+
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
-function RefreshIcon({ className = 'w-5 h-5' }) {
+function RefreshIcon({ className = 'w-6 h-6' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -18,6 +38,28 @@ function RefreshIcon({ className = 'w-5 h-5' }) {
   );
 }
 
+function CloseIcon({ className = 'w-7 h-7' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function AlertIcon({ className = 'w-6 h-6' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <line x1="12" y1="7.5" x2="12" y2="13" />
+      <line x1="12" y1="16.5" x2="12" y2="16.5" />
+    </svg>
+  );
+}
+
+// 120x120 illustration — not an interface icon, so it sets its own stroke.
 function NewspaperIcon({ className = 'w-28 h-28' }) {
   return (
     <svg viewBox="0 0 120 120" fill="none" className={className}>
@@ -32,65 +74,46 @@ function NewspaperIcon({ className = 'w-28 h-28' }) {
   );
 }
 
-function CloseIcon({ className = 'w-5 h-5' }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
+// ─── Category tokens ────────────────────────────────────────────────────────
+// Pastel plate + `text-tp` label. The pastel-d foreground on pastel-bg pairing
+// this replaces measured 2.6:1-4.0:1, below the 4.5:1 floor; `text-tp` on the
+// same plates measures 11.3:1-13.5:1 light and 9.8:1-12.7:1 dark. Theme-aware
+// Tailwind utilities, so no inline var() and no hex anywhere on this screen.
 
-function ChevronLeftIcon({ className = 'w-5 h-5' }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
-
-function NewspaperGlyph({ className = 'w-7 h-7' }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
-      <path d="M18 14h-8" />
-      <path d="M15 18h-5" />
-      <path d="M10 6h8v4h-8V6Z" />
-    </svg>
-  );
-}
-
-// ─── Category Styles ────────────────────────────────────────────────────────
-// Pastel token pairs from the design system (see global.css), mapped by
-// category and applied via inline var() so both light and dark themes resolve.
-
-const CATEGORY_STYLES = {
-  news:          { bg: 'var(--coral-bg)', fg: 'var(--coral-d)' },
-  sport:         { bg: 'var(--mint-bg)',  fg: 'var(--mint-d)' },
-  tech:          { bg: 'var(--lav-bg)',   fg: 'var(--lav-d)' },
-  finance:       { bg: 'var(--gold-bg)',  fg: 'var(--gold-d)' },
-  entertainment: { bg: 'var(--lav-bg)',   fg: 'var(--lav-d)' },
+const CATEGORY_PLATE = {
+  news: 'bg-coral',
+  sport: 'bg-mint',
+  tech: 'bg-lav',
+  finance: 'bg-gold',
+  entertainment: 'bg-lav',
 };
 
-function getCategoryStyle(category) {
-  return CATEGORY_STYLES[category] || CATEGORY_STYLES.news;
+function categoryPlate(category) {
+  return CATEGORY_PLATE[category] || CATEGORY_PLATE.news;
 }
 
-function getCategoryLabel(category) {
+function categoryLabel(category) {
   return t.news.categories[category] || t.news.categories.news;
 }
 
-// Hero gradient per category — pastel-d into pastel-bg. A dark scrim is
-// layered on top at render time so white text stays legible in both themes.
-function categoryGradient(category) {
-  const { bg, fg } = getCategoryStyle(category);
-  return { background: `linear-gradient(135deg, ${fg} 0%, ${bg} 100%)` };
+// ─── Time formatting ────────────────────────────────────────────────────────
+// The rail is a departures board: same-day stories get a clock reading, older
+// ones a day.month stamp. Built by hand rather than via Intl so the Pi renders
+// identical glyph widths regardless of installed locale data.
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
 }
 
-// ─── Relative Time ──────────────────────────────────────────────────────────
+function formatStamp(isoDate) {
+  if (!isoDate) return '—';
+  const then = new Date(isoDate);
+  if (Number.isNaN(then.getTime())) return '—';
+  if (Date.now() - then.getTime() < 86400000) {
+    return `${pad2(then.getHours())}:${pad2(then.getMinutes())}`;
+  }
+  return `${pad2(then.getDate())}.${pad2(then.getMonth() + 1)}`;
+}
 
 function formatRelativeTime(isoDate) {
   if (!isoDate) return t.news.justNow;
@@ -110,67 +133,250 @@ function formatRelativeTime(isoDate) {
   return t.news.relativeTime.daysAgo.replace('{n}', diffDays);
 }
 
-// ─── Category Badge ─────────────────────────────────────────────────────────
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
 
-function CategoryBadge({ category, size = 'sm' }) {
-  const { bg, fg } = getCategoryStyle(category);
-  const sizeClass = size === 'lg'
-    ? 'px-3 py-1 text-xs font-semibold'
-    : 'px-2.5 py-0.5 text-[11px] font-medium';
+// ─── Shared bits ────────────────────────────────────────────────────────────
 
+function CategoryChip({ category, size = 'sm' }) {
+  const sizeClass = size === 'lg' ? 'h-9 px-4 text-[17px]' : 'h-7 px-3 text-[14px]';
   return (
     <span
-      className={`inline-block self-start rounded-full ${sizeClass}`}
-      style={{ backgroundColor: bg, color: fg }}
+      className={`inline-flex items-center shrink-0 rounded-full font-semibold text-tp
+                  ${categoryPlate(category)} ${sizeClass}`}
     >
-      {getCategoryLabel(category)}
+      {categoryLabel(category)}
     </span>
   );
 }
 
-// ─── Article Blocks ─────────────────────────────────────────────────────────
-// Renders the article body as an ordered sequence of text/image blocks so
-// in-article photos appear at their original position, not just as a single
-// title image (per explicit user request). Falls back to a flat text blob
-// for sources where structural extraction wasn't available (e.g. mock data).
+// A hairline standing in for the "·" that used to separate metadata. The old
+// separator was `text-tm` — 2.05:1 on white, illegible at 2.5 m — and a rule
+// is what a separator actually is. (Design Guideline — Layout > Best
+// practices: use separator lines to separate information into distinct areas.)
+function MetaRule() {
+  return <span className="w-px h-4 shrink-0 bg-bd" aria-hidden="true" />;
+}
 
-function ArticleImageBlock({ src, caption }) {
+// Read state is carried three ways so it never depends on colour alone: a
+// filled-vs-hollow node (shape), the headline's weight, and screen-reader
+// text. (Design Guideline — Accessibility > Vision: "Offer visual indicators,
+// like distinct shapes or icons, in addition to color.")
+function ReadNode({ unread, className = 'w-3 h-3' }) {
+  return (
+    <span
+      className={`inline-block shrink-0 rounded-full ${className}
+                  ${unread ? 'bg-acc' : 'border-2 border-tm'}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+// ─── Story card (lead + seconds) ────────────────────────────────────────────
+// One component, two compositions: the lead stacks a full-bleed banner over a
+// wide headline; a second story sets a portrait plate beside its headline.
+// Both keep every word on an opaque surface.
+
+const STORY_VARIANTS = {
+  lead: {
+    shell: 'flex-col',
+    plate: 'flex-1 min-h-0 w-full',
+    plateLabel: 'text-[34px]',
+    // The body takes its natural height so the banner absorbs every spare
+    // pixel — a hero photo earns the leftover space, dead air does not.
+    body: 'shrink-0 p-7 gap-3',
+    title: 'text-[40px] leading-[1.15] line-clamp-2',
+    meta: 'text-[16px]',
+    chipSize: 'lg',
+  },
+  second: {
+    shell: 'flex-row',
+    plate: 'w-[220px] h-full shrink-0',
+    plateLabel: 'text-[20px]',
+    body: 'flex-1 p-5 gap-2',
+    title: 'text-[23px] leading-[1.3] line-clamp-3',
+    meta: 'text-[15px]',
+    chipSize: 'sm',
+  },
+};
+
+function StoryCard({ article, unread, variant, onClick }) {
+  const v = STORY_VARIANTS[variant];
+  const isLead = variant === 'lead';
+  const [imageFailed, setImageFailed] = useState(false);
+  const hasImage = Boolean(article.image) && !imageFailed;
+
+  const activate = () => onClick(article);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${isLead ? t.news.featured : t.news.openArticle}: ${article.title}`}
+      onClick={activate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate();
+        }
+      }}
+      className={`flex overflow-hidden rounded-2xl bg-surf border border-bd cursor-pointer
+                  select-none shadow-card hover:shadow-raised active:scale-[0.98]
+                  transition-all duration-[var(--dur-normal)] ${v.shell}`}
+    >
+      {hasImage ? (
+        <div className={`overflow-hidden bg-s2 ${v.plate}`}>
+          <img
+            src={article.image}
+            alt=""
+            loading="lazy"
+            className="w-full h-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        </div>
+      ) : (
+        // No photo: the plate becomes a flat category field. It names the
+        // section, so the chip below is suppressed — one label, one job.
+        <div className={`flex items-end p-6 ${v.plate} ${categoryPlate(article.category)}`}>
+          <span className={`font-bold text-tp/70 ${v.plateLabel}`}>
+            {categoryLabel(article.category)}
+          </span>
+        </div>
+      )}
+
+      <div className={`min-w-0 flex flex-col ${v.body}`}>
+        {(hasImage || isLead) && (
+          <div className="flex items-center gap-3">
+            {hasImage && <CategoryChip category={article.category} size={v.chipSize} />}
+            {isLead && (
+              <span className="text-[16px] font-semibold text-tp/70">{t.news.featured}</span>
+            )}
+            <ReadNode unread={unread} className={isLead ? 'w-3.5 h-3.5' : 'w-3 h-3'} />
+          </div>
+        )}
+
+        <h2 className={`${v.title} ${unread ? 'font-bold text-tp' : 'font-semibold text-tp/70'}`}>
+          {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
+          {article.title}
+        </h2>
+
+        {isLead && article.description && (
+          <p className="text-[20px] leading-[1.55] text-tp/70 line-clamp-2 max-w-[860px]">
+            {article.description}
+          </p>
+        )}
+
+        <div className={`mt-auto flex items-center gap-3 text-tp/70 ${v.meta}`}>
+          <span className="font-semibold">{article.source}</span>
+          <MetaRule />
+          <span>{formatRelativeTime(article.publishedAt)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Timeline row ───────────────────────────────────────────────────────────
+// A repeated item in a scrolling list, so: rounded-xl, hairline border,
+// surface-tier press. 92px tall and full rail width — far past the 56px
+// minimum touch target.
+
+function TimelineRow({ article, unread, onClick }) {
+  const activate = () => onClick(article);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${t.news.openArticle}: ${article.title}`}
+      onClick={activate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate();
+        }
+      }}
+      className="shrink-0 flex items-center gap-4 min-h-[92px] p-3 rounded-xl bg-surf
+                 border border-bd cursor-pointer select-none shadow-card
+                 hover:shadow-raised active:scale-[0.98]
+                 transition-all duration-[var(--dur-fast)]"
+    >
+      <span
+        dir="ltr"
+        className="w-[62px] shrink-0 text-center font-mono tabular-nums text-[17px] text-tp/70"
+      >
+        {formatStamp(article.publishedAt)}
+      </span>
+
+      <ReadNode unread={unread} />
+
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <h3
+          className={`text-[19px] leading-[1.35] line-clamp-2
+                      ${unread ? 'font-bold text-tp' : 'font-medium text-tp/70'}`}
+        >
+          {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
+          {article.title}
+        </h3>
+        <span className="text-[15px] text-tp/70">{article.source}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Reading view ───────────────────────────────────────────────────────────
+
+const ARTICLE_TITLE_ID = 'news-article-title';
+
+// A live aggregation can return 250+ items. Nobody scans 250 headlines from a
+// sofa, and 250 rows of DOM is real work for the Pi's compositor, so the rail
+// holds the freshest slice and the count reports exactly what it holds.
+const RAIL_LIMIT = 40;
+
+function ArticleFigure({ src, caption }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   return (
-    <figure className="m-0">
+    <figure className="m-0 flex flex-col gap-2">
       <img
         src={src}
         alt={caption || ''}
-        className="w-full rounded-xl"
         loading="lazy"
+        className="w-full rounded-xl bg-s2"
         onError={() => setFailed(true)}
       />
       {caption && (
-        <figcaption className="mt-1.5 text-ts text-xs leading-snug">{caption}</figcaption>
+        <figcaption className="text-[17px] leading-[1.5] text-tp/70">{caption}</figcaption>
       )}
     </figure>
   );
 }
 
-function ArticleBlocks({ blocks, fallbackText, skipImageSrc }) {
+// Body copy: 22px at 1.8 leading across an ~856px measure — about 78
+// characters per line, inside the comfortable range, and legible from across
+// the room. (Design Guideline — Layout > Guides and safe areas: "restrict the
+// width of text for optimal readability.")
+function ArticleBody({ blocks, fallbackText, skipImageSrc }) {
+  const paragraph = 'text-[22px] leading-[1.8] text-tp whitespace-pre-line';
+
   if (!Array.isArray(blocks) || blocks.length === 0) {
-    return (
-      <div className="text-tp text-base leading-relaxed whitespace-pre-line">
-        {fallbackText}
-      </div>
-    );
+    return <p className={paragraph}>{fallbackText}</p>;
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-7">
       {blocks.map((block, i) => {
         if (block.type === 'image') {
           if (skipImageSrc && block.src === skipImageSrc) return null;
-          return <ArticleImageBlock key={i} src={block.src} caption={block.caption} />;
+          return <ArticleFigure key={i} src={block.src} caption={block.caption} />;
         }
         return (
-          <p key={i} className="text-tp text-base leading-relaxed whitespace-pre-line">
+          <p key={i} className={paragraph}>
             {block.value}
           </p>
         );
@@ -179,295 +385,173 @@ function ArticleBlocks({ blocks, fallbackText, skipImageSrc }) {
   );
 }
 
-// ─── Article Overlay ────────────────────────────────────────────────────────
+function ArticleBodySkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-7"
+      role="status"
+      aria-busy="true"
+      aria-label={t.news.overlay.loading}
+    >
+      <div className="skeleton h-[300px] w-full rounded-3xl" />
+      {[['100%', '96%', '88%', '62%'], ['100%', '92%', '70%']].map((group, g) => (
+        <div key={g} className="flex flex-col gap-3">
+          {group.map((w, i) => (
+            <div key={i} className="skeleton h-[26px]" style={{ width: w }} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose }) {
-  const [visible, setVisible] = useState(false);
-  const [heroImageFailed, setHeroImageFailed] = useState(false);
+// Extraction failed: say what happened and offer the way forward, rather than
+// silently showing a two-line summary under a full-size headline. (Design
+// Guideline — Feedback > Best practices: "Show people when a command can't be
+// carried out and help them understand why.")
+function ExtractionNotice({ onRetry }) {
+  return (
+    <div className="flex items-start gap-4 rounded-2xl bg-s2 border border-bd p-6">
+      <AlertIcon className="w-6 h-6 mt-1 shrink-0 text-tp/70" />
+      <div className="flex-1 flex flex-col items-start gap-5">
+        <p className="text-[19px] leading-[1.6] text-tp">{t.news.overlay.unavailable}</p>
+        <button
+          onClick={onRetry}
+          className="ripple min-h-[56px] px-7 rounded-xl bg-acc text-white text-[19px] font-bold
+                     hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
+        >
+          {t.news.overlay.retry}
+        </button>
+      </div>
+    </div>
+  );
+}
 
-  // Trigger slide-up on mount
+// A centred reading pane rather than an edge-anchored panel: it needs no
+// physical-direction anchoring (so it stays correct under RTL), it can hold a
+// proper reading measure, and the dimmed surround puts the article in sole
+// focus.
+function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onRetry }) {
+  const [reduced] = useState(prefersReducedMotion);
+  const [visible, setVisible] = useState(reduced);
+  const [heroFailed, setHeroFailed] = useState(false);
+
   useEffect(() => {
-    requestAnimationFrame(() => setVisible(true));
-  }, []);
+    if (!reduced) requestAnimationFrame(() => setVisible(true));
+  }, [reduced]);
 
   const handleClose = useCallback(() => {
+    if (reduced) {
+      onClose();
+      return;
+    }
     setVisible(false);
-    // Wait for animation to complete before unmounting
-    setTimeout(onClose, 400);
-  }, [onClose]);
+    setTimeout(onClose, 250);
+  }, [onClose, reduced]);
 
-  // Prefer the full-article's extracted image (og:image, more reliable) over
-  // the RSS-provided one, since it becomes available once loaded.
-  const heroImage = !heroImageFailed ? (fullArticle?.image || article.image || null) : null;
+  // Dismiss with an explicit action from the keyboard too, alongside the two
+  // on-screen close controls and the backdrop.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleClose]);
+
+  // Prefer the extracted og:image once it arrives — it is more reliable than
+  // the RSS enclosure.
+  const heroImage = heroFailed ? null : fullArticle?.image || article.image || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-12">
       <div
-        className="absolute inset-0 bg-black/40 transition-opacity"
-        style={{
-          opacity: visible ? 1 : 0,
-          transitionDuration: 'var(--dur-slow)',
-        }}
+        className="absolute inset-0 bg-black/50 transition-opacity"
+        style={{ opacity: visible ? 1 : 0, transitionDuration: 'var(--dur-normal)' }}
         onClick={handleClose}
       />
 
-      {/* Slide-in panel — anchored to the physical left edge of the screen
-          regardless of RTL/LTR text direction (per explicit user request),
-          so it always uses literal left-0 / translateX, not logical start. */}
       <div
-        className="absolute top-0 left-0 h-full w-[92%] max-w-[640px] bg-surf rounded-e-3xl shadow-modal
-                   flex flex-col overflow-hidden transition-transform"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={ARTICLE_TITLE_ID}
+        className="relative w-full max-w-[1240px] h-full flex flex-col overflow-hidden
+                   rounded-2xl bg-surf shadow-modal transition-[opacity,transform]"
         style={{
-          transform: visible ? 'translateX(0)' : 'translateX(-100%)',
-          transitionDuration: 'var(--dur-slow)',
-          transitionTimingFunction: 'var(--ease)',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'translateY(0)' : 'translateY(32px)',
+          transitionDuration: 'var(--dur-normal)',
+          transitionTimingFunction: 'var(--ease-out)',
         }}
       >
-        {/* Hero header — article image if available, else category gradient */}
-        <div
-          className="relative h-[220px] shrink-0"
-          style={heroImage ? undefined : categoryGradient(article.category)}
-        >
-          {heroImage && (
-            <img
-              src={heroImage}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover"
-              onError={() => setHeroImageFailed(true)}
-            />
-          )}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(to top, rgba(0,0,0,0.68) 40%, rgba(0,0,0,0.05) 100%)',
-            }}
-          />
-          <div className="absolute bottom-0 inset-x-0 p-7 flex flex-col gap-2.5">
-            <CategoryBadge category={article.category} size="lg" />
-            <h2 className="text-2xl font-bold text-white leading-tight">
-              {article.title}
-            </h2>
-            <div className="flex items-center gap-2 text-white/70 text-sm">
-              <span>{article.source}</span>
-              <span>·</span>
-              <span>{formatRelativeTime(article.publishedAt)}</span>
-            </div>
-          </div>
-
-          {/* Close button — circular control, 56px touch target */}
+        {/* Masthead — stays put while the article scrolls, so the source and
+            the way out are always available. */}
+        <header className="shrink-0 flex items-center gap-4 px-8 py-4 border-b border-bd">
+          <CategoryChip category={article.category} size="lg" />
+          <span className="text-[17px] font-semibold text-tp truncate">{article.source}</span>
+          <MetaRule />
+          <span className="text-[17px] text-tp/70 shrink-0">
+            {formatRelativeTime(article.publishedAt)}
+          </span>
           <button
             onClick={handleClose}
-            className="absolute top-4 end-4 w-14 h-14 rounded-full bg-black/30
-                       flex items-center justify-center text-white
-                       hover:bg-black/50 active:scale-95 transition-all
-                       duration-[var(--dur-fast)]"
             aria-label={t.news.overlay.close}
+            className="ms-auto w-[56px] h-[56px] shrink-0 flex items-center justify-center
+                       rounded-full bg-s2 text-tp hover:bg-bd active:scale-95
+                       transition-all duration-[var(--dur-fast)]"
           >
-            <CloseIcon className="w-6 h-6" />
+            <CloseIcon />
           </button>
-        </div>
+        </header>
 
-        {/* Scrollable body */}
-        <div
-          className="flex-1 overflow-y-auto p-7"
-          style={{ scrollbarWidth: 'thin' }}
-        >
-          {fullArticleLoading && (
-            <div className="flex flex-col gap-3" aria-label={t.news.overlay.loading}>
-              <div className="skeleton h-4 w-full" />
-              <div className="skeleton h-4 w-[90%]" />
-              <div className="skeleton h-4 w-[95%]" />
-              <div className="skeleton h-4 w-[80%]" />
-              <div className="skeleton h-4 w-full mt-4" />
-              <div className="skeleton h-4 w-[85%]" />
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+          <div className="mx-auto w-full max-w-[920px] px-8 py-10 flex flex-col gap-8">
+            <h1
+              id={ARTICLE_TITLE_ID}
+              className="text-[38px] leading-[1.2] font-bold text-tp"
+            >
+              {article.title}
+            </h1>
 
-          {!fullArticleLoading && fullArticle && (
-            <ArticleBlocks
-              blocks={fullArticle.blocks}
-              fallbackText={fullArticle.content || article.description}
-              skipImageSrc={heroImage}
-            />
-          )}
+            {article.description && (
+              <p className="text-[23px] leading-[1.6] text-tp/70">{article.description}</p>
+            )}
 
-          {!fullArticleLoading && !fullArticle && (
-            <div className="text-tp text-base leading-relaxed">
-              {article.description}
-            </div>
-          )}
-        </div>
+            {heroImage && (
+              <img
+                src={heroImage}
+                alt=""
+                className="w-full rounded-3xl bg-s2"
+                onError={() => setHeroFailed(true)}
+              />
+            )}
 
-        {/* Footer — single button spanning the sheet: surface-tier press */}
-        <div className="shrink-0 border-t border-bd p-4">
-          <button
-            onClick={handleClose}
-            className="w-full min-h-[56px] rounded-xl bg-s2 text-ts font-medium
-                       hover:bg-bd active:scale-[0.98] transition-all duration-[var(--dur-fast)]"
-          >
-            {t.news.overlay.close}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+            <div className="h-px bg-bd" />
 
-// ─── Unread Dot ─────────────────────────────────────────────────────────────
-// Convey "unread" via a dot AND a font-weight/color shift (never color alone),
-// per accessibility guidance for color-blind and low-vision users.
+            {fullArticleLoading && <ArticleBodySkeleton />}
 
-function UnreadDot({ className = 'w-2 h-2' }) {
-  return (
-    <span
-      className={`inline-block shrink-0 rounded-full bg-acc ${className}`}
-      aria-hidden="true"
-    />
-  );
-}
+            {!fullArticleLoading && fullArticle && (
+              <ArticleBody
+                blocks={fullArticle.blocks}
+                fallbackText={fullArticle.content || article.description}
+                skipImageSrc={heroImage}
+              />
+            )}
 
-// ─── Featured Card (hero) ───────────────────────────────────────────────────
+            {!fullArticleLoading && !fullArticle && <ExtractionNotice onRetry={onRetry} />}
 
-function FeaturedCard({ article, unread, onClick }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = article.image && !imageFailed;
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${t.news.featured}: ${article.title}`}
-      onClick={() => onClick(article)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick(article);
-        }
-      }}
-      className="group shrink-0 relative rounded-3xl overflow-hidden h-[340px]
-                 cursor-pointer select-none
-                 shadow-card hover:shadow-raised active:scale-[0.98]
-                 transition-all duration-[var(--dur-normal)]"
-      style={showImage ? undefined : categoryGradient(article.category)}
-    >
-      {showImage && (
-        <img
-          src={article.image}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={() => setImageFailed(true)}
-        />
-      )}
-
-      {/* Legibility scrim */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: 'linear-gradient(to top, rgba(0,0,0,0.74) 45%, rgba(0,0,0,0.08) 100%)',
-        }}
-      />
-
-      {/* Decorative oversized glyph, anchored to the end corner */}
-      <NewspaperGlyph className="absolute top-6 end-7 w-16 h-16 text-white/25" />
-
-      {/* Text content anchored to bottom */}
-      <div className="absolute bottom-0 inset-x-0 p-7 flex flex-col gap-2.5">
-        <div className="flex items-center gap-3">
-          <CategoryBadge category={article.category} size="lg" />
-          {unread && <UnreadDot className="w-2.5 h-2.5" />}
-          <span className="text-white/70 text-sm font-medium tracking-wide">
-            {t.news.featured}
-          </span>
-        </div>
-        <h2 className={`text-2xl leading-tight line-clamp-2 ${unread ? 'font-bold text-white' : 'font-medium text-white/85'}`}>
-          {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
-          {article.title}
-        </h2>
-        {article.description && (
-          <p className="text-white/80 text-[15px] leading-relaxed line-clamp-2 max-w-3xl">
-            {article.description}
-          </p>
-        )}
-        <div className="flex items-center gap-2 text-white/70 text-sm">
-          <span>{article.source}</span>
-          <span>·</span>
-          <span>{formatRelativeTime(article.publishedAt)}</span>
+            {/* End of the read: a full-measure button, so surface-tier press. */}
+            <button
+              onClick={handleClose}
+              className="w-full min-h-[64px] mt-2 rounded-xl bg-s2 border border-bd
+                         text-[19px] font-semibold text-tp hover:bg-bd active:scale-[0.98]
+                         transition-all duration-[var(--dur-fast)]"
+            >
+              {t.news.overlay.close}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ─── Headline Row ───────────────────────────────────────────────────────────
-// A repeated item in a scrolling list is a row, not a surface: rounded-xl,
-// hairline border at rest, raised elevation on hover, surface-tier press.
-
-function HeadlineThumb({ image, bg, fg }) {
-  const [failed, setFailed] = useState(false);
-  if (image && !failed) {
-    return (
-      <img
-        src={image}
-        alt=""
-        className="w-full h-full object-cover"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-  return <NewspaperGlyph className="w-7 h-7" />;
-}
-
-function HeadlineRow({ article, unread, onClick }) {
-  const { bg, fg } = getCategoryStyle(article.category);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${t.news.openArticle}: ${article.title}`}
-      onClick={() => onClick(article)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick(article);
-        }
-      }}
-      className="flex items-center gap-4 rounded-xl bg-surf border border-bd p-3
-                 min-h-[88px] cursor-pointer select-none
-                 hover:shadow-raised hover:border-ts/40 active:scale-[0.98]
-                 transition-all duration-[var(--dur-fast)]"
-    >
-      {/* Media thumb — article image if available, else category glyph */}
-      <div
-        className={`w-[64px] h-[64px] shrink-0 rounded-xl flex items-center justify-center overflow-hidden ${unread ? '' : 'opacity-60'}`}
-        style={{ backgroundColor: bg, color: fg }}
-      >
-        <HeadlineThumb image={article.image} bg={bg} fg={fg} />
-      </div>
-
-      {/* Text */}
-      <div className="flex-1 min-w-0 flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <h3 className={`text-[15px] leading-snug line-clamp-2 ${unread ? 'font-semibold text-tp' : 'font-normal text-ts'}`}>
-            {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
-            {article.title}
-          </h3>
-          {unread && <UnreadDot />}
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-ts">
-          <span className="font-medium" style={{ color: fg }}>
-            {getCategoryLabel(article.category)}
-          </span>
-          <span className="text-tm">·</span>
-          <span>{article.source}</span>
-          <span className="text-tm">·</span>
-          <span>{formatRelativeTime(article.publishedAt)}</span>
-        </div>
-      </div>
-
-      {/* Forward affordance — points left in RTL */}
-      <ChevronLeftIcon className="w-5 h-5 shrink-0 text-tm me-1" aria-hidden="true" />
     </div>
   );
 }
@@ -490,7 +574,7 @@ export default function NewsPage() {
 
   const [selectedArticle, setSelectedArticle] = useState(null);
 
-  // Pull to refresh
+  // Bound to the rail, the one scrolling region on the page.
   const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refresh);
 
   const handleArticleClick = useCallback(
@@ -507,6 +591,10 @@ export default function NewsPage() {
     clearFullArticle();
   }, [clearFullArticle]);
 
+  const handleRetryFullArticle = useCallback(() => {
+    if (selectedArticle) fetchFullArticle(selectedArticle.id);
+  }, [fetchFullArticle, selectedArticle]);
+
   // ─── Loading state ─────────────────────────────────────────────────────
   if (loading) return <NewsSkeleton />;
 
@@ -521,48 +609,42 @@ export default function NewsPage() {
             onAction={refresh}
           />
         )}
-        <div className="flex-1 flex flex-col items-center justify-center gap-5">
-          <NewspaperIcon className="w-28 h-28 text-tm" />
-          <p className="text-tm text-lg">{t.empty.noNews}</p>
-          <button
-            onClick={refresh}
-            className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
-                       font-medium hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div
+            className="flex flex-col items-center gap-6 max-w-[720px] px-16 py-14
+                       rounded-2xl bg-surf border border-bd shadow-card"
           >
-            <RefreshIcon />
-            <span>{t.news.refresh}</span>
-          </button>
+            <NewspaperIcon className="w-28 h-28 text-tm" />
+            <p className="text-[26px] font-bold text-tp text-center">{t.empty.noNews}</p>
+            <p className="text-[19px] leading-[1.6] text-tp/70 text-center">
+              {t.news.emptyHint}
+            </p>
+            <button
+              onClick={refresh}
+              className="ripple flex items-center gap-3 px-8 min-h-[64px] rounded-xl bg-acc
+                         text-white text-[19px] font-bold hover:bg-acc/90 active:scale-95
+                         transition-all duration-[var(--dur-fast)]"
+            >
+              <RefreshIcon />
+              <span>{t.news.refresh}</span>
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // ─── Populated layout ──────────────────────────────────────────────────
+  // ─── Front page ────────────────────────────────────────────────────────
+  // Lead, two seconds, and the rest as a timeline. Only the rail scrolls, so
+  // a touch drag anywhere on the panel has one unambiguous meaning.
 
-  const featured = articles[0];
-  const headlines = articles.slice(1);
+  const lead = articles[0];
+  const seconds = articles.slice(1, 3);
+  const rail = articles.slice(3, 3 + RAIL_LIMIT);
 
   return (
     <>
-      <div
-        className="flex flex-col h-full overflow-y-auto p-6 gap-5"
-        style={{ scrollbarWidth: 'thin' }}
-        {...pullBind}
-      >
-        {/* Pull-to-refresh indicator */}
-        {isPulling && (
-          <div
-            className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)]"
-            style={{ height: `${pullDistance}px`, marginTop: `-${pullDistance}px`, transform: `translateY(${pullDistance}px)` }}
-          >
-            <div
-              className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
-                ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
-            />
-          </div>
-        )}
-
-        {/* Degraded feeds banner */}
+      <div className="flex flex-col h-full">
         {error && (
           <ConnectionBanner
             integration={t.news.banner.title}
@@ -571,32 +653,106 @@ export default function NewsPage() {
           />
         )}
 
-        {/* Featured headline hero */}
-        <FeaturedCard article={featured} unread={!isRead(featured.id)} onClick={handleArticleClick} />
+        <div className="flex-1 min-h-0 flex gap-6 p-6">
+          {/* Front page */}
+          <div className="flex-1 min-w-0 flex flex-col gap-6">
+            <StoryCard
+              article={lead}
+              unread={!isRead(lead.id)}
+              variant="lead"
+              onClick={handleArticleClick}
+            />
 
-        {/* Headline list */}
-        {headlines.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-ts px-1">{t.news.headlines}</h2>
-            {headlines.map((article) => (
-              <HeadlineRow
-                key={article.id}
-                article={article}
-                unread={!isRead(article.id)}
-                onClick={handleArticleClick}
-              />
-            ))}
-          </section>
-        )}
+            {seconds.length > 0 && (
+              <div className="h-[280px] shrink-0 flex gap-6">
+                {seconds.map((article) => (
+                  <div key={article.id} className="flex-1 min-w-0 flex">
+                    <StoryCard
+                      article={article}
+                      unread={!isRead(article.id)}
+                      variant="second"
+                      onClick={handleArticleClick}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Timeline rail */}
+          {rail.length > 0 && (
+            <section
+              className="w-[620px] shrink-0 flex flex-col overflow-hidden
+                         rounded-2xl bg-s2 border border-bd"
+            >
+              <header className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-bd">
+                <h2 className="text-[19px] font-bold text-tp">{t.news.headlines}</h2>
+                <span
+                  dir="ltr"
+                  className="inline-flex items-center justify-center min-w-[38px] h-7 px-2
+                             rounded-full bg-surf border border-bd font-mono tabular-nums
+                             text-[15px] text-tp/70"
+                >
+                  {rail.length}
+                </span>
+                {/* An on-screen equivalent for pull-to-refresh, which is
+                    otherwise the only way to reload and is undiscoverable.
+                    (Design Guideline — Accessibility > Mobility: "Offer
+                    alternatives to gestures.") */}
+                <button
+                  onClick={refresh}
+                  aria-label={t.news.refresh}
+                  className="ms-auto w-[56px] h-[56px] shrink-0 flex items-center justify-center
+                             rounded-full text-tp hover:bg-surf active:scale-95
+                             transition-all duration-[var(--dur-fast)]"
+                >
+                  <RefreshIcon />
+                </button>
+              </header>
+
+              <div
+                className="flex-1 overflow-y-auto p-3 flex flex-col gap-2"
+                style={{ scrollbarWidth: 'thin' }}
+                {...pullBind}
+              >
+                {isPulling && (
+                  <div
+                    className="shrink-0 flex items-center justify-center overflow-hidden
+                               transition-all duration-[var(--dur-fast)]"
+                    style={{
+                      height: `${pullDistance}px`,
+                      marginTop: `-${pullDistance}px`,
+                      transform: `translateY(${pullDistance}px)`,
+                    }}
+                  >
+                    <div
+                      className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+                        ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+                    />
+                  </div>
+                )}
+
+                {rail.map((article) => (
+                  <TimelineRow
+                    key={article.id}
+                    article={article}
+                    unread={!isRead(article.id)}
+                    onClick={handleArticleClick}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       </div>
 
-      {/* Full article overlay */}
       {selectedArticle && (
         <ArticleOverlay
           article={selectedArticle}
           fullArticle={fullArticle}
           fullArticleLoading={fullArticleLoading}
           onClose={handleOverlayClose}
+          onRetry={handleRetryFullArticle}
         />
       )}
     </>
