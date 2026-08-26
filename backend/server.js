@@ -90,6 +90,21 @@ logger.info('SQLite database opened at %s', dbPath);
 const { runMigrations } = require('./db/migrate');
 runMigrations(db, logger);
 
+// Hydrate Spotify credentials from the settings table when .env is empty
+// so Settings-saved Client ID / Secret work without a process restart.
+try {
+  const { getSpotifyCredentials } = require('./routes/auth');
+  const creds = getSpotifyCredentials(db);
+  if (creds.clientId && !process.env.SPOTIFY_CLIENT_ID) {
+    process.env.SPOTIFY_CLIENT_ID = creds.clientId;
+  }
+  if (creds.clientSecret && !process.env.SPOTIFY_CLIENT_SECRET) {
+    process.env.SPOTIFY_CLIENT_SECRET = creds.clientSecret;
+  }
+} catch (err) {
+  logger.warn('Could not hydrate Spotify credentials from settings: %s', err.message);
+}
+
 // ---------------------------------------------------------------------------
 // 6. Express application
 // ---------------------------------------------------------------------------

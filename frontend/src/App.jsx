@@ -225,12 +225,30 @@ function SetupWizard({ onComplete }) {
   const [haEntities, setHaEntities] = useState(null); // { domain: [...] }
   const [haEntityCount, setHaEntityCount] = useState(0);
 
-  // Spotify state
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  // News sources state — dynamic catalog from backend, not hardcoded, so the
+  // wizard and Settings' NewsSection both reflect the same real source list
+  // and both write to the same `news_sources` config key.
+  const [sourceCatalog, setSourceCatalog] = useState([]);
+  const [selectedSources, setSelectedSources] = useState(null); // null = not loaded yet
 
-  // News sources state
-  const [newsYnet, setNewsYnet] = useState(true);
-  const [newsNow14, setNewsNow14] = useState(false);
+  useEffect(() => {
+    if (step === 6 && sourceCatalog.length === 0) {
+      fetch('/api/news/sources')
+        .then((res) => res.json())
+        .then((data) => {
+          setSourceCatalog(data.sources || []);
+          setSelectedSources((prev) => prev ?? data.enabled ?? (data.sources || []).map((s) => s.id));
+        })
+        .catch(() => {});
+    }
+  }, [step, sourceCatalog.length]);
+
+  const toggleWizardSource = (id, checked) => {
+    setSelectedSources((prev) => {
+      const base = prev || sourceCatalog.map((s) => s.id);
+      return checked ? Array.from(new Set([...base, id])) : base.filter((s) => s !== id);
+    });
+  };
 
   const steps = [
     t.setup.welcome,
@@ -271,8 +289,7 @@ function SetupWizard({ onComplete }) {
       location,
       firstRun: false,
       calendarColors: calendarColors,
-      newsYnet,
-      newsNow14,
+      news_sources: selectedSources || sourceCatalog.map((s) => s.id),
     };
     // Only include HA settings if the user filled them in
     if (haHost) patch.haHost = haHost;
@@ -281,7 +298,7 @@ function SetupWizard({ onComplete }) {
     setSettings(patch);
     markSetupComplete();
     if (onComplete) onComplete();
-  }, [name, location, calendarColors, haHost, haToken, newsYnet, newsNow14, setSettings, markSetupComplete, onComplete]);
+  }, [name, location, calendarColors, haHost, haToken, selectedSources, sourceCatalog, setSettings, markSetupComplete, onComplete]);
 
   const handleNext = () => {
     if (step === steps.length - 1) {
@@ -552,60 +569,22 @@ function SetupWizard({ onComplete }) {
                 {t.setup.spotify}
               </h2>
               <p className="text-ts mb-6">{t.setup.spotifyDesc}</p>
-
-              {spotifyConnected ? (
-                <div className="flex items-center gap-3 bg-s2 border border-bd rounded-xl px-5 py-4">
-                  {/* Spotify icon */}
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                       style={{ backgroundColor: 'var(--mint-bg)' }}>
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" style={{ color: 'var(--mint-d)' }}>
-                      <path fill="currentColor" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-tp font-medium text-sm">{t.settings.spotify}</p>
-                  </div>
-                  <span className="shrink-0 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{ backgroundColor: 'var(--mint-bg)', color: 'var(--mint-d)' }}>
-                    {t.setup.connected}
-                  </span>
+              <div className="flex items-center gap-3 bg-s2 border border-bd rounded-xl px-5 py-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                     style={{ backgroundColor: 'var(--mint-bg)' }}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" style={{ color: 'var(--mint-d)' }}>
+                    <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
+                  </svg>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {/* Auth error */}
-                  {auth.error && auth.provider === 'spotify' && (
-                    <div className="px-4 py-3 rounded-xl text-sm font-medium"
-                         style={{ backgroundColor: 'var(--coral-bg)', color: 'var(--coral-d)' }}>
-                      {t.setup.authError}: {auth.error}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      auth.startSpotifyAuth(() => {
-                        setSpotifyConnected(true);
-                      });
-                    }}
-                    disabled={auth.isAuthenticating}
-                    className="px-6 min-h-[56px] bg-acc text-white rounded-xl font-medium
-                               hover:bg-acc/90 active:scale-95 transition-all
-                               disabled:opacity-50 disabled:cursor-not-allowed
-                               flex items-center gap-3 self-start"
-                    style={{ transitionDuration: 'var(--dur-fast)' }}
-                  >
-                    {auth.isAuthenticating && auth.provider === 'spotify' ? (
-                      <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0">
-                        <path fill="currentColor" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                      </svg>
-                    )}
-                    <span>{t.settings.connectSpotify}</span>
-                  </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-tp font-medium text-sm">{t.music.youtubeMusic}</p>
+                  <p className="text-ts text-xs mt-0.5">{t.music.searchHint}</p>
                 </div>
-              )}
+                <span className="shrink-0 px-3 py-1 rounded-full text-xs font-semibold"
+                  style={{ backgroundColor: 'var(--mint-bg)', color: 'var(--mint-d)' }}>
+                  {t.setup.connected}
+                </span>
+              </div>
             </div>
           )}
 
@@ -616,42 +595,34 @@ function SetupWizard({ onComplete }) {
               </h2>
               <p className="text-ts mb-6">{t.setup.newsSourcesDesc}</p>
 
-              <div className="flex flex-col divide-y divide-bd bg-s2 border border-bd rounded-xl overflow-hidden">
-                {/* Ynet toggle */}
-                <label className="flex items-center justify-between px-5 py-4 cursor-pointer
-                                  hover:bg-surf transition-colors duration-[var(--dur-fast)]">
-                  <span className="text-tp font-medium text-sm">{t.settings.sourceYnet}</span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={newsYnet}
-                      onChange={(e) => setNewsYnet(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
-                                    transition-colors duration-[var(--dur-fast)]" />
-                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-card
-                                    peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
-                  </div>
-                </label>
-
-                {/* Channel 14 toggle */}
-                <label className="flex items-center justify-between px-5 py-4 cursor-pointer
-                                  hover:bg-surf transition-colors duration-[var(--dur-fast)]">
-                  <span className="text-tp font-medium text-sm">{t.settings.sourceNow14}</span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={newsNow14}
-                      onChange={(e) => setNewsNow14(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
-                                    transition-colors duration-[var(--dur-fast)]" />
-                    <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-card
-                                    peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
-                  </div>
-                </label>
+              <div className="flex flex-col divide-y divide-bd bg-s2 border border-bd rounded-xl overflow-hidden max-h-[280px] overflow-y-auto">
+                {sourceCatalog.length === 0 && (
+                  <div className="px-5 py-4 text-sm text-ts">{t.common.loading}</div>
+                )}
+                {sourceCatalog.map((src) => {
+                  const checked = (selectedSources || []).includes(src.id);
+                  return (
+                    <label
+                      key={src.id}
+                      className="flex items-center justify-between px-5 py-4 cursor-pointer
+                                  hover:bg-surf transition-colors duration-[var(--dur-fast)]"
+                    >
+                      <span className="text-tp font-medium text-sm">{src.name}</span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => toggleWizardSource(src.id, e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 rounded-full bg-bd peer-checked:bg-acc
+                                        transition-colors duration-[var(--dur-fast)]" />
+                        <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-card
+                                        peer-checked:translate-x-5 transition-transform duration-[var(--dur-fast)]" />
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -714,6 +685,7 @@ function SetupWizard({ onComplete }) {
             });
           }}
           onClose={auth.cancelAuth}
+          onRetry={auth.retryAuth}
         />
       )}
     </div>
@@ -805,6 +777,30 @@ export default function App() {
   // ── Health polling ──
   useHealth();
 
+  // After a same-window OAuth redirect (kiosk / popup-blocked), land back
+  // here with ?spotify=linked or ?google=linked and restore the settings tab.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const spotify = params.get('spotify');
+    const google = params.get('google');
+    if (!spotify && !google) return;
+
+    if (spotify === 'linked') {
+      useStore.getState().setConnectionStatus('spotify', 'connected');
+      useStore.getState().setActiveTab(6);
+      useStore.getState().addToast('success', t.settings.spotifyConnected);
+    }
+    if (google === 'linked') {
+      useStore.getState().setConnectionStatus('google', 'connected');
+      useStore.getState().setActiveTab(6);
+    }
+
+    params.delete('spotify');
+    params.delete('google');
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', next);
+  }, []);
+
   // ── Idle detection & display schedule ──
   const { isIdle, resetIdle } = useIdleDetection();
   const { isSleeping, wakeTemporarily } = useDisplaySchedule();
@@ -824,7 +820,11 @@ export default function App() {
         if (!res.ok) throw new Error('Settings fetch failed');
         return res.json();
       })
-      .then((data) => {
+      .then((body) => {
+        // The API wraps the payload as { settings: {...} } — unwrap it. This
+        // was previously read as the raw response, so `data.firstRun` was
+        // always undefined and the onboarding wizard reopened on every load.
+        let data = body.settings || {};
         // If darkMode has never been set, auto-detect from system preference
         let { darkMode } = data;
         if (darkMode == null) {
@@ -953,8 +953,7 @@ export default function App() {
     if (s.haHost) payload.haHost = s.haHost;
     if (s.haToken) payload.haToken = s.haToken;
     // Include news source preferences
-    if (s.newsYnet !== undefined) payload.newsYnet = s.newsYnet;
-    if (s.newsNow14 !== undefined) payload.newsNow14 = s.newsNow14;
+    if (s.news_sources !== undefined) payload.news_sources = s.news_sources;
 
     fetch('/api/settings', {
       method: 'PUT',

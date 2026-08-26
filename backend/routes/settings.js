@@ -3,6 +3,16 @@
 const { Router } = require('express');
 const router = Router();
 
+function applySpotifyEnv(updates) {
+  if (!updates || typeof updates !== 'object') return;
+  if (typeof updates.spotifyClientId === 'string' && updates.spotifyClientId.trim()) {
+    process.env.SPOTIFY_CLIENT_ID = updates.spotifyClientId.trim();
+  }
+  if (typeof updates.spotifyClientSecret === 'string' && updates.spotifyClientSecret.trim()) {
+    process.env.SPOTIFY_CLIENT_SECRET = updates.spotifyClientSecret.trim();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/settings - all settings from config table
 // ---------------------------------------------------------------------------
@@ -13,8 +23,12 @@ router.get('/', (req, res) => {
     const rows = db.prepare('SELECT key, value FROM config').all();
     const settings = {};
     for (const row of rows) {
-      // Skip internal/secret keys
+      // Skip internal/secret keys — never send secrets to the client
       if (row.key === 'api_token' || row.key === 'token_secret') continue;
+      if (row.key === 'spotifyClientSecret') {
+        settings.spotifyClientSecretSet = Boolean(row.value);
+        continue;
+      }
       // Try to parse JSON values, fall back to raw string
       try {
         settings[row.key] = JSON.parse(row.value);
@@ -50,12 +64,15 @@ router.put('/', (req, res) => {
       for (const [key, value] of entries) {
         // Prevent overwriting internal/secret keys via settings endpoint
         if (key === 'api_token' || key === 'token_secret') continue;
+        // Empty secret means "leave the existing one" — the UI never re-sends it.
+        if (key === 'spotifyClientSecret' && (value === '' || value == null)) continue;
         const serialized = typeof value === 'string' ? value : JSON.stringify(value);
         upsert.run(key, serialized);
       }
     });
 
     runBatch(Object.entries(updates));
+    applySpotifyEnv(updates);
     logger.info('Settings bulk updated (%d keys)', Object.keys(updates).length);
 
     // Notify clients
@@ -85,6 +102,9 @@ router.put('/:key', (req, res) => {
   if (value === undefined) {
     return res.status(400).json({ error: 'Request body must contain a "value" field' });
   }
+  if (key === 'spotifyClientSecret' && (value === '' || value == null)) {
+    return res.json({ ok: true, key, unchanged: true });
+  }
 
   try {
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
@@ -94,6 +114,7 @@ router.put('/:key', (req, res) => {
     );
 
     logger.info('Setting updated: %s', key);
+    applySpotifyEnv({ [key]: value });
 
     const io = req.app.locals.io;
     if (io) io.emit('settings:updated', { [key]: value });

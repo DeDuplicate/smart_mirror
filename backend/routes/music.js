@@ -1,252 +1,311 @@
 'use strict';
 
-const { Router } = require('express');
-const router = Router();
+const express = require('express');
+const router = express.Router();
 
-const { getValidSpotifyToken } = require('./auth');
+const FETCH_TIMEOUT_MS = 8000;
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000;
+const SUGGEST_CACHE_TTL_MS = 10 * 60 * 1000;
+const RELATED_CACHE_TTL_MS = 10 * 60 * 1000;
 
-const SPOTIFY_API = 'https://api.spotify.com/v1/me/player';
+const INVIDIOUS_INSTANCES = [
+  'https://yewtu.be',
+  'https://invidious.flokinet.to',
+  'https://inv.nadeko.net',
+  'https://invidious.privacyredirect.com',
+  'https://inv.tux.pizza',
+];
 
-// ---------------------------------------------------------------------------
-// Helper: make an authenticated Spotify API request
-// ---------------------------------------------------------------------------
-async function spotifyFetch(db, logger, path, options = {}) {
-  const token = await getValidSpotifyToken(db, logger);
-  const url = path.startsWith('http') ? path : `${SPOTIFY_API}${path}`;
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.adminforge.de',
+];
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+const searchCache = new Map();
+const suggestCache = new Map();
+const relatedCache = new Map();
 
-  // 204 = success with no body (common for Spotify control endpoints)
-  if (response.status === 204) return { ok: true };
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Spotify API ${response.status}: ${text}`);
+function cacheGet(map, key, ttl) {
+  const entry = map.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > ttl) {
+    map.delete(key);
+    return null;
   }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    return response.json();
-  }
-  return { ok: true };
+  return entry.value;
 }
 
-// ---------------------------------------------------------------------------
-// GET /api/music/state — current playback state
-// ---------------------------------------------------------------------------
-router.get('/state', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    const data = await spotifyFetch(db, logger, '');
-    res.json(data);
-  } catch (err) {
-    logger.error('Music state error: %s', err.message);
-    res.status(502).json({ error: err.message });
+function cacheSet(map, key, value, max = 80) {
+  map.set(key, { at: Date.now(), value });
+  if (map.size > max) {
+    const oldest = map.keys().next().value;
+    map.delete(oldest);
   }
-});
+}
 
-// ---------------------------------------------------------------------------
-// POST /api/music/play — resume / start playback
-// ---------------------------------------------------------------------------
-router.post('/play', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
+async function fetchJson(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const body = {};
-    if (req.body.context_uri) body.context_uri = req.body.context_uri;
-    if (req.body.uris) body.uris = req.body.uris;
-    if (req.body.offset) body.offset = req.body.offset;
-
-    await spotifyFetch(db, logger, '/play', {
-      method: 'PUT',
-      body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'SmartMirror/1.0',
+      },
     });
-
-    logger.info('Music: play');
-    res.json({ ok: true });
-  } catch (err) {
-    logger.error('Music play error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
   }
-});
+}
 
-// ---------------------------------------------------------------------------
-// POST /api/music/play-track — start playing one specific track immediately
-// { uri: "spotify:track:..." }
-//
-// Spotify's Web API has no "jump to this queue item" endpoint — repeatedly
-// calling /next until the target track comes up is slow and unreliable, so
-// instead we replace current playback with just this track via the same
-// /me/player/play endpoint used by /play, passing a single-item `uris` array.
-// ---------------------------------------------------------------------------
-router.post('/play-track', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
-  try {
-    const uri = req.body.uri;
-    if (!uri || typeof uri !== 'string') {
-      return res.status(400).json({ error: 'uri is required' });
+function thumbnailFromVideoId(videoId) {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+}
+
+function normalizeInvidiousVideo(item) {
+  const videoId = item.videoId || item.videoID;
+  if (!videoId) return null;
+  const length = item.lengthSeconds ?? item.length ?? 0;
+  return {
+    id: videoId,
+    title: item.title || '',
+    artist: item.author || item.uploaderName || item.authorName || '',
+    album: '',
+    duration: formatDuration(length),
+    durationSeconds: Number(length) || 0,
+    imageUrl: thumbnailFromVideoId(videoId),
+    source: 'youtube',
+  };
+}
+
+function normalizePipedItem(item) {
+  if (!item || (item.type && item.type !== 'stream' && item.type !== 'video')) return null;
+  const rawUrl = item.url || item.id || '';
+  const match = String(rawUrl).match(/(?:v=|\/watch\?v=|youtu\.be\/)?([a-zA-Z0-9_-]{11})/);
+  const videoId = item.id && item.id.length === 11 ? item.id : match?.[1];
+  if (!videoId) return null;
+  return {
+    id: videoId,
+    title: item.title || '',
+    artist: item.uploaderName || item.uploader || '',
+    album: '',
+    duration: item.duration
+      ? (typeof item.duration === 'number' ? formatDuration(item.duration) : String(item.duration))
+      : formatDuration(0),
+    durationSeconds: typeof item.duration === 'number' ? item.duration : 0,
+    imageUrl: thumbnailFromVideoId(videoId),
+    source: 'youtube',
+  };
+}
+
+async function searchInvidious(query) {
+  let lastError;
+  for (const base of INVIDIOUS_INSTANCES) {
+    try {
+      const data = await fetchJson(
+        `${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video&sort_by=relevance`
+      );
+      const items = Array.isArray(data) ? data : data?.items || [];
+      const tracks = items.map(normalizeInvidiousVideo).filter(Boolean);
+      if (tracks.length) return tracks;
+    } catch (err) {
+      lastError = err;
     }
+  }
+  throw lastError || new Error('Invidious search failed');
+}
 
-    await spotifyFetch(db, logger, '/play', {
-      method: 'PUT',
-      body: JSON.stringify({ uris: [uri] }),
+async function searchPiped(query) {
+  let lastError;
+  for (const base of PIPED_INSTANCES) {
+    try {
+      const data = await fetchJson(
+        `${base}/search?q=${encodeURIComponent(query)}&filter=videos`
+      );
+      const items = Array.isArray(data) ? data : data?.items || [];
+      const tracks = items.map(normalizePipedItem).filter(Boolean);
+      if (tracks.length) return tracks;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Piped search failed');
+}
+
+function walkVideoRenderers(node, out = []) {
+  if (!node || typeof node !== 'object') return out;
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkVideoRenderers(item, out));
+    return out;
+  }
+  if (node.videoRenderer?.videoId) {
+    const v = node.videoRenderer;
+    out.push({
+      id: v.videoId,
+      title: v.title?.runs?.map((r) => r.text).join('') || v.title?.simpleText || '',
+      artist: v.ownerText?.runs?.[0]?.text || v.shortBylineText?.runs?.[0]?.text || '',
+      album: '',
+      duration: v.lengthText?.simpleText || formatDuration(0),
+      durationSeconds: 0,
+      imageUrl: thumbnailFromVideoId(v.videoId),
+      source: 'youtube',
     });
+    return out;
+  }
+  Object.values(node).forEach((value) => walkVideoRenderers(value, out));
+  return out;
+}
 
-    logger.info('Music: play track %s', uri);
-    res.json({ ok: true });
+async function searchInnertube(query) {
+  const data = await fetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+    },
+    body: JSON.stringify({
+      context: {
+        client: {
+          clientName: 'WEB',
+          clientVersion: '2.20240101.00.00',
+          hl: 'he',
+          gl: 'IL',
+        },
+      },
+      query,
+      params: 'EgIQAQ%3D%3D',
+    }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  });
+
+  const tracks = walkVideoRenderers(data);
+  if (!tracks.length) throw new Error('Innertube returned no videos');
+  return tracks;
+}
+
+async function relatedInvidious(videoId) {
+  let lastError;
+  for (const base of INVIDIOUS_INSTANCES) {
+    try {
+      const data = await fetchJson(`${base}/api/v1/videos/${encodeURIComponent(videoId)}`);
+      const recs = data?.recommendedVideos || data?.recommended || [];
+      const tracks = recs.map(normalizeInvidiousVideo).filter(Boolean);
+      if (tracks.length) return tracks;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Related lookup failed');
+}
+
+router.get('/search', async (req, res) => {
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.json({ tracks: [] });
+
+  const cached = cacheGet(searchCache, query.toLowerCase(), SEARCH_CACHE_TTL_MS);
+  if (cached) return res.json({ tracks: cached, cached: true });
+
+  try {
+    let tracks;
+    try {
+      tracks = await searchInvidious(query);
+    } catch {
+      try {
+        tracks = await searchPiped(query);
+      } catch {
+        tracks = await searchInnertube(query);
+      }
+    }
+    cacheSet(searchCache, query.toLowerCase(), tracks);
+    res.json({ tracks });
   } catch (err) {
-    logger.error('Music play-track error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    console.error('[music] search failed:', err.message);
+    res.status(502).json({ error: 'search_failed', message: err.message, tracks: [] });
   }
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/music/pause
-// ---------------------------------------------------------------------------
-router.post('/pause', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
+router.get('/suggest', async (req, res) => {
+  const query = String(req.query.q || '').trim();
+  if (!query) return res.json({ suggestions: [] });
+
+  const cached = cacheGet(suggestCache, query.toLowerCase(), SUGGEST_CACHE_TTL_MS);
+  if (cached) return res.json({ suggestions: cached, cached: true });
 
   try {
-    await spotifyFetch(db, logger, '/pause', { method: 'PUT' });
-    logger.info('Music: pause');
-    res.json({ ok: true });
+    const data = await fetchJson(
+      `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(query)}`
+    );
+    const suggestions = Array.isArray(data?.[1]) ? data[1].map(String).slice(0, 8) : [];
+    cacheSet(suggestCache, query.toLowerCase(), suggestions);
+    res.json({ suggestions });
   } catch (err) {
-    logger.error('Music pause error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    console.error('[music] suggest failed:', err.message);
+    res.json({ suggestions: [] });
   }
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/music/next
-// ---------------------------------------------------------------------------
-router.post('/next', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
+const MIXES = [
+  { id: 'israeli', title: 'להיטים ישראלים', query: 'להיטים ישראלים', color: '#6b62e0' },
+  { id: 'kids', title: 'שירי ילדים', query: 'שירי ילדים ישראלים', color: '#2ab58a' },
+  { id: 'calm', title: 'רגוע', query: 'מוזיקה שקטה רגועה', color: '#4c8dff' },
+  { id: 'party', title: 'מסיבה', query: 'שירי מסיבה להיטים', color: '#e06b8a' },
+  { id: 'classics', title: 'קלאסיקות עבריות', query: 'שירי ארץ ישראל', color: '#c9a227' },
+  { id: 'english', title: 'Pop Hits', query: 'best pop hits', color: '#9b6bde' },
+];
 
+async function trendingMusic() {
+  const queries = ['להיטים ישראלים', 'שירי ארץ ישראל', 'best music mix'];
+  for (const query of queries) {
+    try {
+      const tracks = await searchInvidious(query);
+      if (tracks.length) return tracks.slice(0, 16);
+    } catch { /* try next query */ }
+  }
+  return searchInnertube(queries[0]);
+}
+
+router.get('/recommended', async (req, res) => {
   try {
-    await spotifyFetch(db, logger, '/next', { method: 'POST' });
-    logger.info('Music: next');
-    res.json({ ok: true });
+    const tracks = await trendingMusic();
+    res.json({ mixes: MIXES, tracks: tracks.slice(0, 16) });
   } catch (err) {
-    logger.error('Music next error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    console.error('[music] recommended failed:', err.message);
+    res.json({ mixes: MIXES, tracks: [] });
   }
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/music/prev
-// ---------------------------------------------------------------------------
-router.post('/prev', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    await spotifyFetch(db, logger, '/previous', { method: 'POST' });
-    logger.info('Music: previous');
-    res.json({ ok: true });
-  } catch (err) {
-    logger.error('Music prev error: %s', err.message);
-    res.status(502).json({ error: err.message });
+router.get('/related/:id', async (req, res) => {
+  const videoId = String(req.params.id || '').trim();
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+    return res.status(400).json({ error: 'invalid_id', tracks: [] });
   }
-});
 
-// ---------------------------------------------------------------------------
-// POST /api/music/shuffle — toggle shuffle { state: true|false }
-// ---------------------------------------------------------------------------
-router.post('/shuffle', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
+  const cached = cacheGet(relatedCache, videoId, RELATED_CACHE_TTL_MS);
+  if (cached) return res.json({ tracks: cached, cached: true });
 
   try {
-    const state = req.body.state !== undefined ? req.body.state : true;
-    await spotifyFetch(db, logger, `/shuffle?state=${state}`, { method: 'PUT' });
-    logger.info('Music: shuffle %s', state);
-    res.json({ ok: true, shuffle: state });
+    const tracks = await relatedInvidious(videoId);
+    cacheSet(relatedCache, videoId, tracks);
+    res.json({ tracks });
   } catch (err) {
-    logger.error('Music shuffle error: %s', err.message);
-    res.status(502).json({ error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/music/repeat — set repeat { state: track|context|off }
-// ---------------------------------------------------------------------------
-router.post('/repeat', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    const state = req.body.state || 'off';
-    await spotifyFetch(db, logger, `/repeat?state=${state}`, { method: 'PUT' });
-    logger.info('Music: repeat %s', state);
-    res.json({ ok: true, repeat: state });
-  } catch (err) {
-    logger.error('Music repeat error: %s', err.message);
-    res.status(502).json({ error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/music/volume — set volume { volume_percent: 0-100 }
-// ---------------------------------------------------------------------------
-router.post('/volume', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    const vol = Math.max(0, Math.min(100, parseInt(req.body.volume_percent, 10) || 50));
-    await spotifyFetch(db, logger, `/volume?volume_percent=${vol}`, { method: 'PUT' });
-    logger.info('Music: volume %d%%', vol);
-    res.json({ ok: true, volume_percent: vol });
-  } catch (err) {
-    logger.error('Music volume error: %s', err.message);
-    res.status(502).json({ error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/music/seek — seek to position { position_ms: number }
-// ---------------------------------------------------------------------------
-router.post('/seek', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    const positionMs = Math.max(0, parseInt(req.body.position_ms, 10) || 0);
-    await spotifyFetch(db, logger, `/seek?position_ms=${positionMs}`, { method: 'PUT' });
-    logger.info('Music: seek to %dms', positionMs);
-    res.json({ ok: true, position_ms: positionMs });
-  } catch (err) {
-    logger.error('Music seek error: %s', err.message);
-    res.status(502).json({ error: err.message });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/music/queue — current queue
-// ---------------------------------------------------------------------------
-router.get('/queue', async (req, res) => {
-  const db = req.app.locals.db;
-  const logger = req.app.locals.logger;
-
-  try {
-    const data = await spotifyFetch(db, logger, '/queue');
-    res.json(data);
-  } catch (err) {
-    logger.error('Music queue error: %s', err.message);
-    res.status(502).json({ error: err.message });
+    console.error('[music] related failed:', err.message);
+    res.json({ tracks: [] });
   }
 });
 
