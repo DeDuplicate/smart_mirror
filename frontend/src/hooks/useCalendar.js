@@ -219,8 +219,26 @@ export default function useCalendar(weekStart) {
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
 
+  // Tracks the in-flight request so a newer fetch (e.g. rapid next/prev week
+  // taps) can cancel a stale older one instead of letting it race to
+  // `setEvents` after the newer response has already landed.
+  const abortControllerRef = useRef(null);
+  // Belt-and-suspenders staleness guard: even if an old request's abort
+  // doesn't reject the fetch in time (e.g. it had already resolved before
+  // the newer request started), this ensures we never apply a response
+  // that isn't from the most recently issued fetch.
+  const requestIdRef = useRef(0);
+
   const fetchEvents = useCallback(async () => {
     if (!weekStart) return;
+
+    // Cancel any previous in-flight fetch — its result is now stale.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const requestId = ++requestIdRef.current;
 
     const start = toISODate(weekStart);
     const end = toISODate(getWeekEnd(weekStart));
@@ -232,7 +250,9 @@ export default function useCalendar(weekStart) {
 
     // Try Google OAuth calendar first
     try {
-      const res = await fetch(`/api/calendar/events?start=${start}&end=${end}`);
+      const res = await fetch(`/api/calendar/events?start=${start}&end=${end}`, {
+        signal: controller.signal,
+      });
       if (res.ok) {
         const data = await res.json();
         if (data?.events && data.events.length > 0) {
@@ -244,13 +264,16 @@ export default function useCalendar(weekStart) {
           gotGoogle = true;
         }
       }
-    } catch (_err) {
+    } catch (err) {
+      if (err?.name === 'AbortError') return; // superseded — bail before touching state
       // Google OAuth not available — continue
     }
 
     // Try ICS calendars (always, to merge with Google if available)
     try {
-      const res = await fetch(`/api/calendar/ics?start=${start}&end=${end}`);
+      const res = await fetch(`/api/calendar/ics?start=${start}&end=${end}`, {
+        signal: controller.signal,
+      });
       if (res.ok) {
         const data = await res.json();
         if (data?.events && data.events.length > 0) {
@@ -262,9 +285,15 @@ export default function useCalendar(weekStart) {
           gotIcs = true;
         }
       }
-    } catch (_err) {
+    } catch (err) {
+      if (err?.name === 'AbortError') return; // superseded — bail before touching state
       // ICS not available — continue
     }
+
+    // Staleness guard: if a newer fetchEvents() call has started since this
+    // one began, discard this response instead of overwriting the grid
+    // with an out-of-order (older) week's events.
+    if (requestId !== requestIdRef.current) return;
 
     // Merge results from both sources
     if (gotGoogle || gotIcs) {
@@ -293,6 +322,14 @@ export default function useCalendar(weekStart) {
     intervalRef.current = setInterval(fetchEvents, REFRESH_INTERVAL);
     return () => clearInterval(intervalRef.current);
   }, [fetchEvents]);
+
+  // Abort any outstanding request on unmount to avoid a dangling fetch
+  // resolving after the component (and this hook) is gone.
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
 
   return { events, loading, error, refetch: fetchEvents };
 }

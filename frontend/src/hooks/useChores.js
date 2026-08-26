@@ -9,14 +9,20 @@ const isDev =
 
 // ─── Load people from localStorage (configured in Settings → Family) ───────
 
-function getConfiguredPeople() {
+// `allowMockFallback` must stay false in production. It exists solely so
+// local dev (no Settings configured yet) still has something to look at —
+// it must NEVER be used on the path that syncs people into the real
+// backend SQLite table (see fetchTasks below), or a fresh Pi install would
+// permanently persist these placeholder names into the production DB.
+function getConfiguredPeople({ allowMockFallback = false } = {}) {
   try {
     const stored = JSON.parse(localStorage.getItem('chores_people') || '[]');
     if (stored.length > 0) {
       return stored.map(p => ({ ...p, listId: null, avatar: null, tasks: [] }));
     }
   } catch { /* ignore */ }
-  // Fallback mock data if no people configured
+  if (!allowMockFallback) return [];
+  // Fallback mock data if no people configured (dev only)
   return [
     { id: 'p1', name: 'חיים', color: '#2a9d7f', listId: null, avatar: null, tasks: [] },
     { id: 'p2', name: 'מעיין', color: '#5b52cc', listId: null, avatar: null, tasks: [] },
@@ -52,7 +58,7 @@ function getMockTasks(personIndex) {
   return taskSets[personIndex % taskSets.length] || [];
 }
 
-const MOCK_PEOPLE = getConfiguredPeople().map((p, i) => ({ ...p, tasks: getMockTasks(i) }));
+const MOCK_PEOPLE = getConfiguredPeople({ allowMockFallback: true }).map((p, i) => ({ ...p, tasks: getMockTasks(i) }));
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 
@@ -104,13 +110,21 @@ export default function useTasks() {
         await new Promise((r) => setTimeout(r, 800));
         setPeople(MOCK_PEOPLE.map((p) => ({ ...p, tasks: [...p.tasks] })));
       } else {
-        // Sync configured people to backend so it knows about them
-        const configured = getConfiguredPeople();
-        const syncParam = encodeURIComponent(JSON.stringify(configured.map(p => ({
-          id: p.id, name: p.name, color: p.color,
-        }))));
-        const data = await apiFetch(`/api/tasks/people?sync=${syncParam}`);
-        setPeople(data);
+        // Production: NEVER fall back to mock names here. If the family
+        // hasn't been configured yet in Settings, `configured` is empty —
+        // fetch the backend's current state as-is (no `sync` param) so we
+        // don't persist placeholder people into the real SQLite database.
+        const configured = getConfiguredPeople({ allowMockFallback: false });
+        if (configured.length > 0) {
+          const syncParam = encodeURIComponent(JSON.stringify(configured.map(p => ({
+            id: p.id, name: p.name, color: p.color,
+          }))));
+          const data = await apiFetch(`/api/tasks/people?sync=${syncParam}`);
+          setPeople(data);
+        } else {
+          const data = await apiFetch('/api/tasks/people');
+          setPeople(data);
+        }
       }
       setError(null);
     } catch (err) {
