@@ -51,7 +51,7 @@ export default function ConfirmDialog() {
       {/* Card */}
       <div
         ref={cardRef}
-        className="relative bg-surf border border-bd rounded-2xl shadow-2xl p-8 min-w-[380px] max-w-[480px]"
+        className="relative bg-surf border border-bd rounded-2xl shadow-modal p-8 min-w-[380px] max-w-[480px]"
         style={{
           animation: `confirmCardIn var(--dur-normal) var(--ease-out) forwards`,
         }}

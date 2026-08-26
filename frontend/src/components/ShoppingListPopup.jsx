@@ -223,8 +223,9 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         </div>
         <button
           onClick={onClose}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-tm hover:bg-s2
-                     transition-colors active:scale-90"
+          aria-label={t.common.close}
+          className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
+                     hover:bg-s2 transition-colors active:scale-90"
         >
           <CloseIcon className="w-4 h-4" />
         </button>
@@ -291,7 +292,8 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
         <button
           onClick={handleAdd}
           disabled={!newItem.trim() || adding}
-          className="w-9 h-9 rounded-xl bg-acc text-white flex items-center justify-center
+          aria-label={t.common.add}
+          className="min-w-[56px] min-h-[56px] rounded-xl bg-acc text-white flex items-center justify-center
                      hover:bg-acc/90 active:scale-95 transition-all
                      disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >

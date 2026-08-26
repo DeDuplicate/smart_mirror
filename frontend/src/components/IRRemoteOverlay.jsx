@@ -16,7 +16,16 @@ function CloseIcon({ className = 'w-5 h-5' }) {
 
 // ─── Remote Button ──────────────────────────────────────────────────────────
 
-function RemoteButton({ label, command, entityId, size = 'md', variant = 'default', className = '' }) {
+// Arrow glyphs (▲◀▶▼) aren't announced meaningfully by screen readers, so
+// icon-only remote buttons need an explicit Hebrew aria-label per command.
+const COMMAND_LABELS = {
+  up: t.home.arrowUp,
+  down: t.home.arrowDown,
+  left: t.home.arrowLeft,
+  right: t.home.arrowRight,
+};
+
+function RemoteButton({ label, command, entityId, size = 'md', variant = 'default', className = '', ariaLabel }) {
   const handlePress = useCallback(async () => {
     try {
       await fetchApi(`/api/ha/remote/${encodeURIComponent(entityId)}/command`, {
@@ -28,11 +37,13 @@ function RemoteButton({ label, command, entityId, size = 'md', variant = 'defaul
     }
   }, [entityId, command]);
 
+  // Every remote key is a primary touch target on the IR frame, so each size
+  // keeps a >=56x56px hit area regardless of how small its glyph/label is.
   const sizeClasses = {
-    sm: 'w-14 h-10 text-xs',
-    md: 'w-16 h-12 text-sm',
-    lg: 'w-20 h-14 text-base',
-    round: 'w-16 h-16 rounded-full text-xs',
+    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs',
+    md: 'min-w-[56px] min-h-[56px] w-16 text-sm',
+    lg: 'min-w-[56px] min-h-[56px] w-20 text-base',
+    round: 'min-w-[56px] min-h-[56px] w-16 h-16 rounded-full text-xs',
   };
 
   const variantClasses = {
@@ -45,6 +56,7 @@ function RemoteButton({ label, command, entityId, size = 'md', variant = 'defaul
   return (
     <button
       onClick={handlePress}
+      aria-label={ariaLabel || COMMAND_LABELS[command] || (typeof label === 'string' ? label : command)}
       className={`flex items-center justify-center rounded-xl font-medium
                   transition-all duration-[var(--dur-fast)] active:scale-90 select-none
                   ${sizeClasses[size] || sizeClasses.md}
@@ -100,7 +112,8 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
           </h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-tm
+            aria-label={t.common.close}
+            className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
                        hover:bg-s2 transition-colors active:scale-90"
           >
             <CloseIcon className="w-5 h-5" />

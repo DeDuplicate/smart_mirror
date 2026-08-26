@@ -133,8 +133,11 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
   return (
     <div className="relative flex items-center justify-center" style={{ width: 68, height: 68 }}>
       <ProgressRing progress={progress} color={color} />
-      <div
+      <button
+        type="button"
         onClick={handlePhotoClick}
+        aria-label={t.tasks.uploadPhoto}
+        title={t.tasks.uploadPhoto}
         className={`
           w-[60px] h-[60px] rounded-full flex items-center justify-center
           text-white text-xl font-bold select-none cursor-pointer
@@ -145,14 +148,13 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
           backgroundColor: color,
           boxShadow: isComplete ? `0 0 16px ${color}66, 0 0 32px ${color}33` : 'none',
         }}
-        title="לחץ להעלאת תמונה"
       >
         {photo ? (
           <img src={photo} alt={name} className="w-full h-full object-cover" />
         ) : (
           initials
         )}
-      </div>
+      </button>
       {/* Small camera badge */}
       {!photo && (
         <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 rounded-full bg-[var(--acc)] flex items-center justify-center shadow-sm">
@@ -272,73 +274,85 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
       : 'bg-[var(--surf)]';
 
   return (
-    <button
-      onClick={handleToggle}
-      data-clap-target
-      aria-label={`${task.title}${isComplete ? ' — הושלם' : ''}${overdue ? ' — באיחור' : ''}`}
+    // Card shell is a plain container: the toggle button and the delete button are
+    // SIBLINGS inside it, never nested (nested interactive elements are invalid
+    // HTML and made the delete action unreachable by keyboard/switch access).
+    <div
       className={`
-        relative w-full flex items-center gap-3 p-3 rounded-xl
+        relative flex items-center rounded-xl
         border border-[var(--bd)]
         transition-all duration-[var(--dur-fast)]
         active:scale-[0.98]
         min-h-[56px]
         ${bgClass}
       `}
-      style={{ borderRight: `3px solid ${personColor}` }}
+      style={{ borderInlineStart: `3px solid ${personColor}` }}
     >
-      {/* Checkbox */}
-      <div
-        role="checkbox"
-        aria-checked={isComplete}
-        aria-label={isComplete ? 'מטלה הושלמה' : 'מטלה לא הושלמה'}
-        className={`
-          relative flex-shrink-0 w-[44px] h-[44px] rounded-full
-          flex items-center justify-center
-          border-2 transition-all duration-[var(--dur-normal)]
-          ${isComplete
-            ? 'border-[var(--acc2)] bg-[var(--acc2)]'
-            : 'border-[var(--tm)] bg-transparent'}
-          ${justToggled ? 'task-checkbox-animate' : ''}
-        `}
+      {/* Card body — tap to toggle. Fills the row apart from the delete target. */}
+      <button
+        type="button"
+        onClick={handleToggle}
+        data-clap-target
+        aria-pressed={isComplete}
+        aria-label={`${task.title}${isComplete ? ` — ${t.tasks.done}` : ''}${overdue ? ` — ${t.tasks.overdue}` : ''}`}
+        className="flex-1 min-w-0 flex items-center gap-3 ps-3 py-3 rounded-xl"
       >
-        {isComplete && (
-          <CheckIcon className="w-5 h-5 text-white" />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 flex flex-col items-start gap-0.5 min-w-0">
-        <div className="flex items-center gap-2 w-full">
-          {task.emoji && <span className="text-lg" aria-hidden="true">{task.emoji}</span>}
-          <span
-            className={`
-              text-sm font-medium text-right leading-snug truncate
-              transition-all duration-[var(--dur-normal)]
-              ${isComplete ? 'line-through text-[var(--ts)]' : 'text-[var(--tp)]'}
-            `}
-          >
-            {task.title}
-          </span>
+        {/* Checkbox — purely decorative: state is announced by the button label */}
+        <div
+          aria-hidden="true"
+          className={`
+            relative flex-shrink-0 w-[44px] h-[44px] rounded-full
+            flex items-center justify-center
+            border-2 transition-all duration-[var(--dur-normal)]
+            ${isComplete
+              ? 'border-[var(--acc2)] bg-[var(--acc2)]'
+              : 'border-[var(--tm)] bg-transparent'}
+            ${justToggled ? 'task-checkbox-animate' : ''}
+          `}
+        >
+          {isComplete && (
+            <CheckIcon className="w-5 h-5 text-white" />
+          )}
         </div>
-        {recurrenceLabel && (
-          <span className="text-xs text-[var(--tm)]">
-            {recurrenceLabel}
-          </span>
-        )}
-      </div>
 
-      {/* Delete button */}
-      <div
+        {/* Content */}
+        <div className="flex-1 flex flex-col items-start gap-0.5 min-w-0">
+          <div className="flex items-center gap-2 w-full">
+            {task.emoji && <span className="text-lg" aria-hidden="true">{task.emoji}</span>}
+            <span
+              className={`
+                text-sm font-medium text-start leading-snug truncate
+                transition-all duration-[var(--dur-normal)]
+                ${isComplete ? 'line-through text-[var(--ts)]' : 'text-[var(--tp)]'}
+              `}
+            >
+              {task.title}
+            </span>
+          </div>
+          {recurrenceLabel && (
+            <span className="text-xs text-[var(--tm)]">
+              {recurrenceLabel}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Delete — a real focusable button; 56x56 hit area, 32px visual chip */}
+      <button
+        type="button"
         onClick={handleDelete}
-        className="flex-shrink-0 p-2 rounded-lg text-[var(--tm)] hover:text-[var(--coral-d)] hover:bg-[var(--coral-bg)]/30 transition-colors"
-        role="button"
-        aria-label={`מחק מטלה: ${task.title}`}
-        tabIndex={-1}
+        aria-label={t.tasks.deleteChore.replace('{title}', task.title)}
+        className="group flex-shrink-0 min-w-[56px] min-h-[56px] flex items-center justify-center"
       >
-        <TrashIcon />
-      </div>
-
-    </button>
+        <span
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--tm)]
+                     group-hover:text-[var(--coral-d)] group-hover:bg-[var(--coral-bg)]/30
+                     transition-colors"
+        >
+          <TrashIcon />
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -563,12 +577,15 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
         {/* Emoji picker */}
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold text-[var(--tp)]">
-            סמל מטלה
+            {t.tasks.choreEmoji}
           </label>
           <div className="flex items-center gap-3">
             {/* Selected emoji display / toggle button */}
             <button
+              type="button"
               onClick={() => setShowEmojiPicker(v => !v)}
+              aria-label={t.tasks.chooseEmoji}
+              aria-expanded={showEmojiPicker}
               className="
                 w-16 h-16 rounded-2xl border-2 flex items-center justify-center
                 text-3xl transition-all duration-[var(--dur-fast)] active:scale-95 shrink-0
@@ -582,21 +599,26 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
             </button>
             {emoji && (
               <button
+                type="button"
                 onClick={() => setEmoji('')}
-                className="text-xs text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
+                className="min-w-[56px] min-h-[56px] flex items-center justify-center rounded-xl
+                           text-xs text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
               >
-                הסר
+                {t.tasks.removeEmoji}
               </button>
             )}
           </div>
           {showEmojiPicker && (
-            <div className="grid grid-cols-8 gap-1.5 p-3 bg-[var(--s2)] rounded-xl border border-[var(--bd)] max-h-[140px] overflow-y-auto">
+            <div className="grid grid-cols-8 gap-1.5 p-3 bg-[var(--s2)] rounded-xl border border-[var(--bd)] max-h-[172px] overflow-y-auto">
               {CHORE_EMOJIS.map((e) => (
                 <button
                   key={e}
+                  type="button"
                   onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                  aria-label={`${t.tasks.chooseEmoji} ${e}`}
+                  aria-pressed={emoji === e}
                   className={`
-                    w-11 h-11 rounded-xl flex items-center justify-center text-xl
+                    w-14 h-14 rounded-xl flex items-center justify-center text-xl
                     transition-all duration-[var(--dur-fast)] active:scale-90
                     ${emoji === e ? 'bg-[var(--acc)]/20 ring-2 ring-[var(--acc)]' : 'hover:bg-[var(--bd)]'}
                   `}

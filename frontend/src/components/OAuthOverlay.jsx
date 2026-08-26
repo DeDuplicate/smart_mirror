@@ -105,7 +105,7 @@ export default function OAuthOverlay({ provider, authUrl, onSuccess, onClose }) 
 
       {/* Iframe container */}
       <div
-        className="relative bg-surf rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative bg-surf rounded-2xl shadow-modal overflow-hidden flex flex-col"
         style={{
           width: 560,
           height: 680,

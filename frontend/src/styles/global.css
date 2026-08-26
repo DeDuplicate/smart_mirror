@@ -4,6 +4,50 @@
 
 /* ========================================================================
    Design System - CSS Custom Properties
+
+   ── Design system rules — read before adding UI ─────────────────────────
+   These four rules are the whole vocabulary. Picking a value by eye is how
+   the system drifts; pick the rule that names your element instead.
+
+   1. PRESS FEEDBACK — exactly two tiers, never a third:
+        active:scale-95       controls — icon/text buttons, chips, segmented
+                              options, keyboard keys, nav tabs, FABs.
+        active:scale-[0.98]   surfaces — cards, tiles, list rows, event
+                              blocks, plus any single button that spans a
+                              full column or a sheet/dialog footer.
+      A 5% squeeze on a 450px tile is a lurch; 2% on a 56px button is
+      invisible. That is the whole reason there are two.
+      `active:scale-100` exists only alongside `disabled:`, to REMOVE
+      feedback. It is not a tier.
+
+   2. RADIUS — by element class, never by eye:
+        rounded-full   pill, chip, badge, avatar, circular button, knob,
+                       track, and any text control under 32px tall.
+        rounded-2xl    surface — card, tile, popover, dialog, sheet, column,
+                       panel. 16px: the anchor, and exactly what .card sets.
+        rounded-xl     control — button, input, select, option button, list
+                       row, keyboard key, media thumbnail, nested block. 12px.
+      A repeated item inside a scrolling list is a row, not a surface: it
+      takes rounded-xl even when it looks like a card.
+      Two exceptions, and no others: rounded-3xl (24px) for full-bleed media
+      and edge-anchored sheets; rounded-sm for the rotated popover nub.
+      rounded-lg / -md are not in the scale — do not reintroduce them.
+      Skeleton placeholders mirror the radius of what they stand in for.
+
+   3. ICON STROKE — strokeWidth="2" on every 24x24 line icon.
+      strokeWidth="2.5" only for (a) bare check / plus / minus marks, which
+      are 2-3 strokes with nothing enclosing them, and (b) icons rendered at
+      12px or smaller. Spinners, progress rings, gauges, brand marks and the
+      120x120 illustrations are not icons: they set their own stroke.
+
+   4. ELEVATION — semantic, by how far the element floats off the page.
+      Use shadow-card / shadow-raised / shadow-popover / shadow-modal
+      (Tailwind aliases for the --elev-* tokens below). Never shadow-sm /
+      -md / -lg / -xl / -2xl — those encode size, not meaning:
+        card     resting on the page — card, tile, selected segment, knob
+        raised   lifted by interaction — hover, drag ghost, FAB, floating art
+        popover  anchored to a trigger — popover, dropdown, toast
+        modal    owns the screen behind a backdrop — dialog, overlay, sheet
    ======================================================================== */
 
 :root {
@@ -29,6 +73,13 @@
   --coral-d: #c95454;
   --gold-bg: #ffe4a0;
   --gold-d: #b07c10;
+
+  /* Elevation — semantic, see rule 4. Tinted with the --tp hue so shadows
+     read as the same cool grey as the rest of the palette. */
+  --elev-card:    0 1px 2px rgba(26, 28, 46, 0.06);
+  --elev-raised:  0 4px 12px rgba(26, 28, 46, 0.10);
+  --elev-popover: 0 10px 28px rgba(26, 28, 46, 0.14);
+  --elev-modal:   0 24px 64px rgba(26, 28, 46, 0.22);
 
   /* Animation tokens */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -59,6 +110,13 @@
   --lav-bg:  #252046;  --lav-d:  #8b82f0;
   --coral-bg: #3d1a1a; --coral-d: #ff8888;
   --gold-bg:  #3d2d0a; --gold-d:  #ffc040;
+
+  /* Elevation — neutral black and deeper, since a tinted shadow disappears
+     against dark surfaces */
+  --elev-card:    0 1px 2px rgba(0, 0, 0, 0.32);
+  --elev-raised:  0 4px 12px rgba(0, 0, 0, 0.42);
+  --elev-popover: 0 10px 28px rgba(0, 0, 0, 0.52);
+  --elev-modal:   0 24px 64px rgba(0, 0, 0, 0.64);
 }
 
 /* ========================================================================
@@ -190,13 +248,21 @@
     border-radius: 8px;
   }
 
-  /* Glass card surface */
+  /* Resting card surface — the single source of truth for the card tier.
+     It owns: surface colour, hairline border, 16px radius (identical to
+     rounded-2xl by construction), 16px padding, and the resting elevation.
+     Do not restate any of those at a call site — `card rounded-2xl` is a
+     no-op that invites the two to drift apart.
+     One sanctioned override: a thicker or coloured border to signal state,
+     e.g. `card border-2 border-acc2` for a device that is on. */
   .card {
     background: var(--surf);
     border: 1px solid var(--bd);
     border-radius: 16px;
     padding: 16px;
-    transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+    box-shadow: var(--elev-card);
+    transition: background-color 0.3s, border-color 0.3s, color 0.3s,
+      box-shadow var(--dur-normal) var(--ease);
   }
 
   /* Tab content transition wrapper */

@@ -58,7 +58,9 @@
     "done": "סיום",
     "loading": "טוען...",
     "yes": "כן",
-    "no": "לא"
+    "no": "לא",
+    "close": "סגור",
+    "add": "הוסף"
   },
   "toast": {
     "success": "הצלחה",
@@ -165,7 +167,12 @@
     "recurrenceOnce": "חד פעמי",
     "hideCompleted": "הסתר שהושלם",
     "showCompleted": "הצג שהושלם",
-    "allHidden": "כל המשימות הושלמו והוסתרו"
+    "allHidden": "כל המשימות הושלמו והוסתרו",
+    "deleteChore": "מחק מטלה: {title}",
+    "uploadPhoto": "לחץ להעלאת תמונה",
+    "choreEmoji": "סמל מטלה",
+    "chooseEmoji": "בחר סמל למטלה",
+    "removeEmoji": "הסר"
   },
   "home": {
     "scenes": "סצנות",
