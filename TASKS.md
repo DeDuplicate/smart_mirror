@@ -56,6 +56,147 @@ _(none known — verify the new 56px controls and popup clamps on the real
 
 ## Done
 
+- [x] **WiFi: audited for Pi-readiness, fixed 4 real nmcli bugs (user-requested).**
+      Frontend is fully real (always hits `/api/wifi/*`); backend mocks only
+      run on non-Linux dev machines. Fixed the Linux (`nmcli`) paths that
+      would have broken on the Pi: (1) `/status` queried a wired-only field
+      on hardcoded `wlan0` and returned no signal/ip/mac — rewritten to use
+      `device wifi list` (ACTIVE row) + auto-detected wifi interface for
+      IP/MAC; (2) terse output parsing split on raw `:` which broke SSIDs
+      containing colons — added a proper `\:`-aware `splitTerse` parser
+      (unit-verified); (3) a failed connect (wrong password) left a broken
+      saved profile making all retries fail — profile now deleted on failure;
+      (4) connect timeout raised 15s→45s (scan + DHCP can exceed 15s).
+
+- [x] **Brightness button did nothing (user-reported).**
+      Two bugs: frontend sent `{ brightness }` while backend read `req.body.value`
+      (always fell back to 50), and on non-Linux / unsupported hardware nothing
+      visible happened. Fixed the payload mismatch (backend now accepts both
+      keys), persisted the level in localStorage (slider no longer resets to
+      80%), and added a software dimming overlay (`#brightness-dim-overlay`,
+      pointer-events-none, capped at 85% black) applied on load and on change —
+      brightness now visibly works on any hardware, alongside
+      ddcutil/sysfs/xrandr on the Pi.
+
+- [x] **Shopping list: on-screen keyboard + longer list (user-reported).**
+      The add-item input never opened `OnScreenKeyboard` on the touch kiosk.
+      Wired it per the TasksPage pattern: input `onFocus`/`onClick` opens the
+      keyboard driving `newItem` state (Enter adds and keeps the keyboard up
+      for burst entry); the popup's outside-click handler is suppressed while
+      the keyboard is open       so key/backdrop taps don't close the popup. The keyboard is portaled
+      to `#root` — rendered inside the popup it inherited the popup's
+      `transform` (from the popupIn entrance animation), which made
+      `position: fixed` resolve against the 320px popup box instead of the
+      viewport and trapped the keyboard inside the list; portaling to
+      `document.body` instead escaped the app-scale transform and rendered
+      the keys unscaled/tiny, so `#root` is the correct target (escapes the
+      popup, keeps the 1920×1080 canvas scale). List
+      area lengthened 240→520px (popup max-h 460→760px); while the keyboard
+      is open the list caps at 260px so the add row stays above the keyboard
+      panel (bottom 40% of the 1080 canvas).
+
+- [x] **Shopping list popup opened detached from its anchor, far off to the
+      left (user-reported, with screenshot).** Root cause: the popup used
+      `position: fixed` + `getBoundingClientRect()`/`window.innerWidth`
+      viewport math, but it renders inside `#root`, which carries
+      `transform: scale(var(--app-scale))` — a transformed ancestor turns
+      `fixed` into "absolute relative to #root", so the popup was placed in
+      #root's unscaled 1920×1080 coordinate space using viewport (scaled)
+      coordinates. Fixed by switching to the codebase's other-popover
+      pattern (`WeatherPopup`): `absolute top-full start-0 mt-3` inside the
+      TopBar button's `relative` wrapper — no coordinate math at all.
+      Removed `computePosition`/position state/resize listener; added the
+      missing anchor exclusion to the outside-click handler (clicking the
+      cart button while open now closes instead of reopening, matching
+      `WeatherPopup`). Apple-design polish pass on the same component:
+      count badge 10px→11px (typography minimum), removed dead `group`
+      classes, completed rows no longer dim the delete button along with
+      the content (`opacity-50` removed — line-through + check icon still
+      signal state). Build clean; hot-reloaded into the running dev server.
+
+- [x] **Shopping list popup always empty despite 26 items in HA
+      (user-reported).** Root cause: `todo.get_items` is a response-data
+      service — HA 400s with "Service call requires responses but caller did
+      not ask for responses. Add ?return_response to query parameters"
+      unless that param is on the URL, and the route then silently fell back
+      to `/api/states/<entity>`, whose attributes never contain the items
+      (state is just the item count), so the popup always rendered empty.
+      Fixed `GET /api/ha/todo/:entity_id` in
+      `backend/routes/homeassistant.js`: added `?return_response` and parse
+      the real REST wrapper shape
+      `{ changed_states, service_response: { "<entity>": { items } } }`
+      (older shapes kept as fallbacks). Verified live against the real HA:
+      all 26 items load with the `summary`/`status`/`uid` fields the popup
+      expects; add/update/remove endpoints untouched (not response-data
+      services).
+
+- [x] **Chores tab — photos uploaded from the camera icon persist in the DB.**
+      (user request) The avatar/camera button on each person already opened a
+      file picker but only stored the result in `localStorage`
+      (`chores_avatars`), so photos didn't survive or sync. Added a
+      lazily-created `avatar TEXT` column on `chore_people`,
+      `PUT`/`DELETE /api/tasks/people/:id/avatar` (validated image data URL,
+      ≤1.5 MB, JSON body limit raised to 2 MB), and the people payload now
+      carries `avatar`. The page uploads via the hook and emits
+      `tasks:updated`, so a photo taken on one device appears on the others.
+      **Root cause of "tapping does nothing", found via Playwright E2E:** the
+      `ProgressRing` SVG is `absolute inset-0` *on top of* the static avatar
+      button, so it swallowed every tap — the button never received a click.
+      Fixed with `pointer-events-none` on the ring SVG; also removed
+      `capture="environment"` (forces a camera app that may not exist),
+      reset `input.value` after each pick so re-picking the same file
+      re-fires `onChange`, and added success/error toasts. Verified in real
+      Chromium: tap → file chooser opens → resize → PUT → avatar in DB.
+- [x] **Chores tab — mock data removed, everything backed by SQLite.** (user
+      request) `useChores.js` shipped 3 mock people with 14 hard-coded Hebrew
+      chores and used them whenever `import.meta.env.DEV` was true, so in dev
+      nothing touched the DB and toggles were lost on reload. The hook now
+      always goes through `/api/tasks/people` (people + chores), with Socket.io
+      `tasks:updated` live sync. Family members are now persisted in the DB:
+      Settings → Family loads from `/api/tasks/people` (seeding from
+      `chores_people` localStorage on first run so existing installs converge),
+      and add/remove person hit new `POST`/`DELETE /api/tasks/people[/:id]`
+      routes (delete cascades to that person's chores). Every chores mutation
+      route now emits `tasks:updated`.
+- [x] **Tasks tab — mock data removed, everything backed by SQLite.** (user
+      request) `useTasks.js` shipped 10 hard-coded Hebrew mock tasks and used
+      them whenever `import.meta.env.DEV` was true, so in dev the tab never
+      touched the DB and every mutation was lost on reload. The mock array and
+      dev branch are gone: the tab always reads/writes through `/api/tasks`
+      (Vite proxies to the backend in dev, so the same code path runs
+      everywhere).
+- [x] **Tasks tab — checklist sub-items inside tasks; list badges removed.**
+      (user request) Each task now holds a tickable checklist, edited inside
+      the task detail overlay: `kanban_subtasks` table (migration
+      `005_task_subtasks.sql`, `ON DELETE CASCADE` from `kanban_tasks`),
+      `POST/PATCH/DELETE /api/tasks/:id/subtasks[/:subId]` routes, subtasks
+      embedded in the task payload, and an overlay section with circular
+      tick boxes, strike-through on done items, per-item delete, and an
+      add-item row (on-screen keyboard, Enter adds). Cards show a
+      "x מתוך y בוצעו" progress line when a task has items.
+      Note: the live DB had already recorded schema_version=5 from the
+      earlier `005_task_lists.sql` experiment, so the subtasks migration was
+      applied by hand and the leftover `task_lists` table dropped — on a
+      fresh DB the migration runs normally. The list/badge feature itself was
+      rejected by the user and fully removed: picker UI, card pill, and
+      `/api/tasks/lists` routes (the unused `list_name`/`list_color` columns
+      remain in the `kanban_tasks` schema but nothing reads or writes them).
+- [x] **Tasks tab — position-aware drag reorder.** The `position` column
+      existed in the schema but drag-and-drop only changed `status` — cards
+      always appended to the end of the target column and could never be
+      reordered within a column. The drag now tracks a `{ col, index }`
+      insertion point (pointer vs. card midpoints, dragged card excluded),
+      renders an accent drop indicator at that slot, and persists the new
+      order via bulk `PUT /api/tasks/reorder` (single transaction; source
+      column reindexed on cross-column moves). New tasks now also append at
+      the end of *their* column instead of using a global max position.
+- [x] **Tasks tab — single-request clear-completed.** `clearCompleted` fired N
+      parallel `DELETE /api/tasks/:id` calls (one per done task) and any
+      failure triggered a full refetch. Now one `DELETE /api/tasks/completed`.
+- [x] **Tasks tab — Socket.io live sync.** Every mutation route emits
+      `tasks:updated`; `useTasks` subscribes (same `io('/')` singleton pattern
+      as `useHomeAssistant`) and refetches, so changes from another
+      tab/device appear without waiting for the 2-minute poll.
 - [x] **News section redesigned against the Apple HIG** (using the cloned skill
       at `.github/skills/apple-design-skill/`, HIG-cited review then
       implementation). The old page was a phone layout on a 1920x1080 wall

@@ -368,4 +368,220 @@ async function fetchAllIcsEvents(logger, icsUrls, start, end) {
   return merged;
 }
 
+// ---------------------------------------------------------------------------
+// Local editable events (SQLite)
+// ---------------------------------------------------------------------------
+
+const VALID_COLORS = new Set(['mint', 'lav', 'coral', 'gold']);
+
+function normalizeColor(value) {
+  if (value === 'lavender') return 'lav';
+  return VALID_COLORS.has(value) ? value : 'mint';
+}
+
+function rowToLocalEvent(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.title,
+    description: row.description || '',
+    location: row.location || '',
+    start: row.start,
+    end: row.end,
+    allDay: row.all_day === 1,
+    calendar: 'local',
+    color: normalizeColor(row.color),
+    source: 'local',
+  };
+}
+
+function parseEventInstant(value, allDay, endOfDay) {
+  const raw = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return new Date(`${raw}T${endOfDay ? '23:59:59' : '00:00:00'}`);
+  }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function eventOverlapsRange(ev, rangeStart, rangeEnd) {
+  const start = parseEventInstant(ev.start, ev.allDay, false);
+  let end = parseEventInstant(ev.end || ev.start, ev.allDay, true);
+  if (!start) return false;
+  if (!end || end < start) {
+    end = new Date(start);
+    if (ev.allDay) end.setDate(end.getDate() + 1);
+    else end.setHours(end.getHours() + 1);
+  }
+  return end >= rangeStart && start <= rangeEnd;
+}
+
+function validateEventBody(body, { partial = false } = {}) {
+  const out = {};
+
+  if (body.title !== undefined || !partial) {
+    const title = String(body.title || '').trim();
+    if (!title) return { error: 'Title is required' };
+    out.title = title;
+  }
+  if (body.description !== undefined || !partial) {
+    out.description = String(body.description || '');
+  }
+  if (body.location !== undefined || !partial) {
+    out.location = String(body.location || '');
+  }
+  if (body.color !== undefined || !partial) {
+    out.color = normalizeColor(body.color);
+  }
+  if (body.allDay !== undefined || body.all_day !== undefined || !partial) {
+    out.allDay = !!(body.allDay ?? body.all_day);
+  }
+  if (body.start !== undefined || !partial) {
+    const start = String(body.start || '').trim();
+    if (!start) return { error: 'Start is required' };
+    out.start = start;
+  }
+  if (body.end !== undefined || !partial) {
+    out.end = String(body.end || body.start || '').trim();
+  }
+
+  return { value: out };
+}
+
+function emitCalendarUpdated(req) {
+  const io = req.app.locals.io;
+  if (io) io.emit('calendar:updated');
+}
+
+// GET /api/calendar/events?start=&end=
+router.get('/events', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    const rangeStart = req.query.start ? new Date(req.query.start) : new Date(0);
+    const rangeEnd = req.query.end
+      ? new Date(req.query.end)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())) {
+      return res.status(400).json({ error: 'Invalid start or end' });
+    }
+
+    const rows = db.prepare('SELECT * FROM calendar_events').all();
+    const events = rows
+      .map(rowToLocalEvent)
+      .filter((ev) => eventOverlapsRange(ev, rangeStart, rangeEnd))
+      .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    res.json({ events, source: 'local' });
+  } catch (err) {
+    logger.error('Local calendar fetch error: %s', err.message);
+    res.status(500).json({ error: 'Failed to fetch local calendar events' });
+  }
+});
+
+// POST /api/calendar/events
+router.post('/events', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+  const parsed = validateEventBody(req.body || {});
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+
+  try {
+    const id = `ev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const ev = parsed.value;
+    db.prepare(
+      `INSERT INTO calendar_events
+         (id, title, description, location, start, end, all_day, color)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      id,
+      ev.title,
+      ev.description,
+      ev.location,
+      ev.start,
+      ev.end || ev.start,
+      ev.allDay ? 1 : 0,
+      ev.color
+    );
+
+    const row = db.prepare('SELECT * FROM calendar_events WHERE id = ?').get(id);
+    logger.info('Calendar event created: %s', id);
+    emitCalendarUpdated(req);
+    res.status(201).json(rowToLocalEvent(row));
+  } catch (err) {
+    logger.error('Calendar event create error: %s', err.message);
+    res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+// PATCH /api/calendar/events/:id
+router.patch('/events/:id', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+  const id = req.params.id;
+
+  const existing = db.prepare('SELECT * FROM calendar_events WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Event not found' });
+
+  const parsed = validateEventBody(req.body || {}, { partial: true });
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
+
+  try {
+    const next = {
+      title: parsed.value.title !== undefined ? parsed.value.title : existing.title,
+      description:
+        parsed.value.description !== undefined ? parsed.value.description : existing.description,
+      location: parsed.value.location !== undefined ? parsed.value.location : existing.location,
+      start: parsed.value.start !== undefined ? parsed.value.start : existing.start,
+      end: parsed.value.end !== undefined ? parsed.value.end : existing.end,
+      allDay:
+        parsed.value.allDay !== undefined ? parsed.value.allDay : existing.all_day === 1,
+      color: parsed.value.color !== undefined ? parsed.value.color : existing.color,
+    };
+
+    db.prepare(
+      `UPDATE calendar_events
+          SET title = ?, description = ?, location = ?, start = ?, end = ?,
+              all_day = ?, color = ?, updated_at = datetime('now')
+        WHERE id = ?`
+    ).run(
+      next.title,
+      next.description,
+      next.location,
+      next.start,
+      next.end || next.start,
+      next.allDay ? 1 : 0,
+      next.color,
+      id
+    );
+
+    const row = db.prepare('SELECT * FROM calendar_events WHERE id = ?').get(id);
+    logger.info('Calendar event updated: %s', id);
+    emitCalendarUpdated(req);
+    res.json(rowToLocalEvent(row));
+  } catch (err) {
+    logger.error('Calendar event update error: %s', err.message);
+    res.status(500).json({ error: 'Failed to update event' });
+  }
+});
+
+// DELETE /api/calendar/events/:id
+router.delete('/events/:id', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+  const id = req.params.id;
+
+  try {
+    const result = db.prepare('DELETE FROM calendar_events WHERE id = ?').run(id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Event not found' });
+    logger.info('Calendar event deleted: %s', id);
+    emitCalendarUpdated(req);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Calendar event delete error: %s', err.message);
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
 module.exports = router;

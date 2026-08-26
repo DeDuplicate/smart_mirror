@@ -3,10 +3,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // ─── Color Palettes ─────────────────────────────────────────────────────────
 
 export const CALENDAR_COLORS = {
-  mint:  { bg: 'var(--mint-bg)', border: 'var(--mint-d)', text: 'var(--mint-d)', dot: '#2a9d7f' },
-  lav:   { bg: 'var(--lav-bg)',  border: 'var(--lav-d)',  text: 'var(--lav-d)',  dot: '#5b52cc' },
-  coral: { bg: 'var(--coral-bg)', border: 'var(--coral-d)', text: 'var(--coral-d)', dot: '#c95454' },
-  gold:  { bg: 'var(--gold-bg)',  border: 'var(--gold-d)',  text: 'var(--gold-d)',  dot: '#b07c10' },
+  mint:  { bg: 'var(--mint-bg)', border: 'var(--mint-d)', text: 'var(--tp)', dot: 'var(--mint-d)' },
+  lav:   { bg: 'var(--lav-bg)',  border: 'var(--lav-d)',  text: 'var(--tp)',  dot: 'var(--lav-d)' },
+  coral: { bg: 'var(--coral-bg)', border: 'var(--coral-d)', text: 'var(--tp)', dot: 'var(--coral-d)' },
+  gold:  { bg: 'var(--gold-bg)',  border: 'var(--gold-d)',  text: 'var(--tp)',  dot: 'var(--gold-d)' },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -156,46 +156,44 @@ export default function useCalendar(rangeStart, rangeEnd) {
     const start = rangeStart.toISOString();
     const end = rangeEnd.toISOString();
 
-    let icsEvents = [];
-    let gotIcs = false;
+    const normalize = (ev, fallbackSource) => ({
+      ...ev,
+      title: ev.title || ev.summary || '(No title)',
+      source: ev.source || fallbackSource,
+    });
 
-    // Fetch configured ICS calendars
+    let icsEvents = [];
+    let localEvents = [];
+
     try {
-      const res = await fetch(`/api/calendar/ics?start=${start}&end=${end}`, {
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.events && data.events.length > 0) {
-          icsEvents = data.events.map((ev) => ({
-            ...ev,
-            title: ev.title || ev.summary || '(No title)',
-            source: ev.source || 'ics',
-          }));
-          gotIcs = true;
+      const [icsRes, localRes] = await Promise.all([
+        fetch(`/api/calendar/ics?start=${start}&end=${end}`, { signal: controller.signal }),
+        fetch(`/api/calendar/events?start=${start}&end=${end}`, { signal: controller.signal }),
+      ]);
+
+      if (icsRes.ok) {
+        const data = await icsRes.json();
+        if (data?.events?.length) {
+          icsEvents = data.events.map((ev) => normalize(ev, 'ics'));
+        }
+      }
+      if (localRes.ok) {
+        const data = await localRes.json();
+        if (data?.events?.length) {
+          localEvents = data.events.map((ev) => normalize(ev, 'local'));
         }
       }
     } catch (err) {
-      if (err?.name === 'AbortError') return; // superseded — bail before touching state
-      // ICS not available — continue
+      if (err?.name === 'AbortError') return;
     }
 
-    // Staleness guard: if a newer fetchEvents() call has started since this
-    // one began, discard this response instead of overwriting the grid
-    // with an out-of-order (older) week's events.
     if (requestId !== requestIdRef.current) return;
 
-    if (gotIcs) {
-      // Sort by start time
-      icsEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
-      setEvents(icsEvents);
-      setError(null);
-    } else {
-      // No source returned data — show empty calendar
-      setEvents([]);
-      setError(null);
-    }
-
+    const merged = [...icsEvents, ...localEvents].sort(
+      (a, b) => new Date(a.start) - new Date(b.start)
+    );
+    setEvents(merged);
+    setError(null);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart?.getTime(), rangeEnd?.getTime()]);
@@ -220,5 +218,48 @@ export default function useCalendar(rangeStart, rangeEnd) {
     };
   }, []);
 
-  return { events, loading, error, refetch: fetchEvents };
+  const createEvent = useCallback(async (payload) => {
+    const res = await fetch('/api/calendar/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to create event');
+    await fetchEvents();
+    return data;
+  }, [fetchEvents]);
+
+  const updateEvent = useCallback(async (id, payload) => {
+    const res = await fetch(`/api/calendar/events/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to update event');
+    await fetchEvents();
+    return data;
+  }, [fetchEvents]);
+
+  const deleteEvent = useCallback(async (id) => {
+    const res = await fetch(`/api/calendar/events/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete event');
+    }
+    await fetchEvents();
+  }, [fetchEvents]);
+
+  return {
+    events,
+    loading,
+    error,
+    refetch: fetchEvents,
+    createEvent,
+    updateEvent,
+    deleteEvent,
+  };
 }

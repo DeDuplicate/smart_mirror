@@ -81,15 +81,23 @@ function NewspaperIcon({ className = 'w-28 h-28' }) {
 // Tailwind utilities, so no inline var() and no hex anywhere on this screen.
 
 const CATEGORY_PLATE = {
-  news: 'bg-coral',
-  sport: 'bg-mint',
-  tech: 'bg-lav',
-  finance: 'bg-gold',
-  entertainment: 'bg-lav',
+  news: { className: 'bg-coral', bg: 'var(--coral-bg)' },
+  sport: { className: 'bg-mint', bg: 'var(--mint-bg)' },
+  tech: { className: 'bg-lav', bg: 'var(--lav-bg)' },
+  finance: { className: 'bg-gold', bg: 'var(--gold-bg)' },
+  entertainment: { className: 'bg-lav', bg: 'var(--lav-bg)' },
 };
 
 function categoryPlate(category) {
   return CATEGORY_PLATE[category] || CATEGORY_PLATE.news;
+}
+
+function categoryPlateClass(category) {
+  return categoryPlate(category).className;
+}
+
+function categoryPlateBg(category) {
+  return categoryPlate(category).bg;
 }
 
 function categoryLabel(category) {
@@ -148,7 +156,8 @@ function CategoryChip({ category, size = 'sm' }) {
   return (
     <span
       className={`inline-flex items-center shrink-0 rounded-full font-semibold text-tp
-                  ${categoryPlate(category)} ${sizeClass}`}
+                  ${categoryPlateClass(category)} ${sizeClass}`}
+      style={{ color: 'var(--tp)', backgroundColor: categoryPlateBg(category) }}
     >
       {categoryLabel(category)}
     </span>
@@ -242,8 +251,11 @@ function StoryCard({ article, unread, variant, onClick }) {
       ) : (
         // No photo: the plate becomes a flat category field. It names the
         // section, so the chip below is suppressed — one label, one job.
-        <div className={`flex items-end p-6 ${v.plate} ${categoryPlate(article.category)}`}>
-          <span className={`font-bold text-tp/70 ${v.plateLabel}`}>
+        <div
+          className={`flex items-end p-6 ${v.plate} ${categoryPlateClass(article.category)}`}
+          style={{ backgroundColor: categoryPlateBg(article.category) }}
+        >
+          <span className={`font-bold text-tp ${v.plateLabel}`}>
             {categoryLabel(article.category)}
           </span>
         </div>
@@ -254,24 +266,24 @@ function StoryCard({ article, unread, variant, onClick }) {
           <div className="flex items-center gap-3">
             {hasImage && <CategoryChip category={article.category} size={v.chipSize} />}
             {isLead && (
-              <span className="text-[16px] font-semibold text-tp/70">{t.news.featured}</span>
+              <span className="text-[16px] font-semibold text-ts">{t.news.featured}</span>
             )}
             <ReadNode unread={unread} className={isLead ? 'w-3.5 h-3.5' : 'w-3 h-3'} />
           </div>
         )}
 
-        <h2 className={`${v.title} ${unread ? 'font-bold text-tp' : 'font-semibold text-tp/70'}`}>
+        <h2 className={`${v.title} ${unread ? 'font-bold text-tp' : 'font-semibold text-ts'}`}>
           {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
           {article.title}
         </h2>
 
         {isLead && article.description && (
-          <p className="text-[20px] leading-[1.55] text-tp/70 line-clamp-2 max-w-[860px]">
+          <p className="text-[20px] leading-[1.55] text-ts line-clamp-2 max-w-[860px]">
             {article.description}
           </p>
         )}
 
-        <div className={`mt-auto flex items-center gap-3 text-tp/70 ${v.meta}`}>
+        <div className={`mt-auto flex items-center gap-3 text-ts ${v.meta}`}>
           <span className="font-semibold">{article.source}</span>
           <MetaRule />
           <span>{formatRelativeTime(article.publishedAt)}</span>
@@ -308,7 +320,7 @@ function TimelineRow({ article, unread, onClick }) {
     >
       <span
         dir="ltr"
-        className="w-[62px] shrink-0 text-center font-mono tabular-nums text-[17px] text-tp/70"
+        className="w-[62px] shrink-0 text-center font-mono tabular-nums text-[17px] text-ts"
       >
         {formatStamp(article.publishedAt)}
       </span>
@@ -318,12 +330,12 @@ function TimelineRow({ article, unread, onClick }) {
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <h3
           className={`text-[19px] leading-[1.35] line-clamp-2
-                      ${unread ? 'font-bold text-tp' : 'font-medium text-tp/70'}`}
+                      ${unread ? 'font-bold text-tp' : 'font-medium text-ts'}`}
         >
           {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
           {article.title}
         </h3>
-        <span className="text-[15px] text-tp/70">{article.source}</span>
+        <span className="text-[15px] text-ts">{article.source}</span>
       </div>
     </div>
   );
@@ -351,7 +363,7 @@ function ArticleFigure({ src, caption }) {
         onError={() => setFailed(true)}
       />
       {caption && (
-        <figcaption className="text-[17px] leading-[1.5] text-tp/70">{caption}</figcaption>
+        <figcaption className="text-[17px] leading-[1.5] text-ts">{caption}</figcaption>
       )}
     </figure>
   );
@@ -412,7 +424,7 @@ function ArticleBodySkeleton() {
 function ExtractionNotice({ onRetry }) {
   return (
     <div className="flex items-start gap-4 rounded-2xl bg-s2 border border-bd p-6">
-      <AlertIcon className="w-6 h-6 mt-1 shrink-0 text-tp/70" />
+      <AlertIcon className="w-6 h-6 mt-1 shrink-0 text-ts" />
       <div className="flex-1 flex flex-col items-start gap-5">
         <p className="text-[19px] leading-[1.6] text-tp">{t.news.overlay.unavailable}</p>
         <button
@@ -476,7 +488,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
         aria-modal="true"
         aria-labelledby={ARTICLE_TITLE_ID}
         className="relative w-full max-w-[1240px] h-full flex flex-col overflow-hidden
-                   rounded-2xl bg-surf shadow-modal transition-[opacity,transform]"
+                   rounded-2xl bg-surf text-tp shadow-modal transition-[opacity,transform]"
         style={{
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(32px)',
@@ -490,7 +502,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
           <CategoryChip category={article.category} size="lg" />
           <span className="text-[17px] font-semibold text-tp truncate">{article.source}</span>
           <MetaRule />
-          <span className="text-[17px] text-tp/70 shrink-0">
+          <span className="text-[17px] text-ts shrink-0">
             {formatRelativeTime(article.publishedAt)}
           </span>
           <button
@@ -514,7 +526,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
             </h1>
 
             {article.description && (
-              <p className="text-[23px] leading-[1.6] text-tp/70">{article.description}</p>
+              <p className="text-[23px] leading-[1.6] text-ts">{article.description}</p>
             )}
 
             {heroImage && (
@@ -616,7 +628,7 @@ export default function NewsPage() {
           >
             <NewspaperIcon className="w-28 h-28 text-tm" />
             <p className="text-[26px] font-bold text-tp text-center">{t.empty.noNews}</p>
-            <p className="text-[19px] leading-[1.6] text-tp/70 text-center">
+            <p className="text-[19px] leading-[1.6] text-ts text-center">
               {t.news.emptyHint}
             </p>
             <button
@@ -691,7 +703,7 @@ export default function NewsPage() {
                   dir="ltr"
                   className="inline-flex items-center justify-center min-w-[38px] h-7 px-2
                              rounded-full bg-surf border border-bd font-mono tabular-nums
-                             text-[15px] text-tp/70"
+                             text-[15px] text-ts"
                 >
                   {rail.length}
                 </span>

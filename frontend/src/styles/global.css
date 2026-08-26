@@ -105,6 +105,7 @@
 
   /* One-off hues with no pastel family */
   --amber: #e0a630;
+  --cal-line: #c4c7d8;
 
   /* Elevation — semantic, see rule 4. Tinted with the --tp hue so shadows
      read as the same cool grey as the rest of the palette. */
@@ -127,6 +128,7 @@
    ======================================================================== */
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg:    rgb(var(--bg-rgb));
   --bg-rgb: 15 16 25;
   --surf:  rgb(var(--surf-rgb));
@@ -134,7 +136,7 @@
   --s2:    rgb(var(--s2-rgb));
   --s2-rgb: 34 36 58;
   --bd:    rgb(var(--bd-rgb));
-  --bd-rgb: 45 47 74;
+  --bd-rgb: 78 82 122;
   --tp:    rgb(var(--tp-rgb));
   --tp-rgb: 232 233 240;
   --ts:    rgb(var(--ts-rgb));
@@ -158,6 +160,7 @@
 
   /* One-off hues */
   --amber: #f0b840;
+  --cal-line: #9aa0c8;
 
   /* Elevation — neutral black and deeper, since a tinted shadow disappears
      against dark surfaces */
@@ -213,15 +216,27 @@
 
   html {
     font-size: 16px;
+    width: 100%;
+    height: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg);
+    color-scheme: light;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  :root[data-theme="dark"],
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
+    width: 100%;
+    height: 100%;
     background-color: var(--bg);
     color: var(--tp);
     font-family: 'Heebo', sans-serif;
-    min-height: 100vh;
+    min-height: 100%;
     overflow: hidden;
     line-height: 1.5;
     direction: rtl;
@@ -232,9 +247,13 @@
     width: 1920px;
     height: 1080px;
     overflow: hidden;
-    position: relative;
-    transform: scale(var(--app-scale, 1));
-    transform-origin: top right;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-color: var(--bg);
+    color: var(--tp);
+    transform: scale(var(--app-scale-x, 1), var(--app-scale-y, 1));
+    transform-origin: top left;
   }
 
   /* Scrollbar styling for touch */
@@ -836,3 +855,62 @@
     outline: none;
   }
 }
+
+/* Tailwind rgb(var(--x-rgb) / opacity) can fail to follow theme on some
+   Chromium builds. These unlayered aliases use the derived tokens instead. */
+.bg-bg { background-color: var(--bg); }
+.bg-surf { background-color: var(--surf); }
+.bg-s1 { background-color: var(--s2); }
+.bg-s2 { background-color: var(--s2); }
+.bg-s2\/60 { background-color: color-mix(in srgb, var(--s2) 60%, transparent); }
+.bg-bd { background-color: var(--bd); }
+.bg-acc { background-color: var(--acc); }
+.bg-acc\/10 { background-color: color-mix(in srgb, var(--acc) 10%, transparent); }
+.hover\:bg-s2:hover { background-color: var(--s2); }
+.hover\:bg-surf:hover { background-color: var(--surf); }
+.hover\:bg-bd:hover { background-color: var(--bd); }
+
+.cal-grid {
+  gap: 2px;
+  background-color: var(--cal-line);
+}
+.cal-grid > * {
+  min-width: 0;
+}
+
+.mini-player {
+  background-color: var(--s2) !important;
+  color: var(--tp);
+}
+.mini-player button {
+  background-color: transparent;
+  color: inherit;
+}
+.mini-player .mini-title { color: var(--tp) !important; }
+.mini-player .mini-artist { color: var(--ts) !important; }
+
+.track-row button {
+  background-color: transparent;
+}
+.track-row:hover,
+.track-row.is-current {
+  background-color: var(--s2) !important;
+}
+.track-row:hover .track-title,
+.track-row.is-current .track-title {
+  color: var(--tp) !important;
+}
+.track-row:hover .track-meta,
+.track-row .track-meta {
+  color: var(--ts) !important;
+}
+.bg-mint { background-color: var(--mint-bg); }
+.bg-lav { background-color: var(--lav-bg); }
+.bg-coral { background-color: var(--coral-bg); }
+.bg-gold { background-color: var(--gold-bg); }
+.text-tp { color: var(--tp); }
+.text-ts { color: var(--ts); }
+.text-tm { color: var(--tm); }
+.text-tp\/70 { color: var(--ts); }
+.border-bd { border-color: var(--bd); }
+.border-surf { border-color: var(--surf); }

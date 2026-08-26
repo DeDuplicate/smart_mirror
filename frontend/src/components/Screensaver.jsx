@@ -3,6 +3,7 @@ import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 import WeatherIcon, { getConditionLabel } from './WeatherIcon.jsx';
 import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
+import useDailyPhrase from '../hooks/useDailyPhrase.js';
 
 // ─── Screensaver Component ───────────────────────────────────────────────────
 // Two modes: "clock" (full-screen dark clock) or "slideshow" (Ken Burns photos).
@@ -152,6 +153,30 @@ function ScreensaverShabbat({ date }) {
   );
 }
 
+// ─── Daily phrase (המשפט היומי) ──────────────────────────────────────────────
+
+function DailyPhrase({ compact = false }) {
+  const phrase = useDailyPhrase();
+  if (!phrase?.text) return null;
+
+  return (
+    <div
+      className={`flex flex-col ${compact ? 'items-start' : 'items-center'} text-center max-w-[920px] px-10 select-none`}
+      dir="rtl"
+    >
+      <p
+        className="text-white/90 font-light leading-relaxed"
+        style={{
+          fontSize: compact ? 28 : 42,
+          textShadow: compact ? '0 1px 8px rgba(0,0,0,0.55)' : 'none',
+        }}
+      >
+        {phrase.text}
+      </p>
+    </div>
+  );
+}
+
 // ─── Clock Mode ──────────────────────────────────────────────────────────────
 
 function ClockMode() {
@@ -197,6 +222,10 @@ function ClockMode() {
       {/* Shabbat times — Friday and Saturday only */}
       <div className="mt-4">
         <ScreensaverShabbat date={time} />
+      </div>
+
+      <div className="mt-10">
+        <DailyPhrase />
       </div>
     </div>
   );
@@ -298,6 +327,13 @@ function SlideshowMode() {
         >
           <ScreensaverWeather iconSize={30} />
         </div>
+      </div>
+
+      <div
+        className="absolute bottom-8 right-8 max-w-[560px]"
+        style={{ zIndex: 2 }}
+      >
+        <DailyPhrase compact />
       </div>
     </div>
   );

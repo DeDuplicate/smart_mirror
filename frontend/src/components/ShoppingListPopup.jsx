@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { io } from 'socket.io-client';
 import { fetchApi } from '../hooks/useApi.js';
+import OnScreenKeyboard from './OnScreenKeyboard.jsx';
 import t from '../i18n/he.json';
 
 // ─── Socket.io singleton (real-time HA sync) ────────────────────────────────
@@ -86,30 +88,6 @@ function TrashIcon({ className = 'w-4 h-4' }) {
 
 const ENTITY_ID = 'todo.shopping_list';
 const POLL_INTERVAL = 30_000;
-const POPUP_WIDTH = 320;
-const POPUP_MAX_HEIGHT = 460;
-
-// Compute popup position relative to the anchor (top bar icon), clamped to
-// the viewport. Recomputed on open and on window resize.
-function computePosition(anchorRef) {
-  if (!anchorRef?.current) return null;
-  const rect = anchorRef.current.getBoundingClientRect();
-
-  // Vertical: below the button, but clamp to viewport
-  let top = rect.bottom + 8;
-  if (top + POPUP_MAX_HEIGHT > window.innerHeight) {
-    top = Math.max(8, window.innerHeight - POPUP_MAX_HEIGHT - 8);
-  }
-
-  // Horizontal: align right edge with button, but clamp to viewport
-  let right = window.innerWidth - rect.right;
-  if (right < 8) right = 8;
-  if (right + POPUP_WIDTH > window.innerWidth - 8) {
-    right = window.innerWidth - POPUP_WIDTH - 8;
-  }
-
-  return { top: `${top}px`, right: `${right}px` };
-}
 
 // ─── ShoppingListPopup ────────────────────────────────────────────────────
 
@@ -123,7 +101,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   const [adding, setAdding] = useState(false);
   const [offline, setOffline] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [position, setPosition] = useState(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const pollRef = useRef(null);
 
   // Fetch items
@@ -142,15 +120,6 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       setLoading(false);
     }
   }, []);
-
-  // Keep popup clamped to the viewport when the window resizes while open
-  useEffect(() => {
-    if (!visible) return;
-    const update = () => setPosition(computePosition(anchorRef));
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [visible, anchorRef]);
 
   // Fetch on open + poll (poll is a fallback safety net; real-time sync
   // happens via the 'ha:state_changed' socket event below)
@@ -198,7 +167,15 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   useEffect(() => {
     if (!visible) return;
     function handleClickOutside(e) {
-      if (popupRef.current && !popupRef.current.contains(e.target)) {
+      // While the on-screen keyboard is open its backdrop covers the page —
+      // key taps and backdrop taps must not close the popup underneath.
+      if (keyboardOpen) return;
+      if (
+        popupRef.current &&
+        !popupRef.current.contains(e.target) &&
+        anchorRef?.current &&
+        !anchorRef.current.contains(e.target)
+      ) {
         onClose();
       }
     }
@@ -209,7 +186,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       clearTimeout(timer);
       document.removeEventListener('pointerdown', handleClickOutside);
     };
-  }, [visible, onClose]);
+  }, [visible, onClose, anchorRef, keyboardOpen]);
 
   // Close on Escape
   useEffect(() => {
@@ -244,6 +221,20 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       setAdding(false);
     }
   }, [newItem, adding, fetchItems]);
+
+  // On-screen keyboard (touch kiosk) — drives the add-item input directly.
+  // Enter adds the item and keeps the keyboard open for rapid multi-entry.
+  const handleKeyboardInput = useCallback((char) => {
+    setNewItem((prev) => prev + char);
+  }, []);
+
+  const handleKeyboardBackspace = useCallback(() => {
+    setNewItem((prev) => prev.slice(0, -1));
+  }, []);
+
+  const handleKeyboardEnter = useCallback(() => {
+    handleAdd();
+  }, [handleAdd]);
 
   // Toggle item completion — referenced by index into the source `items`
   // array (not summary+uid) since HA items can share a summary and some
@@ -345,14 +336,6 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
 
   if (!visible) return null;
 
-  // Position relative to anchor (top bar icon) with viewport bounds checking;
-  // kept in state so it also recomputes on window resize
-  const style = {
-    position: 'fixed',
-    zIndex: 50,
-    ...(position || {}),
-  };
-
   const withIdx = items.map((item, idx) => ({ item, idx }));
   const activeItems = withIdx.filter((x) => x.item.status !== 'completed');
   const completedItems = withIdx.filter((x) => x.item.status === 'completed');
@@ -361,9 +344,9 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   return (
     <div
       ref={popupRef}
-      className="bg-surf border border-bd rounded-2xl shadow-popover w-[320px] max-h-[460px] flex flex-col
+      className="absolute top-full start-0 z-50 mt-3
+                 bg-surf border border-bd rounded-2xl shadow-popover w-[320px] max-h-[760px] flex flex-col
                  overflow-hidden animate-popup-in"
-      style={style}
       dir="rtl"
     >
       {/* Header */}
@@ -372,7 +355,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
           <ShoppingBagIcon className="w-5 h-5 text-acc" />
           <span className="text-sm font-semibold text-tp">{t.shoppingList.title}</span>
           {itemCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-acc/15 text-acc text-[10px] font-bold">
+            <span className="px-1.5 py-0.5 rounded-full bg-acc/15 text-acc text-[11px] font-bold">
               {itemCount}
             </span>
           )}
@@ -440,7 +423,10 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
       )}
 
       {/* Item list */}
-      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ maxHeight: '240px' }}>
+      <div
+        className="flex-1 overflow-y-auto px-2 py-2"
+        style={{ maxHeight: keyboardOpen ? '260px' : '520px' }}
+      >
         {loading ? (
           <div className="flex items-center justify-center py-8 text-sm text-tm">
             {t.common.loading}
@@ -467,7 +453,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             {activeItems.map(({ item, idx }) => (
               <div
                 key={`active-${item.uid || idx}`}
-                className="w-full flex items-center gap-3 px-3 py-2 min-h-[56px] rounded-xl hover:bg-s2 transition-colors group"
+                className="w-full flex items-center gap-3 px-3 py-2 min-h-[56px] rounded-xl hover:bg-s2 transition-colors"
               >
                 <button
                   onClick={() => handleToggleItem(idx)}
@@ -490,7 +476,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             {completedItems.map(({ item, idx }) => (
               <div
                 key={`done-${item.uid || idx}`}
-                className="w-full flex items-center gap-3 px-3 py-2 min-h-[56px] rounded-xl hover:bg-s2 transition-colors opacity-50 group"
+                className="w-full flex items-center gap-3 px-3 py-2 min-h-[56px] rounded-xl hover:bg-s2 transition-colors"
               >
                 <button
                   onClick={() => handleToggleItem(idx)}
@@ -522,6 +508,8 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
           type="text"
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
+          onFocus={() => setKeyboardOpen(true)}
+          onClick={() => setKeyboardOpen(true)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleAdd();
           }}
@@ -542,6 +530,23 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
           <PlusIcon className="w-4 h-4" />
         </button>
       </div>
+
+      {/* On-screen keyboard for the add-item input (touch kiosk).
+          Portaled to #root: this popup keeps a `transform` from its
+          entrance animation, which would hijack the keyboard's
+          `position: fixed` and trap it inside the popup's box. #root
+          (not <body>) keeps the keyboard inside the app's scaled
+          1920×1080 canvas so it renders full-size like on the pages. */}
+      {createPortal(
+        <OnScreenKeyboard
+          visible={keyboardOpen}
+          onInput={handleKeyboardInput}
+          onBackspace={handleKeyboardBackspace}
+          onEnter={handleKeyboardEnter}
+          onClose={() => setKeyboardOpen(false)}
+        />,
+        document.getElementById('root') || document.body
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import useStore from '../store/index.js';
 
 // ─── Idle Detection Hook ─────────────────────────────────────────────────────
 // Tracks user activity (touch, mouse, keyboard) and sets idle state
-// after a configurable timeout from settings.idleTimeout (seconds).
+// after a configurable timeout from settings.idleTimeout (minutes).
 
 const ACTIVITY_EVENTS = [
   'touchstart',
@@ -16,7 +16,7 @@ const ACTIVITY_EVENTS = [
 ];
 
 export default function useIdleDetection() {
-  const idleTimeout = useStore((s) => s.settings.idleTimeout) || 300; // default 5 min in seconds
+  const idleMinutes = useStore((s) => s.settings.idleTimeout) || 5;
   const [isIdle, setIsIdle] = useState(false);
   const timerRef = useRef(null);
   const idleRef = useRef(false);
@@ -37,8 +37,8 @@ export default function useIdleDetection() {
     timerRef.current = setTimeout(() => {
       idleRef.current = true;
       setIsIdle(true);
-    }, idleTimeout * 1000);
-  }, [idleTimeout]);
+    }, idleMinutes * 60 * 1000);
+  }, [idleMinutes]);
 
   useEffect(() => {
     // Start initial timer

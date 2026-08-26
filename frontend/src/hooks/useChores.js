@@ -1,64 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { io } from 'socket.io-client';
 
-// ─── Dev mode check ────────────────────────────────────────────────────────
+// ─── Socket.io singleton (same pattern as useTasks / useHomeAssistant) ─────
 
-const isDev =
-  typeof import.meta !== 'undefined' &&
-  import.meta.env &&
-  import.meta.env.DEV;
+let socket = null;
 
-// ─── Load people from localStorage (configured in Settings → Family) ───────
+function getSocket() {
+  if (!socket) {
+    socket = io('/', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+    });
+  }
+  return socket;
+}
 
-// `allowMockFallback` must stay false in production. It exists solely so
-// local dev (no Settings configured yet) still has something to look at —
-// it must NEVER be used on the path that syncs people into the real
-// backend SQLite table (see fetchTasks below), or a fresh Pi install would
-// permanently persist these placeholder names into the production DB.
-function getConfiguredPeople({ allowMockFallback = false } = {}) {
+// ─── Family members from localStorage (written by Settings → Family) ───────
+// Used ONLY to seed the backend table; the backend is the source of truth.
+
+function getConfiguredPeople() {
   try {
-    const stored = JSON.parse(localStorage.getItem('chores_people') || '[]');
-    if (stored.length > 0) {
-      return stored.map(p => ({ ...p, listId: null, avatar: null, tasks: [] }));
-    }
-  } catch { /* ignore */ }
-  if (!allowMockFallback) return [];
-  // Fallback mock data if no people configured (dev only)
-  return [
-    { id: 'p1', name: 'חיים', color: '#2a9d7f', listId: null, avatar: null, tasks: [] },
-    { id: 'p2', name: 'מעיין', color: '#5b52cc', listId: null, avatar: null, tasks: [] },
-    { id: 'p3', name: 'רון', color: '#c95454', listId: null, avatar: null, tasks: [] },
-  ];
+    return JSON.parse(localStorage.getItem('chores_people') || '[]');
+  } catch {
+    return [];
+  }
 }
-
-// Sample tasks for dev mode (assigned to configured people)
-function getMockTasks(personIndex) {
-  const taskSets = [
-    [
-      { id: 't1', title: 'לקנות חלב ולחם', emoji: '🛒', completed: true, recurrence: 'once', dueDate: '2026-04-06' },
-      { id: 't2', title: 'לשלם חשבון ארנונה', emoji: '💳', completed: true, recurrence: 'once', dueDate: '2026-04-05' },
-      { id: 't3', title: 'להוציא את הכלב', emoji: '🐕', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't4', title: 'לתקן ברז במטבח', emoji: '🔧', completed: false, recurrence: 'once', dueDate: null },
-      { id: 't5', title: 'לנקות את המחסן', emoji: '🧹', completed: false, recurrence: 'weekly', dueDate: '2026-04-10' },
-    ],
-    [
-      { id: 't6', title: 'להכין שיעורי בית', emoji: '📚', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't7', title: 'לסדר את החדר', emoji: '🛏️', completed: true, recurrence: 'weekly', dueDate: '2026-04-07' },
-      { id: 't8', title: 'לתרגל פסנתר', emoji: '🎹', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't9', title: 'לקרוא ספר', emoji: '📖', completed: true, recurrence: 'once', dueDate: '2026-04-09' },
-    ],
-    [
-      { id: 't10', title: 'להכין מצגת לעבודה', emoji: '💼', completed: false, recurrence: 'once', dueDate: '2026-04-08' },
-      { id: 't11', title: 'לרוץ 5 ק"מ', emoji: '🏃', completed: true, recurrence: 'daily', dueDate: '2026-04-07' },
-      { id: 't12', title: 'לעדכן קורות חיים', emoji: '📝', completed: false, recurrence: 'once', dueDate: '2026-04-12' },
-      { id: 't13', title: 'לתאם פגישה עם רו"ח', emoji: '📞', completed: false, recurrence: 'once', dueDate: '2026-04-10' },
-      { id: 't14', title: 'להחליף שמן ברכב', emoji: '🚗', completed: false, recurrence: 'once', dueDate: '2026-04-15' },
-      { id: 't15', title: 'לקנות מתנה ליום הולדת', emoji: '🎁', completed: false, recurrence: 'once', dueDate: '2026-04-03' },
-    ],
-  ];
-  return taskSets[personIndex % taskSets.length] || [];
-}
-
-const MOCK_PEOPLE = getConfiguredPeople({ allowMockFallback: true }).map((p, i) => ({ ...p, tasks: getMockTasks(i) }));
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 
@@ -71,7 +39,7 @@ async function apiFetch(url, options = {}) {
   return res.json();
 }
 
-// ─── localStorage helpers ─────────────────────────────────────────────────
+// ─── localStorage helpers (UI preference only) ─────────────────────────────
 
 const HIDE_COMPLETED_KEY = 'tasks_hideCompleted';
 
@@ -93,39 +61,30 @@ function saveHideCompleted(val) {
 
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
-let nextMockId = 200;
-
-export default function useTasks() {
+export default function useChores() {
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hideCompleted, setHideCompletedState] = useState(loadHideCompleted);
   const intervalRef = useRef(null);
 
-  // ── Fetch tasks (person-based) ─────────────────────────────────────────
+  // ── Fetch people + chores from the backend (SQLite) ────────────────────
+  // If Settings has a configured family, sync it into the DB first so the
+  // two stores converge; otherwise read the DB as-is.
   const fetchTasks = useCallback(async () => {
     try {
-      if (isDev) {
-        // Simulate network delay on first load
-        await new Promise((r) => setTimeout(r, 800));
-        setPeople(MOCK_PEOPLE.map((p) => ({ ...p, tasks: [...p.tasks] })));
-      } else {
-        // Production: NEVER fall back to mock names here. If the family
-        // hasn't been configured yet in Settings, `configured` is empty —
-        // fetch the backend's current state as-is (no `sync` param) so we
-        // don't persist placeholder people into the real SQLite database.
-        const configured = getConfiguredPeople({ allowMockFallback: false });
-        if (configured.length > 0) {
-          const syncParam = encodeURIComponent(JSON.stringify(configured.map(p => ({
-            id: p.id, name: p.name, color: p.color,
-          }))));
-          const data = await apiFetch(`/api/tasks/people?sync=${syncParam}`);
-          setPeople(data);
-        } else {
-          const data = await apiFetch('/api/tasks/people');
-          setPeople(data);
-        }
+      const configured = getConfiguredPeople();
+      let url = '/api/tasks/people';
+      if (configured.length > 0) {
+        const syncParam = encodeURIComponent(
+          JSON.stringify(
+            configured.map((p) => ({ id: p.id, name: p.name, color: p.color }))
+          )
+        );
+        url += `?sync=${syncParam}`;
       }
+      const data = await apiFetch(url);
+      setPeople(data);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -134,11 +93,19 @@ export default function useTasks() {
     }
   }, []);
 
-  // ── Initial fetch + 2-minute polling ───────────────────────────────────
+  // ── Initial fetch + polling + live socket updates ──────────────────────
   useEffect(() => {
     fetchTasks();
     intervalRef.current = setInterval(fetchTasks, 2 * 60 * 1000);
-    return () => clearInterval(intervalRef.current);
+
+    const s = getSocket();
+    const onUpdated = () => fetchTasks();
+    s.on('tasks:updated', onUpdated);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      s.off('tasks:updated', onUpdated);
+    };
   }, [fetchTasks]);
 
   // ── Toggle task completion (optimistic) ────────────────────────────────
@@ -171,14 +138,12 @@ export default function useTasks() {
         })
       );
 
-      if (!isDev) {
-        try {
-          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
-            method: 'PATCH',
-          });
-        } catch {
-          await fetchTasks();
-        }
+      try {
+        await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
+          method: 'PATCH',
+        });
+      } catch {
+        await fetchTasks();
       }
 
       // Return whether celebration should trigger
@@ -192,43 +157,25 @@ export default function useTasks() {
   );
 
   // ── Add task to a person ───────────────────────────────────────────────
-  const addTask = useCallback(
-    async (personId, { title, emoji, recurrence }) => {
-      const newTask = {
-        id: isDev ? `t${++nextMockId}` : undefined,
+  const addTask = useCallback(async (personId, { title, emoji, recurrence }) => {
+    const created = await apiFetch(`/api/tasks/people/${personId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({
         title,
         emoji: emoji || '📌',
-        completed: false,
         recurrence: recurrence || 'once',
         dueDate: null,
-      };
-
-      if (isDev) {
-        setPeople((prev) =>
-          prev.map((person) =>
-            person.id === personId
-              ? { ...person, tasks: [...person.tasks, newTask] }
-              : person
-          )
-        );
-        return newTask;
-      }
-
-      const created = await apiFetch(`/api/tasks/people/${personId}/tasks`, {
-        method: 'POST',
-        body: JSON.stringify(newTask),
-      });
-      setPeople((prev) =>
-        prev.map((person) =>
-          person.id === personId
-            ? { ...person, tasks: [...person.tasks, created] }
-            : person
-        )
-      );
-      return created;
-    },
-    []
-  );
+      }),
+    });
+    setPeople((prev) =>
+      prev.map((person) =>
+        person.id === personId
+          ? { ...person, tasks: [...person.tasks, created] }
+          : person
+      )
+    );
+    return created;
+  }, []);
 
   // ── Delete task ────────────────────────────────────────────────────────
   const deleteTask = useCallback(
@@ -241,14 +188,68 @@ export default function useTasks() {
         )
       );
 
-      if (!isDev) {
-        try {
-          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}`, {
-            method: 'DELETE',
-          });
-        } catch {
-          await fetchTasks();
-        }
+      try {
+        await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        await fetchTasks();
+      }
+    },
+    [fetchTasks]
+  );
+
+  // ── Avatar photo (camera/file picker) — persisted to the DB ────────────
+  const uploadAvatar = useCallback(
+    async (personId, dataUrl) => {
+      try {
+        await apiFetch(`/api/tasks/people/${personId}/avatar`, {
+          method: 'PUT',
+          body: JSON.stringify({ avatar: dataUrl }),
+        });
+        setPeople((prev) =>
+          prev.map((p) => (p.id === personId ? { ...p, avatar: dataUrl } : p))
+        );
+        return true;
+      } catch (err) {
+        setError(err.message);
+        return false;
+      }
+    },
+    []
+  );
+
+  const removeAvatar = useCallback(
+    async (personId) => {
+      setPeople((prev) =>
+        prev.map((p) => (p.id === personId ? { ...p, avatar: null } : p))
+      );
+      try {
+        await apiFetch(`/api/tasks/people/${personId}/avatar`, { method: 'DELETE' });
+      } catch {
+        await fetchTasks();
+      }
+    },
+    [fetchTasks]
+  );
+
+  // ── People CRUD (Settings → Family) ────────────────────────────────────
+  const addPerson = useCallback(async ({ name, color }) => {
+    const created = await apiFetch('/api/tasks/people', {
+      method: 'POST',
+      body: JSON.stringify({ name, color }),
+    });
+    setPeople((prev) => [...prev, created]);
+    return created;
+  }, []);
+
+  const removePerson = useCallback(
+    async (personId) => {
+      setPeople((prev) => prev.filter((p) => p.id !== personId));
+      try {
+        await apiFetch(`/api/tasks/people/${personId}`, { method: 'DELETE' });
+      } catch {
+        await fetchTasks();
       }
     },
     [fetchTasks]
@@ -274,6 +275,10 @@ export default function useTasks() {
     toggleTask,
     addTask,
     deleteTask,
+    addPerson,
+    removePerson,
+    uploadAvatar,
+    removeAvatar,
     refetch: fetchTasks,
   };
 }

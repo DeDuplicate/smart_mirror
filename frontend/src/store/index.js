@@ -1,4 +1,19 @@
 import { create } from 'zustand';
+import {
+  applyTheme,
+  nextThemeMode,
+  normalizeThemeMode,
+  resolveIsDark,
+} from '../theme.js';
+
+// Settings slider is 1–30 minutes. Legacy values were stored as seconds
+// (e.g. 300). Convert those so the hook and UI stay in sync.
+export function normalizeIdleMinutes(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 5;
+  if (n > 30) return Math.min(30, Math.max(1, Math.round(n / 60)));
+  return Math.min(30, Math.max(1, Math.round(n)));
+}
 
 // ─── Tab Slice ───────────────────────────────────────────────────────────────
 
@@ -85,24 +100,42 @@ const confirmSlice = (set) => ({
 
 // ─── Settings Slice ──────────────────────────────────────────────────────────
 
-const settingsSlice = (set) => ({
+const settingsSlice = (set, get) => ({
   settings: {
     userName: '',
     location: '',
     temperatureUnit: 'celsius',
     showWeekend: true,
-    idleTimeout: 300,
+    idleTimeout: 5,
     screensaverStyle: 'clock',
     weatherSource: 'openmeteo',
     displaySchedule: { wake: '06:00', sleep: '23:00' },
+    themeMode: 'auto',
     darkMode: false,
     loaded: false,
     firstRun: true,
   },
   setSettings: (patch) =>
-    set((state) => ({
-      settings: { ...state.settings, ...patch },
-    })),
+    set((state) => {
+      const settings = { ...state.settings, ...patch };
+      if ('idleTimeout' in patch || settings.idleTimeout != null) {
+        settings.idleTimeout = normalizeIdleMinutes(settings.idleTimeout);
+      }
+      if ('themeMode' in patch || 'darkMode' in patch) {
+        const themeMode = normalizeThemeMode(settings.themeMode, settings.darkMode);
+        const darkMode = resolveIsDark({
+          themeMode,
+          daily: state.weather.daily,
+          isDay: state.weather.current.isDay,
+          lat: settings.latitude,
+          lon: settings.longitude,
+        });
+        applyTheme(darkMode);
+        settings.themeMode = themeMode;
+        settings.darkMode = darkMode;
+      }
+      return { settings };
+    }),
   markSettingsLoaded: () =>
     set((state) => ({
       settings: { ...state.settings, loaded: true },
@@ -111,16 +144,40 @@ const settingsSlice = (set) => ({
     set((state) => ({
       settings: { ...state.settings, firstRun: false },
     })),
-  toggleDarkMode: () =>
+  setDarkMode: (next) =>
     set((state) => {
-      const next = !state.settings.darkMode;
-      if (next) {
-        document.documentElement.dataset.theme = 'dark';
-      } else {
-        delete document.documentElement.dataset.theme;
-      }
-      return { settings: { ...state.settings, darkMode: next } };
+      const isDark = !!next;
+      if (state.settings.darkMode === isDark) return state;
+      applyTheme(isDark);
+      return { settings: { ...state.settings, darkMode: isDark } };
     }),
+  setThemeMode: (mode) =>
+    set((state) => {
+      const themeMode = normalizeThemeMode(mode, state.settings.darkMode);
+      const isDark = resolveIsDark({
+        themeMode,
+        daily: state.weather.daily,
+        isDay: state.weather.current.isDay,
+        lat: state.settings.latitude,
+        lon: state.settings.longitude,
+      });
+      applyTheme(isDark);
+      return { settings: { ...state.settings, themeMode, darkMode: isDark } };
+    }),
+  cycleThemeMode: () => {
+    const current = normalizeThemeMode(
+      get().settings.themeMode,
+      get().settings.darkMode
+    );
+    const next = nextThemeMode(current);
+    get().setThemeMode(next);
+    return next;
+  },
+  toggleDarkMode: () => {
+    const next = get().settings.darkMode ? 'light' : 'dark';
+    get().setThemeMode(next);
+    return next;
+  },
 });
 
 // ─── Weather Slice ───────────────────────────────────────────────────────────
@@ -133,6 +190,7 @@ const weatherSlice = (set) => ({
       humidity: null,
       wind: null,
       feelsLike: null,
+      isDay: null,
     },
     daily: [],
     lastUpdated: null,
@@ -146,6 +204,7 @@ const weatherSlice = (set) => ({
           humidity: data.current?.humidity ?? null,
           wind: data.current?.wind ?? null,
           feelsLike: data.current?.feelsLike ?? null,
+          isDay: typeof data.current?.isDay === 'boolean' ? data.current.isDay : null,
         },
         daily: data.daily ?? [],
         lastUpdated: Date.now(),

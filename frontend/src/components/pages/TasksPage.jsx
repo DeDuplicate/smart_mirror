@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { Fragment, useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import { TasksSkeleton } from '../Skeleton.jsx';
@@ -70,6 +70,15 @@ function CloseIcon({ className = 'w-6 h-6' }) {
       strokeLinecap="round" strokeLinejoin="round" className={className}>
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className = 'w-5 h-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }
@@ -235,11 +244,25 @@ function DatePicker({ value, onChange }) {
   );
 }
 
+// ─── Drop indicator (insertion point while dragging) ────────────────────────
+
+function DropIndicator() {
+  return (
+    <div
+      className="h-1.5 rounded-full bg-acc/60 mx-1 shrink-0"
+      style={{ animation: 'fadeIn var(--dur-fast) var(--ease) forwards' }}
+    />
+  );
+}
+
 // ─── TaskCard ───────────────────────────────────────────────────────────────
 
 function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
   const cardRef = useRef(null);
   const wasDragged = useRef(false);
+
+  const subtasks = task.subtasks || [];
+  const subsDone = subtasks.filter((s) => s.done).length;
 
   // Instant drag start from grip handle (mouse or touch)
   const startDrag = useCallback((e) => {
@@ -314,8 +337,21 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
             )}
           </div>
 
-          {/* Bottom row: due date + list badge */}
+          {/* Bottom row: due date + checklist progress */}
           <div className="flex items-center gap-2 mt-2">
+            {subtasks.length > 0 && (
+              <span
+                className={`
+                  flex items-center gap-1 text-xs font-medium
+                  ${isDone ? 'text-tm' : subsDone === subtasks.length ? 'text-mint-d' : 'text-ts'}
+                `}
+              >
+                <CheckIcon className="w-3.5 h-3.5" />
+                {t.tasks.subtaskProgress
+                  .replace('{done}', String(subsDone))
+                  .replace('{total}', String(subtasks.length))}
+              </span>
+            )}
             {task.dueDate && (
               <span
                 className={`
@@ -333,14 +369,6 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
               </span>
             )}
             <div className="flex-1" />
-            {task.listName && (
-              <span
-                className="text-[10px] font-medium px-2 py-0.5 rounded-full text-white shrink-0"
-                style={{ backgroundColor: task.listColor || 'var(--acc)' }}
-              >
-                {task.listName}
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -350,14 +378,18 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
 
 // ─── TaskDetailOverlay ──────────────────────────────────────────────────────
 
-function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
+function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAddSubtask, onToggleSubtask, onDeleteSubtask }) {
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [dueDate, setDueDate] = useState(task?.dueDate || null);
   const [hasDueDate, setHasDueDate] = useState(!!task?.dueDate);
   const [priority, setPriority] = useState(task?.priority || 'none');
   const [starred, setStarred] = useState(task?.starred || false);
-  const [keyboardTarget, setKeyboardTarget] = useState(null); // 'title' | 'description' | null
+  const [subtaskDraft, setSubtaskDraft] = useState('');
+  const [keyboardTarget, setKeyboardTarget] = useState(null); // 'title' | 'description' | 'subtask' | null
+  // Live subtasks from the hook (checkbox ticks update instantly)
+  const liveTask = !isNew && task ? tasks.find((x) => x.id === task.id) : null;
+  const subtasks = liveTask?.subtasks || task?.subtasks || [];
   const showConfirm = useStore((s) => s.showConfirm);
 
   // Refs for cursor management
@@ -384,12 +416,21 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
     });
   }, [task, onDelete, showConfirm]);
 
+  const handleAddSubtask = useCallback(() => {
+    const trimmed = subtaskDraft.trim();
+    if (!trimmed || !task?.id) return;
+    onAddSubtask(task.id, trimmed);
+    setSubtaskDraft('');
+  }, [subtaskDraft, task, onAddSubtask]);
+
   const handleKeyboardInput = useCallback(
     (char) => {
       if (keyboardTarget === 'title') {
         setTitle((prev) => prev + char);
       } else if (keyboardTarget === 'description') {
         setDescription((prev) => prev + char);
+      } else if (keyboardTarget === 'subtask') {
+        setSubtaskDraft((prev) => prev + char);
       }
     },
     [keyboardTarget]
@@ -400,22 +441,26 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
       setTitle((prev) => prev.slice(0, -1));
     } else if (keyboardTarget === 'description') {
       setDescription((prev) => prev.slice(0, -1));
+    } else if (keyboardTarget === 'subtask') {
+      setSubtaskDraft((prev) => prev.slice(0, -1));
     }
   }, [keyboardTarget]);
 
   const handleKeyboardEnter = useCallback(() => {
     if (keyboardTarget === 'description') {
       setDescription((prev) => prev + '\n');
+    } else if (keyboardTarget === 'subtask') {
+      handleAddSubtask();
     } else {
       setKeyboardTarget(null);
     }
-  }, [keyboardTarget]);
+  }, [keyboardTarget, handleAddSubtask]);
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-tp/40"
+        className="absolute inset-0 bg-black/40"
         onClick={onClose}
         style={{ animation: 'fadeIn var(--dur-fast) var(--ease) forwards' }}
       />
@@ -482,6 +527,85 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
                          focus:ring-acc/30 transition-all duration-[var(--dur-fast)]"
             />
           </div>
+
+          {/* Checklist — tick items off inside the task */}
+          {!isNew && (
+            <div>
+              <label className="block text-sm font-semibold text-tp mb-3">
+                {t.tasks.subtasks}
+                {subtasks.length > 0 && (
+                  <span className="text-ts font-normal ms-2">
+                    {t.tasks.subtaskProgress
+                      .replace('{done}', String(subtasks.filter((s) => s.done).length))
+                      .replace('{total}', String(subtasks.length))}
+                  </span>
+                )}
+              </label>
+              <div className="space-y-2">
+                {subtasks.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-center gap-3 px-4 h-12 rounded-xl bg-s2 border border-bd"
+                  >
+                    <button
+                      onClick={() => onToggleSubtask(task.id, sub)}
+                      aria-label={sub.title}
+                      className={`
+                        w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0
+                        transition-all duration-[var(--dur-fast)] active:scale-90
+                        ${sub.done
+                          ? 'bg-mint-d border-mint-d text-white'
+                          : 'border-bd text-transparent hover:border-mint-d hover:text-mint-d/40'
+                        }
+                      `}
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                    </button>
+                    <span
+                      className={`flex-1 text-sm truncate ${
+                        sub.done ? 'line-through text-tm' : 'text-tp'
+                      }`}
+                    >
+                      {sub.title}
+                    </span>
+                    <button
+                      onClick={() => onDeleteSubtask(task.id, sub.id)}
+                      aria-label={t.common.delete}
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-tm
+                                 hover:text-red-500 hover:bg-red-500/10 active:scale-90
+                                 transition-all duration-[var(--dur-fast)] shrink-0"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add new checklist item */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={subtaskDraft}
+                    readOnly
+                    onFocus={() => setKeyboardTarget('subtask')}
+                    placeholder={t.tasks.subtaskPlaceholder}
+                    className="flex-1 h-12 px-4 rounded-xl border border-bd bg-s2 text-tp text-sm
+                               placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+                  />
+                  <button
+                    onClick={handleAddSubtask}
+                    disabled={!subtaskDraft.trim()}
+                    className="flex items-center gap-1.5 px-4 h-12 rounded-xl bg-acc text-white
+                               font-semibold text-sm active:scale-95
+                               transition-all duration-[var(--dur-fast)]
+                               disabled:opacity-40 disabled:pointer-events-none shrink-0"
+                  >
+                    <PlusIcon className="w-5 h-5" />
+                    {t.tasks.addSubtask}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Due date toggle + picker */}
           <div>
@@ -550,7 +674,7 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
               className={`
                 flex items-center gap-3 px-4 h-14 rounded-xl border w-full
                 transition-all duration-[var(--dur-fast)]
-                ${starred ? 'border-amber-400 bg-amber-50' : 'border-bd bg-s2'}
+                ${starred ? 'border-amber-400 bg-gold' : 'border-bd bg-s2'}
               `}
             >
               <StarIcon filled={starred} className={`w-6 h-6 ${starred ? 'text-amber-400' : 'text-tm'}`} />
@@ -559,21 +683,6 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
               </span>
             </button>
           </div>
-
-          {/* Task list badge (read-only) */}
-          {task?.listName && (
-            <div>
-              <label className="block text-sm font-semibold text-tp mb-2">{t.tasks.taskList}</label>
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs font-medium px-3 py-1.5 rounded-full text-white"
-                  style={{ backgroundColor: task.listColor || 'var(--acc)' }}
-                >
-                  {task.listName}
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Bottom spacer for buttons */}
           <div className="h-4" />
@@ -628,12 +737,17 @@ function TaskDetailOverlay({ task, isNew, onSave, onDelete, onClose }) {
 
 export default function TasksPage() {
   const {
+    tasks,
     columns,
     loading,
     createTask,
     updateTask,
+    reorderTasks,
     deleteTask,
     clearCompleted,
+    addSubtask,
+    updateSubtask,
+    deleteSubtask,
     refetch,
   } = useTasks();
 
@@ -661,7 +775,7 @@ export default function TasksPage() {
   // Drag state
   const [draggedTask, setDraggedTask] = useState(null);
   const [dragGhost, setDragGhost] = useState(null); // { x, y, width, height }
-  const [dropTarget, setDropTarget] = useState(null); // column key being hovered (different from source)
+  const [dropTarget, setDropTarget] = useState(null); // { col, index } insertion point under the pointer
   const dragSourceCol = useRef(null);
   const dragCardRect = useRef(null);
   const touchOffsetRef = useRef({ x: 0, y: 0 });
@@ -705,6 +819,18 @@ export default function TasksPage() {
     [deleteTask, closeOverlay]
   );
 
+
+  // ── Subtask handlers ─────────────────────────────────────────────────────
+  const handleAddSubtask = useCallback((taskId, title) => addSubtask(taskId, title), [addSubtask]);
+  const handleToggleSubtask = useCallback(
+    (taskId, sub) => updateSubtask(taskId, sub.id, { done: !sub.done }),
+    [updateSubtask]
+  );
+  const handleDeleteSubtask = useCallback(
+    (taskId, subId) => deleteSubtask(taskId, subId),
+    [deleteSubtask]
+  );
+
   // ── Drag-and-drop system ─────────────────────────────────────────────────
 
   const cancelDrag = useCallback(() => {
@@ -740,8 +866,9 @@ export default function TasksPage() {
     e.preventDefault?.();
   }, []);
 
-  // Detect which column a point is over
-  const detectColumn = useCallback((clientX, clientY) => {
+  // Detect the drop point (column + insertion index) under a pointer.
+  // The index counts only non-dragged cards in that column.
+  const detectDropPoint = useCallback((clientX, clientY, draggedId) => {
     for (const [key, el] of Object.entries(columnRefs.current)) {
       if (!el) continue;
       const rect = el.getBoundingClientRect();
@@ -751,7 +878,18 @@ export default function TasksPage() {
         clientY >= rect.top &&
         clientY <= rect.bottom
       ) {
-        return key;
+        const cards = [...el.querySelectorAll('[data-task-id]')].filter(
+          (c) => c.dataset.taskId !== draggedId
+        );
+        let index = cards.length;
+        for (let i = 0; i < cards.length; i++) {
+          const r = cards[i].getBoundingClientRect();
+          if (clientY < r.top + r.height / 2) {
+            index = i;
+            break;
+          }
+        }
+        return { col: key, index };
       }
     }
     return null;
@@ -767,25 +905,51 @@ export default function TasksPage() {
 
       setDragGhost((prev) => (prev ? { ...prev, x, y } : null));
 
-      // Determine which column we're over — only highlight if different from source
-      const found = detectColumn(point.clientX, point.clientY);
-      setDropTarget(found && found !== dragSourceCol.current ? found : null);
+      setDropTarget(detectDropPoint(point.clientX, point.clientY, draggedTask.id));
     },
-    [draggedTask, detectColumn]
+    [draggedTask, detectDropPoint]
   );
 
   const handleGlobalTouchEnd = useCallback(() => {
     if (!draggedTask) return;
 
-    if (dropTarget && dropTarget !== draggedTask.status) {
-      // Move task to new column
-      updateTask(draggedTask.id, { status: dropTarget });
-      addToast('success', t.tasks.taskMoved);
+    if (dropTarget) {
+      const targetCol = dropTarget.col;
+      const moved = targetCol !== dragSourceCol.current;
+
+      // New order for the target column: existing tasks minus the dragged
+      // one, with the dragged task spliced in at the insertion index
+      const targetItems = (columns[targetCol] || []).filter(
+        (task) => task.id !== draggedTask.id
+      );
+      targetItems.splice(Math.min(dropTarget.index, targetItems.length), 0, draggedTask);
+
+      const updates = [];
+      targetItems.forEach((item, i) => {
+        if (item.status !== targetCol || item.position !== i) {
+          updates.push({ id: item.id, status: targetCol, position: i });
+        }
+      });
+      // Reindex the source column so its positions stay contiguous
+      if (moved) {
+        (columns[dragSourceCol.current] || [])
+          .filter((task) => task.id !== draggedTask.id)
+          .forEach((task, i) => {
+            if (task.position !== i) {
+              updates.push({ id: task.id, status: task.status, position: i });
+            }
+          });
+      }
+
+      if (updates.length > 0) {
+        reorderTasks(updates);
+        if (moved) addToast('success', t.tasks.taskMoved);
+      }
     }
-    // If hovering original column or no column → cancel (snap back, no action)
+    // No drop target → cancel (snap back, no action)
 
     cancelDrag();
-  }, [draggedTask, dropTarget, updateTask, addToast, cancelDrag]);
+  }, [draggedTask, dropTarget, columns, reorderTasks, addToast, cancelDrag]);
 
   // Escape key to cancel drag
   useEffect(() => {
@@ -844,7 +1008,16 @@ export default function TasksPage() {
         {columnDefs.map((col) => {
           const items = columns[col.key] || [];
           const isDone = col.key === 'done';
-          const isDropHere = dropTarget === col.key;
+          const isDropHere = dropTarget?.col === col.key;
+
+          // The drop index counts non-dragged cards; map it back onto the
+          // rendered list (which still contains the dragged card) so the
+          // indicator lands in the right visual spot
+          let indicatorIdx = isDropHere ? dropTarget.index : null;
+          const dragIdx = items.findIndex((task) => task.id === draggedTask?.id);
+          if (indicatorIdx != null && dragIdx !== -1 && dragIdx < indicatorIdx) {
+            indicatorIdx += 1;
+          }
 
           return (
             <div
@@ -877,23 +1050,26 @@ export default function TasksPage() {
 
               {/* Cards area */}
               <div className="flex-1 overflow-y-auto px-4 pb-4">
-                {items.length === 0 ? (
+                {items.length === 0 && !isDropHere ? (
                   <div className="flex items-center justify-center h-full border-2 border-dashed border-bd/50 rounded-2xl py-12">
                     <span className="text-tm text-sm">{t.empty.noTasks}</span>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
                     {items.map((task, i) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        index={i}
-                        isDone={isDone}
-                        onTap={openOverlay}
-                        onDragStart={handleDragStart}
-                        isBeingDragged={draggedTask?.id === task.id}
-                      />
+                      <Fragment key={task.id}>
+                        {indicatorIdx === i && <DropIndicator />}
+                        <TaskCard
+                          task={task}
+                          index={i}
+                          isDone={isDone}
+                          onTap={openOverlay}
+                          onDragStart={handleDragStart}
+                          isBeingDragged={draggedTask?.id === task.id}
+                        />
+                      </Fragment>
                     ))}
+                    {indicatorIdx === items.length && <DropIndicator />}
                   </div>
                 )}
               </div>
@@ -977,9 +1153,13 @@ export default function TasksPage() {
         <TaskDetailOverlay
           task={overlayTask === 'new' ? null : overlayTask}
           isNew={overlayTask === 'new'}
+          tasks={tasks}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={closeOverlay}
+          onAddSubtask={handleAddSubtask}
+          onToggleSubtask={handleToggleSubtask}
+          onDeleteSubtask={handleDeleteSubtask}
         />
       )}
 

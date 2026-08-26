@@ -64,7 +64,7 @@ function ProgressRing({ progress, color, size = 68, strokeWidth = 4 }) {
   const isComplete = progress >= 1;
 
   return (
-    <svg width={size} height={size} className="absolute inset-0">
+    <svg width={size} height={size} className="absolute inset-0 pointer-events-none">
       {/* Background ring */}
       <circle
         cx={size / 2}
@@ -99,6 +99,7 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
   const initials = name.charAt(0);
   const isComplete = progress >= 1;
   const fileInputRef = useRef(null);
+  const addToast = useStore((s) => s.addToast);
 
   const handlePhotoClick = useCallback(() => {
     if (fileInputRef.current) fileInputRef.current.click();
@@ -106,11 +107,19 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
 
   const handleFileChange = useCallback((e) => {
     const file = e.target.files?.[0];
+    // Reset so picking the same file again re-fires onChange
+    e.target.value = '';
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      addToast('error', t.tasks.photoUploadError);
+      return;
+    }
     // Resize and convert to base64
     const reader = new FileReader();
+    reader.onerror = () => addToast('error', t.tasks.photoUploadError);
     reader.onload = (ev) => {
       const img = new Image();
+      img.onerror = () => addToast('error', t.tasks.photoUploadError);
       img.onload = () => {
         // Resize to 120x120 for performance
         const canvas = document.createElement('canvas');
@@ -128,7 +137,7 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
-  }, [personId, onPhotoChange]);
+  }, [personId, onPhotoChange, addToast]);
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: 68, height: 68 }}>
@@ -168,7 +177,6 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -742,30 +750,21 @@ export default function TasksPage() {
     toggleTask,
     addTask,
     deleteTask,
+    uploadAvatar,
   } = useChores();
 
   const addToast = useStore((s) => s.addToast);
 
-  // Photo upload — persist to localStorage
-  const [photos, setPhotos] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('chores_avatars') || '{}');
-    } catch { return {}; }
-  });
+  // Photo upload — persisted to the backend DB (syncs across devices)
+  const handlePhotoChange = useCallback(
+    async (personId, dataUrl) => {
+      const ok = await uploadAvatar(personId, dataUrl);
+      addToast(ok ? 'success' : 'error', ok ? t.tasks.photoUploaded : t.tasks.photoUploadError);
+    },
+    [uploadAvatar, addToast]
+  );
 
-  const handlePhotoChange = useCallback((personId, dataUrl) => {
-    setPhotos(prev => {
-      const next = { ...prev, [personId]: dataUrl };
-      localStorage.setItem('chores_avatars', JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  // Merge photos into people data
-  const peopleWithPhotos = useMemo(() => {
-    if (!people) return [];
-    return people.map(p => ({ ...p, avatar: photos[p.id] || p.avatar }));
-  }, [people, photos]);
+  const peopleWithPhotos = useMemo(() => people || [], [people]);
 
   // Loading state
   if (loading) {

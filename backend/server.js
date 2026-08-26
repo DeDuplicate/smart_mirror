@@ -111,7 +111,7 @@ const cors = require('cors');
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // generous limit for base64 avatar uploads
 
 // CORS — allow localhost:3000 in dev, same-origin in production
 const isDev = process.env.NODE_ENV !== 'production';
@@ -198,6 +198,7 @@ app.use('/api/news', require('./routes/news'));
 app.use('/api/wifi', require('./routes/wifi'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/system', require('./routes/system'));
+app.use('/api/quotes', require('./routes/quotes'));
 
 // ---------------------------------------------------------------------------
 // 10. HTTP server + Socket.io

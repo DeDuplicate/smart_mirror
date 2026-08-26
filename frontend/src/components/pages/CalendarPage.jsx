@@ -14,6 +14,7 @@ import useCalendar, {
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
 import { CalendarSkeleton, MonthGridSkeleton } from '../Skeleton.jsx';
 import MonthGrid from '../MonthGrid.jsx';
+import EventEditor from '../EventEditor.jsx';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -205,7 +206,7 @@ function computeOverlapLayout(events) {
 
 // ─── Event Detail Popup ─────────────────────────────────────────────────────
 
-function EventDetailPopup({ event, onClose }) {
+function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
   const popupRef = useRef(null);
   const [visible, setVisible] = useState(false);
 
@@ -309,7 +310,26 @@ function EventDetailPopup({ event, onClose }) {
             </div>
           )}
 
-          <p className="text-xs text-tm text-center">{t.calendar.readOnlyEvent}</p>
+          {event.source === 'local' ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => { handleClose(); onEdit?.(event); }}
+                className="ripple flex-1 min-h-[56px] rounded-xl bg-acc text-white text-sm font-medium
+                           hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
+              >
+                {t.calendar.editEvent}
+              </button>
+              <button
+                onClick={() => onDelete?.(event)}
+                className="ripple flex-1 min-h-[56px] rounded-xl bg-red-500/10 text-red-500 text-sm font-medium
+                           hover:bg-red-500/20 active:scale-95 transition-all duration-[var(--dur-fast)]"
+              >
+                {t.common.delete}
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-tm text-center">{t.calendar.readOnlyEvent}</p>
+          )}
 
           <button
             onClick={handleClose}
@@ -433,6 +453,8 @@ const VIEW_STORAGE_KEY = 'calendar_view';
 
 export default function CalendarPage() {
   const showWeekend = useStore((s) => s.settings.showWeekend);
+  const addToast = useStore((s) => s.addToast);
+  const showConfirm = useStore((s) => s.showConfirm);
 
   // ── Week navigation state ──
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStart(new Date()));
@@ -486,13 +508,16 @@ export default function CalendarPage() {
         : { start: currentWeekStart, end: getWeekEnd(currentWeekStart) },
     [view, currentMonth, currentWeekStart]
   );
-  const { events: rawEvents, loading, refetch } =
+  const { events: rawEvents, loading, refetch, createEvent, updateEvent, deleteEvent } =
     useCalendar(fetchRange.start, fetchRange.end);
 
   const events = useMemo(
     () => rawEvents.map((ev) => ({
       ...ev,
       color: normalizeCalendarColor(ev.color),
+      calendar: ev.source === 'local' || ev.calendar === 'local'
+        ? t.calendar.localCalendar
+        : ev.calendar,
     })),
     [rawEvents]
   );
@@ -500,8 +525,10 @@ export default function CalendarPage() {
   // ── Pull to refresh ──
   const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
 
-  // ── Popup state ──
+  // ── Popup / editor state ──
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [editor, setEditor] = useState(null); // { event } | { defaults } | null
+  const [saving, setSaving] = useState(false);
 
   // ── Week days ──
   const dayColumns = useMemo(
@@ -665,6 +692,57 @@ export default function CalendarPage() {
     setSelectedEvent(event);
   }
 
+  const openNewEditor = useCallback((defaults) => {
+    setSelectedEvent(null);
+    setEditor({ event: null, defaults: defaults || {} });
+  }, []);
+
+  const handleSlotTap = useCallback((date, e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = (e.clientY ?? e.changedTouches?.[0]?.clientY ?? rect.top) - rect.top;
+    const hourFloat = HOUR_START + y / HOUR_HEIGHT;
+    const hour = Math.min(HOUR_END - 1, Math.max(HOUR_START, Math.floor(hourFloat)));
+    const minute = hourFloat - hour >= 0.5 ? 30 : 0;
+    openNewEditor({ date, hour, minute, allDay: false });
+  }, [openNewEditor]);
+
+  const handleSaveEvent = useCallback(async (payload) => {
+    setSaving(true);
+    try {
+      if (editor?.event?.id) {
+        await updateEvent(editor.event.id, payload);
+      } else {
+        await createEvent(payload);
+      }
+      addToast('success', t.calendar.eventSaved);
+      setEditor(null);
+    } catch {
+      addToast('error', t.calendar.eventSaveFailed);
+    } finally {
+      setSaving(false);
+    }
+  }, [editor, createEvent, updateEvent, addToast]);
+
+  const handleDeleteEvent = useCallback(async (event) => {
+    if (!event?.id) return;
+    try {
+      await deleteEvent(event.id);
+      addToast('success', t.calendar.eventDeleted);
+      setSelectedEvent(null);
+      setEditor(null);
+    } catch {
+      addToast('error', t.calendar.eventDeleteFailed);
+    }
+  }, [deleteEvent, addToast]);
+
+  const confirmDeleteEvent = useCallback((event) => {
+    showConfirm({
+      title: t.calendar.deleteConfirmTitle,
+      message: t.calendar.deleteConfirmMessage,
+      onConfirm: () => handleDeleteEvent(event),
+    });
+  }, [showConfirm, handleDeleteEvent]);
+
   // ── Month view: events grouped by day + selected day's agenda ──
   const eventsByDay = useMemo(
     () => (view === 'month' ? groupEventsByDay(events) : null),
@@ -785,6 +863,25 @@ export default function CalendarPage() {
         >
           {t.calendar.today}
         </button>
+
+        <button
+          onClick={() => {
+            const base = view === 'month' ? selectedDate : new Date();
+            const hour = Math.max(HOUR_START, new Date().getHours());
+            openNewEditor({
+              date: base,
+              hour,
+              minute: 0,
+              allDay: view === 'month',
+            });
+          }}
+          className="ripple flex items-center justify-center min-w-[56px] min-h-[56px] rounded-xl
+                     bg-acc/10 text-acc hover:bg-acc/20 active:scale-95
+                     transition-all duration-[var(--dur-fast)]"
+          aria-label={t.calendar.addEvent}
+        >
+          <PlusIcon className="w-6 h-6" />
+        </button>
       </div>
 
       {/* ── Main Content ── */}
@@ -804,8 +901,11 @@ export default function CalendarPage() {
         >
           {/* ── Sticky Day Headers ── */}
           <div
-            className="shrink-0 grid gap-px bg-bd border-b border-bd"
-            style={{ gridTemplateColumns: `48px repeat(${colCount}, 1fr)` }}
+            className="cal-grid shrink-0 grid border-b-2"
+            style={{
+              gridTemplateColumns: `48px repeat(${colCount}, 1fr)`,
+              borderColor: 'var(--cal-line)',
+            }}
           >
             {/* Time gutter header (empty) */}
             <div className="bg-surf" />
@@ -881,7 +981,7 @@ export default function CalendarPage() {
               }}
             >
               {/* ── Hour Labels (gutter) ── */}
-              <div className="relative bg-surf border-l border-bd">
+              <div className="relative bg-surf" style={{ borderInlineStart: '2px solid var(--cal-line)' }}>
                 {hourLabels.map((label, i) => (
                   <div
                     key={i}
@@ -909,15 +1009,19 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={colIdx}
-                    className={`relative border-s border-bd
-                      ${today ? 'bg-acc/[0.03]' : 'bg-bg'}`}
+                    className={`relative ${today ? 'bg-acc/[0.03]' : 'bg-bg'}`}
+                    style={{ borderInlineStart: '2px solid var(--cal-line)' }}
+                    onClick={(e) => handleSlotTap(date, e)}
                   >
                     {/* Hour grid lines */}
                     {hourLabels.map((_, i) => (
                       <div
                         key={i}
-                        className="absolute w-full border-t border-bd/50"
-                        style={{ top: `${i * HOUR_HEIGHT}px` }}
+                        className="absolute w-full"
+                        style={{
+                          top: `${i * HOUR_HEIGHT}px`,
+                          borderTop: '2px solid var(--cal-line)',
+                        }}
                       />
                     ))}
 
@@ -1031,10 +1135,21 @@ export default function CalendarPage() {
 
         {/* ── Sidebar: upcoming (week) / selected-day agenda (month) ── */}
         <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-bd shrink-0">
-            <h2 className="text-sm font-semibold text-tp">
+          <div className="px-5 py-4 border-b border-bd shrink-0 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-tp flex-1">
               {view === 'month' ? selectedDayLabel : t.calendar.upcoming}
             </h2>
+            {view === 'month' && (
+              <button
+                onClick={() => openNewEditor({ date: selectedDate, hour: 9, minute: 0, allDay: false })}
+                className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
+                           bg-acc/10 text-acc hover:bg-acc/20 active:scale-95
+                           transition-all duration-[var(--dur-fast)]"
+                aria-label={t.calendar.addEvent}
+              >
+                <PlusIcon className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
@@ -1072,6 +1187,22 @@ export default function CalendarPage() {
         <EventDetailPopup
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+          onEdit={(ev) => setEditor({ event: ev, defaults: null })}
+          onDelete={(ev) => {
+            setSelectedEvent(null);
+            confirmDeleteEvent(ev);
+          }}
+        />
+      )}
+
+      {editor && (
+        <EventEditor
+          event={editor.event}
+          defaults={editor.defaults}
+          saving={saving}
+          onSave={handleSaveEvent}
+          onDelete={editor.event ? () => handleDeleteEvent(editor.event) : undefined}
+          onClose={() => setEditor(null)}
         />
       )}
     </div>
