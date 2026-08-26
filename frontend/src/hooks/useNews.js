@@ -30,7 +30,12 @@ function saveReadIds(ids) {
   }
 }
 
-// ─── Mock Data (dev mode) ──────────────────────────────────────────────────
+// ─── Mock Data (dev-only fallback) ──────────────────────────────────────────
+
+const isDev =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
+  import.meta.env.DEV;
 
 function generateMockArticles() {
   const now = Date.now();
@@ -176,15 +181,28 @@ export default function useNews() {
         }));
         setArticles(enriched);
         setError(null);
+      } else if (isDev) {
+        // Dev mode with no real feed configured: mock data so there's
+        // something to look at.
+        setArticles(generateMockArticles());
+        setError(null);
       } else {
-        throw new Error('empty');
+        // Production with a genuinely empty feed — show the real empty
+        // state instead of fabricating articles.
+        setArticles([]);
+        setError(null);
       }
     } catch (_err) {
       if (!mountedRef.current) return;
-      // Fall back to mock data in dev
-      const mock = generateMockArticles();
-      setArticles(mock);
-      setError(null);
+      if (isDev) {
+        setArticles(generateMockArticles());
+        setError(null);
+      } else {
+        // Keep whatever articles were last successfully loaded (if any) and
+        // surface the error so NewsPage can show its ConnectionBanner /
+        // retry action instead of silently displaying fake headlines.
+        setError(_err.message || 'error');
+      }
     } finally {
       if (mountedRef.current) {
         setLoading(false);
@@ -208,14 +226,19 @@ export default function useNews() {
       }
     } catch (_err) {
       if (!mountedRef.current) return;
-      // Fall back to mock full article from current articles list
-      setArticles((current) => {
-        const found = current.find((a) => a.id === id);
-        if (found) {
-          setFullArticle(generateMockFullArticle(found));
-        }
-        return current;
-      });
+      if (isDev) {
+        // Fall back to mock full article from current articles list
+        setArticles((current) => {
+          const found = current.find((a) => a.id === id);
+          if (found) {
+            setFullArticle(generateMockFullArticle(found));
+          }
+          return current;
+        });
+      }
+      // In production, leave fullArticle null — the overlay already has a
+      // loading/failed state and retrying is safer than showing fake body
+      // text under a real headline.
     } finally {
       if (mountedRef.current) {
         setFullArticleLoading(false);
