@@ -222,7 +222,7 @@ export default function OnScreenKeyboard({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-tp/20"
+        className="absolute inset-0 bg-black/20"
         onClick={onClose}
         style={{
           animation: 'fadeIn var(--dur-fast) var(--ease) forwards',

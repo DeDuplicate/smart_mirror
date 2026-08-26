@@ -10,16 +10,48 @@ const IS_LINUX = os.platform() === 'linux';
 // ---------------------------------------------------------------------------
 // Safe shell helper - uses execFile (no shell injection risk)
 // ---------------------------------------------------------------------------
-function run(cmd, args) {
+function run(cmd, args, timeout = 15000) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 15000 }, (err, stdout, stderr) => {
+    execFile(cmd, args, { timeout }, (err, stdout, stderr) => {
       if (err) {
-        resolve({ ok: false, stdout: '', stderr: err.message });
+        resolve({ ok: false, stdout: '', stderr: (stderr || err.message).toString() });
       } else {
         resolve({ ok: true, stdout: stdout.toString(), stderr: stderr.toString() });
       }
     });
   });
+}
+
+// Split a line of `nmcli -t` output on unescaped colons and unescape values.
+// nmcli terse mode escapes ':' and '\' inside values (e.g. SSIDs) as '\:' '\\'.
+function splitTerse(line) {
+  const fields = [];
+  let cur = '';
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '\\' && i + 1 < line.length) {
+      cur += line[++i];
+    } else if (ch === ':') {
+      fields.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  fields.push(cur);
+  return fields;
+}
+
+// Find the wifi interface name (usually wlan0 on the Pi, but don't assume)
+async function getWifiDevice() {
+  const result = await run('nmcli', ['-t', '-f', 'DEVICE,TYPE', 'device']);
+  if (result.ok) {
+    for (const line of result.stdout.split('\n').filter(Boolean)) {
+      const [device, type] = splitTerse(line);
+      if (type === 'wifi') return device;
+    }
+  }
+  return 'wlan0';
 }
 
 // ---------------------------------------------------------------------------
@@ -53,48 +85,48 @@ router.get('/status', async (req, res) => {
   }
 
   try {
-    const result = await run('nmcli', [
-      '-t', '-f', 'GENERAL.CONNECTION,GENERAL.STATE,WIRED-PROPERTIES.CARRIER',
-      'device', 'show', 'wlan0',
+    // Active wifi connection: ssid/signal/freq/security
+    const wifiResult = await run('nmcli', [
+      '-t', '-f', 'ACTIVE,SSID,SIGNAL,FREQ,SECURITY', 'device', 'wifi', 'list',
     ]);
 
-    if (!result.ok) {
-      // Try alternative approach
-      const altResult = await run('nmcli', ['-t', '-f', 'active,ssid,signal,freq,security', 'device', 'wifi']);
-      if (!altResult.ok) {
-        return res.json({ connected: false, error: 'Unable to query WiFi status' });
-      }
-
-      const activeLine = altResult.stdout.split('\n').find((l) => l.startsWith('yes:'));
-      if (!activeLine) {
-        return res.json({ connected: false });
-      }
-
-      const parts = activeLine.split(':');
-      return res.json({
-        connected: true,
-        ssid: parts[1] || '',
-        signal: parseInt(parts[2], 10) || 0,
-        frequency: parts[3] || '',
-        security: parts[4] || '',
-      });
+    if (!wifiResult.ok) {
+      return res.json({ connected: false, error: 'Unable to query WiFi status' });
     }
 
-    // Parse nmcli device show output
-    const lines = result.stdout.split('\n');
-    const status = {};
-    for (const line of lines) {
-      const [key, ...vals] = line.split(':');
-      if (key && vals.length) {
-        status[key.trim()] = vals.join(':').trim();
+    const activeLine = wifiResult.stdout
+      .split('\n')
+      .filter(Boolean)
+      .map(splitTerse)
+      .find((parts) => parts[0] === 'yes');
+
+    if (!activeLine) {
+      return res.json({ connected: false });
+    }
+
+    const status = {
+      connected: true,
+      ssid: activeLine[1] || '',
+      signal: parseInt(activeLine[2], 10) || 0,
+      frequency: activeLine[3] || '',
+      security: activeLine[4] || '',
+    };
+
+    // Best-effort: add IP + MAC of the wifi interface
+    const device = await getWifiDevice();
+    const devResult = await run('nmcli', [
+      '-t', '-f', 'IP4.ADDRESS,GENERAL.HWADDR', 'device', 'show', device,
+    ]);
+    if (devResult.ok) {
+      for (const line of devResult.stdout.split('\n').filter(Boolean)) {
+        const [key, ...vals] = splitTerse(line);
+        const val = vals.join(':').trim();
+        if (key.startsWith('IP4.ADDRESS') && val) status.ip = val.split('/')[0];
+        if (key === 'GENERAL.HWADDR' && val) status.mac = val;
       }
     }
 
-    res.json({
-      connected: !!status['GENERAL.CONNECTION'],
-      ssid: status['GENERAL.CONNECTION'] || null,
-      state: status['GENERAL.STATE'] || null,
-    });
+    res.json(status);
   } catch (err) {
     logger.error('WiFi status error: %s', err.message);
     res.status(500).json({ error: 'Failed to query WiFi status' });
@@ -128,7 +160,7 @@ router.get('/scan', async (req, res) => {
       .split('\n')
       .filter(Boolean)
       .map((line) => {
-        const parts = line.split(':');
+        const parts = splitTerse(line);
         const ssid = parts[0] || '';
         if (!ssid || seen.has(ssid)) return null;
         seen.add(ssid);
@@ -170,10 +202,14 @@ router.post('/connect', async (req, res) => {
       args.push('password', password);
     }
 
-    const result = await run('nmcli', args);
+    // Connecting can take a while (scan + DHCP) — allow up to 45s
+    const result = await run('nmcli', args, 45000);
 
     if (!result.ok) {
       logger.error('WiFi connect failed: %s', result.stderr);
+      // nmcli leaves a broken saved profile behind on a failed connect
+      // (e.g. wrong password), which makes every retry fail — clean it up.
+      await run('nmcli', ['connection', 'delete', ssid]);
       return res.status(500).json({ error: 'Failed to connect: ' + result.stderr });
     }
 

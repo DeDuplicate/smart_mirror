@@ -78,7 +78,8 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
       style={{ direction: 'rtl' /* Sunday on the right, days flow left */ }}
     >
       {/* ── Day-name header ── */}
-      <div className="shrink-0 grid grid-cols-7 gap-px bg-bd border-b border-bd">
+      <div className="cal-grid shrink-0 grid grid-cols-7 border-b-2"
+           style={{ borderColor: 'var(--cal-line)' }}>
         {t.topBar.days.map((name, i) => (
           <div key={i} className="bg-surf py-2 flex items-center justify-center">
             <span className="text-xs font-semibold text-ts">{name}</span>
@@ -88,7 +89,7 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
 
       {/* ── Week rows ── */}
       <div
-        className="flex-1 grid grid-cols-7 gap-px bg-bd overflow-hidden"
+        className="cal-grid flex-1 grid grid-cols-7 overflow-hidden"
         style={{ gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}
       >
         {weeks.flat().map((date) => {

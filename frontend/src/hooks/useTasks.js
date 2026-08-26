@@ -1,126 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { io } from 'socket.io-client';
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────
+// ─── Socket.io singleton (same pattern as useHomeAssistant) ────────────────
 
-const MOCK_TASKS = [
-  {
-    id: '1',
-    title: 'לקנות חלב ולחם מהסופר',
-    description: 'חלב תנובה 3%, לחם אחיד',
-    status: 'todo',
-    priority: 'high',
-    starred: true,
-    dueDate: '2026-04-07',
-    listName: 'קניות',
-    listColor: '#6b62e0',
-  },
-  {
-    id: '2',
-    title: 'לתאם פגישה עם רו"ח',
-    description: 'לדבר על דוח שנתי ומע"מ',
-    status: 'todo',
-    priority: 'medium',
-    starred: false,
-    dueDate: '2026-04-10',
-    listName: 'עבודה',
-    listColor: '#2ab58a',
-  },
-  {
-    id: '3',
-    title: 'לתקן את הברז במטבח',
-    description: '',
-    status: 'todo',
-    priority: 'low',
-    starred: false,
-    dueDate: null,
-    listName: 'בית',
-    listColor: '#b07c10',
-  },
-  {
-    id: '4',
-    title: 'להכין מצגת לישיבת צוות',
-    description: 'כולל גרפים מרבעון אחרון',
-    status: 'inProgress',
-    priority: 'high',
-    starred: true,
-    dueDate: '2026-04-08',
-    listName: 'עבודה',
-    listColor: '#2ab58a',
-  },
-  {
-    id: '5',
-    title: 'לעדכן קורות חיים',
-    description: 'להוסיף את הפרויקט האחרון',
-    status: 'inProgress',
-    priority: 'medium',
-    starred: false,
-    dueDate: '2026-04-12',
-    listName: 'אישי',
-    listColor: '#c95454',
-  },
-  {
-    id: '6',
-    title: 'לשלם חשבון ארנונה',
-    description: 'תשלום רבעוני',
-    status: 'inProgress',
-    priority: 'high',
-    starred: false,
-    dueDate: '2026-04-05',
-    listName: 'בית',
-    listColor: '#b07c10',
-  },
-  {
-    id: '7',
-    title: 'להזמין טיסות לחופשה',
-    description: 'בדקנו טיסות לברצלונה',
-    status: 'done',
-    priority: 'medium',
-    starred: true,
-    dueDate: '2026-04-01',
-    listName: 'אישי',
-    listColor: '#c95454',
-  },
-  {
-    id: '8',
-    title: 'לשלוח דוח חודשי למנהל',
-    description: 'דוח מרץ 2026',
-    status: 'done',
-    priority: 'low',
-    starred: false,
-    dueDate: '2026-04-02',
-    listName: 'עבודה',
-    listColor: '#2ab58a',
-  },
-  {
-    id: '9',
-    title: 'לנקות את המחסן',
-    description: '',
-    status: 'done',
-    priority: 'none',
-    starred: false,
-    dueDate: '2026-03-30',
-    listName: 'בית',
-    listColor: '#b07c10',
-  },
-  {
-    id: '10',
-    title: 'להרשם לקורס ריצה',
-    description: 'קורס ערב ביום שלישי',
-    status: 'todo',
-    priority: 'none',
-    starred: false,
-    dueDate: '2026-04-15',
-    listName: 'אישי',
-    listColor: '#c95454',
-  },
-];
+let socket = null;
 
-// ─── Dev mode check ────────────────────────────────────────────────────────
-
-const isDev =
-  typeof import.meta !== 'undefined' &&
-  import.meta.env &&
-  import.meta.env.DEV;
+function getSocket() {
+  if (!socket) {
+    socket = io('/', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+    });
+  }
+  return socket;
+}
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 
@@ -135,8 +30,6 @@ async function apiFetch(url, options = {}) {
 
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
-let nextMockId = 100;
-
 export default function useTasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -146,30 +39,32 @@ export default function useTasks() {
   // ── Fetch tasks ────────────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
     try {
-      if (isDev) {
-        // Simulate network delay on first load
-        if (loading) await new Promise((r) => setTimeout(r, 800));
-        setTasks(MOCK_TASKS);
-      } else {
-        const data = await apiFetch('/api/tasks');
-        setTasks(data);
-      }
+      const data = await apiFetch('/api/tasks');
+      setTasks(data);
       setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Initial fetch + 2-minute polling ───────────────────────────────────
+  // ── Initial fetch + polling + live socket updates ──────────────────────
   useEffect(() => {
     fetchTasks();
     intervalRef.current = setInterval(fetchTasks, 2 * 60 * 1000);
-    return () => clearInterval(intervalRef.current);
+
+    const s = getSocket();
+    const onUpdated = () => fetchTasks();
+    s.on('tasks:updated', onUpdated);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      s.off('tasks:updated', onUpdated);
+    };
   }, [fetchTasks]);
 
-  // ── Grouped by column ─────────────────────────────────────────────────
+  // ── Grouped by column (ordered by position) ───────────────────────────
   const columns = {
     todo: tasks.filter((t) => t.status === 'todo'),
     inProgress: tasks.filter((t) => t.status === 'inProgress'),
@@ -177,26 +72,14 @@ export default function useTasks() {
   };
 
   // ── Create task ───────────────────────────────────────────────────────
-  const createTask = useCallback(
-    async (taskData) => {
-      const newTask = {
-        ...taskData,
-        id: isDev ? String(++nextMockId) : undefined,
-        status: taskData.status || 'todo',
-      };
-      if (isDev) {
-        setTasks((prev) => [...prev, newTask]);
-        return newTask;
-      }
-      const created = await apiFetch('/api/tasks', {
-        method: 'POST',
-        body: JSON.stringify(newTask),
-      });
-      setTasks((prev) => [...prev, created]);
-      return created;
-    },
-    []
-  );
+  const createTask = useCallback(async (taskData) => {
+    const created = await apiFetch('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ status: 'todo', ...taskData }),
+    });
+    setTasks((prev) => [...prev, created]);
+    return created;
+  }, []);
 
   // ── Update task (including column move) ───────────────────────────────
   const updateTask = useCallback(
@@ -204,16 +87,33 @@ export default function useTasks() {
       setTasks((prev) =>
         prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
       );
-      if (!isDev) {
-        try {
-          await apiFetch(`/api/tasks/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(patch),
-          });
-        } catch {
-          // Revert on failure
-          await fetchTasks();
-        }
+      try {
+        await apiFetch(`/api/tasks/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        });
+      } catch {
+        await fetchTasks();
+      }
+    },
+    [fetchTasks]
+  );
+
+  // ── Reorder: persist column + position for many tasks at once ─────────
+  // updates: [{ id, status, position }] — applied optimistically first.
+  const reorderTasks = useCallback(
+    async (updates) => {
+      const byId = new Map(updates.map((u) => [u.id, u]));
+      setTasks((prev) =>
+        prev.map((t) => (byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t))
+      );
+      try {
+        await apiFetch('/api/tasks/reorder', {
+          method: 'PUT',
+          body: JSON.stringify({ tasks: updates }),
+        });
+      } catch {
+        await fetchTasks();
       }
     },
     [fetchTasks]
@@ -223,33 +123,76 @@ export default function useTasks() {
   const deleteTask = useCallback(
     async (id) => {
       setTasks((prev) => prev.filter((t) => t.id !== id));
-      if (!isDev) {
-        try {
-          await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
-        } catch {
-          await fetchTasks();
-        }
+      try {
+        await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+      } catch {
+        await fetchTasks();
       }
     },
     [fetchTasks]
   );
 
-  // ── Clear completed ───────────────────────────────────────────────────
+  // ── Clear completed (single request) ──────────────────────────────────
   const clearCompleted = useCallback(async () => {
-    const doneIds = tasks.filter((t) => t.status === 'done').map((t) => t.id);
     setTasks((prev) => prev.filter((t) => t.status !== 'done'));
-    if (!isDev) {
-      try {
-        await Promise.all(
-          doneIds.map((id) =>
-            apiFetch(`/api/tasks/${id}`, { method: 'DELETE' })
-          )
-        );
-      } catch {
-        await fetchTasks();
-      }
+    try {
+      await apiFetch('/api/tasks/completed', { method: 'DELETE' });
+    } catch {
+      await fetchTasks();
     }
-  }, [tasks, fetchTasks]);
+  }, [fetchTasks]);
+
+  // ── Subtasks (checklist items inside a task) ──────────────────────────
+  const addSubtask = useCallback(async (taskId, title) => {
+    const created = await apiFetch(`/api/tasks/${taskId}/subtasks`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    });
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), created] } : t
+      )
+    );
+    return created;
+  }, []);
+
+  const updateSubtask = useCallback(async (taskId, subId, patch) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              subtasks: (t.subtasks || []).map((s) =>
+                s.id === subId ? { ...s, ...patch } : s
+              ),
+            }
+          : t
+      )
+    );
+    try {
+      await apiFetch(`/api/tasks/${taskId}/subtasks/${subId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+    } catch {
+      await fetchTasks();
+    }
+  }, [fetchTasks]);
+
+  const deleteSubtask = useCallback(async (taskId, subId) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? { ...t, subtasks: (t.subtasks || []).filter((s) => s.id !== subId) }
+          : t
+      )
+    );
+    try {
+      await apiFetch(`/api/tasks/${taskId}/subtasks/${subId}`, { method: 'DELETE' });
+    } catch {
+      await fetchTasks();
+    }
+  }, [fetchTasks]);
 
   return {
     tasks,
@@ -258,8 +201,12 @@ export default function useTasks() {
     error,
     createTask,
     updateTask,
+    reorderTasks,
     deleteTask,
     clearCompleted,
+    addSubtask,
+    updateSubtask,
+    deleteSubtask,
     refetch: fetchTasks,
   };
 }

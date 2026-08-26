@@ -41,7 +41,7 @@ export default function ConfirmDialog() {
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-tp"
+        className="absolute inset-0 bg-black"
         style={{
           opacity: 0.4,
           animation: `fadeIn var(--dur-fast) var(--ease) forwards`,

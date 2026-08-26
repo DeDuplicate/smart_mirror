@@ -95,6 +95,17 @@ function Spinner({ className = 'w-4 h-4' }) {
   );
 }
 
+function UploadIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  );
+}
+
 // ─── Shared UI Primitives ────────────────────────────────────────────────────
 
 /** Section card wrapper */
@@ -801,31 +812,69 @@ function NewsSection() {
 const PERSON_COLORS = ['#2a9d7f', '#5b52cc', '#c95454', '#b07c10', '#e06262', '#4a90d9', '#7b61ff', '#d4a017'];
 
 function FamilySection() {
-  const [people, setPeople] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('chores_people') || '[]');
-    } catch { return []; }
-  });
+  const [people, setPeople] = useState([]);
   const [newName, setNewName] = useState('');
   const addToast = useStore((s) => s.addToast);
 
-  const savePeople = useCallback((updated) => {
-    setPeople(updated);
-    localStorage.setItem('chores_people', JSON.stringify(updated));
+  // Persist to both localStorage (so the Chores tab's sync seed converges)
+  // and the backend DB (source of truth for chores).
+  const persistLocal = useCallback((updated) => {
+    try { localStorage.setItem('chores_people', JSON.stringify(updated)); } catch { /* ignore */ }
   }, []);
 
-  const addPerson = useCallback(() => {
+  // Initial load: seed from localStorage if present, otherwise read the DB.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem('chores_people') || '[]');
+        if (stored.length > 0) {
+          const syncParam = encodeURIComponent(JSON.stringify(
+            stored.map((p) => ({ id: p.id, name: p.name, color: p.color }))
+          ));
+          const data = await fetchApi(`/api/tasks/people?sync=${syncParam}`);
+          if (!cancelled) setPeople(data.map(({ id, name, color }) => ({ id, name, color })));
+        } else {
+          const data = await fetchApi('/api/tasks/people');
+          if (!cancelled) {
+            const mapped = data.map(({ id, name, color }) => ({ id, name, color }));
+            setPeople(mapped);
+            persistLocal(mapped);
+          }
+        }
+      } catch { /* keep whatever we have */ }
+    })();
+    return () => { cancelled = true; };
+  }, [persistLocal]);
+
+  const addPerson = useCallback(async () => {
     if (!newName.trim()) return;
     const color = PERSON_COLORS[people.length % PERSON_COLORS.length];
-    const id = 'p_' + Date.now();
-    savePeople([...people, { id, name: newName.trim(), color }]);
-    setNewName('');
-    addToast('success', `${newName.trim()} נוסף/ה`);
-  }, [newName, people, savePeople, addToast]);
+    try {
+      const created = await fetchApi('/api/tasks/people', {
+        method: 'POST',
+        body: JSON.stringify({ name: newName.trim(), color }),
+      });
+      const updated = [...people, { id: created.id, name: created.name, color: created.color }];
+      setPeople(updated);
+      persistLocal(updated);
+      setNewName('');
+      addToast('success', `${created.name} נוסף/ה`);
+    } catch {
+      addToast('error', 'שמירת בן המשפחה נכשלה');
+    }
+  }, [newName, people, persistLocal, addToast]);
 
-  const removePerson = useCallback((id) => {
-    savePeople(people.filter(p => p.id !== id));
-  }, [people, savePeople]);
+  const removePerson = useCallback(async (id) => {
+    const updated = people.filter(p => p.id !== id);
+    setPeople(updated);
+    persistLocal(updated);
+    try {
+      await fetchApi(`/api/tasks/people/${id}`, { method: 'DELETE' });
+    } catch {
+      addToast('error', 'מחיקת בן המשפחה נכשלה');
+    }
+  }, [people, persistLocal, addToast]);
 
   return (
     <Section title="בני המשפחה (מטלות)">
@@ -933,9 +982,9 @@ function TasksSection() {
 
 function DisplaySection() {
   const { settings, updateSettings } = useSettings();
-  const { setSettings, toggleDarkMode } = useStore();
+  const { setSettings, setThemeMode } = useStore();
 
-  const idleMin = settings.idleTimeout || 10;
+  const idleMin = settings.idleTimeout || 5;
   const brightness = settings.brightnessDefault || 80;
   const screensaver = settings.screensaverStyle || 'clock';
   const hebrewCal = settings.hebrewCalendar === true;
@@ -1044,14 +1093,34 @@ function DisplaySection() {
               updateSettings({ hebrewCalendar: val });
             }}
           />
-          <ToggleRow
-            label={t.settings.darkMode}
-            checked={settings.darkMode === true}
-            onChange={() => {
-              toggleDarkMode();
-              updateSettings({ darkMode: !settings.darkMode });
-            }}
-          />
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm text-tp">{t.settings.themeCycle}</span>
+              <span className="text-xs text-tm">{t.settings.themeAutoHint}</span>
+            </div>
+            <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
+              {[
+                { value: 'auto', label: t.settings.themeAuto },
+                { value: 'light', label: t.settings.lightMode },
+                { value: 'dark', label: t.settings.darkMode },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setThemeMode(opt.value);
+                    updateSettings({ themeMode: opt.value });
+                  }}
+                  className={`px-3 min-h-[44px] rounded-xl text-sm font-medium transition-all
+                               duration-[var(--dur-fast)] active:scale-95
+                               ${(settings.themeMode || 'auto') === opt.value
+                                 ? 'bg-acc text-white shadow-card'
+                                 : 'text-ts hover:text-tp'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </Section>
@@ -1094,6 +1163,9 @@ function SystemSection() {
   const [checking, setChecking] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const restoreInputRef = useRef(null);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updating, setUpdating] = useState(false);
   // Ref guard so double-clicks can't start a second install while a confirm
@@ -1221,8 +1293,32 @@ function SystemSection() {
     setBackingUp(true);
     try {
       const data = await fetchApi('/api/system/backup', { method: 'POST' });
-      if (data?.timestamp) {
-        setLastBackup(new Date(data.timestamp).toLocaleString('he-IL'));
+      if (data?.date || data?.timestamp) {
+        const when = data.date ? new Date(data.date) : new Date();
+        setLastBackup(when.toLocaleString('he-IL'));
+      }
+      // Download the freshly created backup to the browser. Best-effort — the
+      // server-side backup already succeeded, so a download failure isn't fatal.
+      if (data?.file) {
+        try {
+          const token = localStorage.getItem('auth_token');
+          const res = await fetch(`/api/system/backup/download/${encodeURIComponent(data.file)}`, {
+            headers: token ? { Authorization: `******` } : {},
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.file;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          }
+        } catch {
+          /* download is best-effort */
+        }
       }
       addToast('success', t.settings.backupSuccess);
     } catch {
@@ -1231,6 +1327,63 @@ function SystemSection() {
       setBackingUp(false);
     }
   }, [addToast]);
+
+  const handleResetDevice = useCallback(() => {
+    showConfirm({
+      title: t.settings.resetDeviceTitle,
+      message: t.settings.resetDeviceConfirm,
+      onConfirm: async () => {
+        setResetting(true);
+        try {
+          await fetchApi('/api/system/reset', { method: 'POST' });
+          addToast('success', t.settings.resetSuccess);
+          // Clear client-side state (queues, family, cached prefs) so the device
+          // truly returns to a first-run state, then reload into the fresh app.
+          try { localStorage.clear(); } catch { /* ignore */ }
+          setTimeout(() => window.location.reload(), 1200);
+        } catch {
+          addToast('error', t.settings.resetFailed);
+          setResetting(false);
+        }
+      },
+    });
+  }, [showConfirm, addToast]);
+
+  const handleRestoreFile = useCallback((e) => {
+    const file = e.target.files?.[0];
+    // Reset the input so selecting the same file again re-triggers onChange.
+    e.target.value = '';
+    if (!file) return;
+    showConfirm({
+      title: t.settings.restoreTitle,
+      message: t.settings.restoreConfirm,
+      onConfirm: async () => {
+        setRestoringBackup(true);
+        try {
+          const token = localStorage.getItem('auth_token');
+          const res = await fetch('/api/system/restore', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              ...(token ? { Authorization: `******` } : {}),
+            },
+            body: file,
+          });
+          if (!res.ok) {
+            const txt = await res.text().catch(() => '');
+            throw new Error(txt || res.statusText);
+          }
+          addToast('success', t.settings.restoreSuccess);
+          // Client-side caches now reference the old data — clear and reload.
+          try { localStorage.clear(); } catch { /* ignore */ }
+          setTimeout(() => window.location.reload(), 1200);
+        } catch {
+          addToast('error', t.settings.restoreFailed);
+          setRestoringBackup(false);
+        }
+      },
+    });
+  }, [showConfirm, addToast]);
 
   return (
     <Section title={t.settings.system}>
@@ -1286,6 +1439,28 @@ function SystemSection() {
             disabled={backingUp}
           >
             {t.settings.backupNow}
+          </Btn>
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept=".db,.sqlite,application/octet-stream"
+            onChange={handleRestoreFile}
+            className="hidden"
+          />
+          <Btn
+            icon={restoringBackup ? <Spinner /> : <UploadIcon />}
+            onClick={() => restoreInputRef.current?.click()}
+            disabled={restoringBackup}
+          >
+            {t.settings.restoreBackup}
+          </Btn>
+          <Btn
+            icon={resetting ? <Spinner /> : <TrashIcon />}
+            variant="danger"
+            onClick={handleResetDevice}
+            disabled={resetting}
+          >
+            {t.settings.resetDevice}
           </Btn>
         </div>
 

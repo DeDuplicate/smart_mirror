@@ -143,12 +143,10 @@ function WeatherSection() {
   const toggle = useCallback(() => setOpen((v) => !v), []);
   const close = useCallback(() => setOpen(false), []);
 
-  if (weather.temp == null && weather.code == null) return null;
-
   const unitLabel =
     temperatureUnit === 'celsius' ? t.weather.celsius : t.weather.fahrenheit;
   const tempText =
-    weather.temp != null ? `${Math.round(weather.temp)}${unitLabel}` : '';
+    weather.temp != null ? `${Math.round(weather.temp)}${unitLabel}` : '—';
 
   return (
     <div className="relative">
@@ -221,51 +219,55 @@ function GreetingSection() {
     <div className="flex flex-col select-none leading-tight">
       <span className="text-lg font-semibold text-tp">
         {greeting}
-        {userName ? `, ${userName}` : ''}
+        {userName ? ` ${userName}` : ''}
       </span>
     </div>
   );
 }
 
-/** Dark mode toggle — moon/sun icon */
+/** Theme cycle — auto / dark / light */
 function DarkModeToggle() {
   const darkMode = useStore((s) => s.settings.darkMode);
-  const toggleDarkMode = useStore((s) => s.toggleDarkMode);
+  const themeMode = useStore((s) => s.settings.themeMode || 'auto');
+  const cycleThemeMode = useStore((s) => s.cycleThemeMode);
 
   const handleToggle = useCallback(async () => {
-    toggleDarkMode();
-    // Persist to backend
+    const next = cycleThemeMode();
     try {
-      const next = !darkMode;
-      await fetch('/api/settings/darkMode', {
+      await fetch('/api/settings/themeMode', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: next }),
       });
     } catch {
-      // Silently fail — local state is already updated
+      // Local state is already updated
     }
-  }, [darkMode, toggleDarkMode]);
+  }, [cycleThemeMode]);
+
+  const label =
+    themeMode === 'auto'
+      ? `${t.settings.themeCycle}: ${t.settings.themeAuto}`
+      : themeMode === 'dark'
+        ? t.settings.darkMode
+        : t.settings.lightMode;
 
   return (
     <button
       onClick={handleToggle}
-      className="flex items-center justify-center w-[56px] h-[56px] rounded-xl
+      className="relative flex items-center justify-center w-[56px] h-[56px] rounded-xl
                  hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                  text-ts hover:text-tp"
-      aria-label={darkMode ? t.settings.lightMode : t.settings.darkMode}
+      aria-label={label}
+      title={label}
     >
       {darkMode ? (
-        /* Sun icon — shown in dark mode, tap to switch to light */
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-6 h-6"
-        >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
           <circle cx="12" cy="12" r="5" />
           <line x1="12" y1="1" x2="12" y2="3" />
           <line x1="12" y1="21" x2="12" y2="23" />
@@ -276,19 +278,12 @@ function DarkModeToggle() {
           <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
         </svg>
-      ) : (
-        /* Moon icon — shown in light mode, tap to switch to dark */
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-6 h-6"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
+      )}
+      {themeMode === 'auto' && (
+        <span className="absolute bottom-1.5 left-1.5 min-w-[16px] h-4 px-0.5 rounded-full
+                         bg-acc text-white text-[9px] font-bold leading-4 text-center">
+          A
+        </span>
       )}
     </button>
   );
@@ -385,55 +380,6 @@ function WifiIndicator() {
         />
       </button>
       <WifiPopup visible={open} onClose={close} anchorRef={anchorRef} />
-    </div>
-  );
-}
-
-/** Person presence indicators — green=home, grey=away */
-function PersonPresence() {
-  const haStatus = useStore((s) => s.connections.ha);
-  const isConfigured = haStatus === 'connected' || haStatus === 'degraded';
-  const { allStates } = useHomeAssistant();
-
-  if (!isConfigured) return null;
-
-  const persons = [
-    { entityId: 'person.yossef', initial: '\u05D9', label: t.presence.yossef },
-    { entityId: 'person.maayan', initial: '\u05DE', label: t.presence.maayan },
-  ];
-
-  // Find person entities from allStates — only show if entity actually exists in HA
-  const personStates = persons
-    .map((p) => {
-      const entity = allStates.find((e) => e.entity_id === p.entityId);
-      if (!entity) return null;
-      const isHome = entity.state === 'home';
-      return { ...p, isHome, state: entity.state };
-    })
-    .filter(Boolean);
-
-  if (personStates.length === 0) return null;
-
-  return (
-    <div className="flex items-center gap-1.5">
-      {personStates.map((p) => (
-        <div
-          key={p.entityId}
-          className="relative flex items-center justify-center"
-          title={`${p.label}: ${p.isHome ? t.presence.home : t.presence.away}`}
-        >
-          <div
-            className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold
-              border-2 transition-colors duration-300
-              ${p.isHome
-                ? 'border-acc2 bg-acc2/15 text-acc2'
-                : 'border-bd bg-s2 text-tm'
-              }`}
-          >
-            {p.initial}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -546,17 +492,18 @@ function MusicMiniPlayer() {
 
   return (
     <div
-      className="flex items-center gap-2 ps-1.5 pe-2 py-1 rounded-2xl bg-s1"
+      className="mini-player flex items-center gap-2 ps-1.5 pe-2 py-1 rounded-2xl"
       role="group"
       aria-label={t.music.nowPlaying}
     >
       <button
         onClick={() => setActiveTab(MUSIC_TAB_INDEX)}
-        className="flex items-center gap-2 min-w-0 min-h-[56px] rounded-xl hover:bg-s2 active:scale-[0.98]
+        className="flex items-center gap-2 min-w-0 min-h-[56px] rounded-xl active:scale-[0.98]
                    transition-all duration-[var(--dur-fast)] py-1 ps-1 pe-1.5"
         aria-label={t.music.backToMusic}
       >
-        <div className="w-10 h-10 rounded-xl overflow-hidden bg-s2 shrink-0 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
+             style={{ backgroundColor: 'var(--s2)' }}>
           {currentTrack.imageUrl ? (
             <img src={currentTrack.imageUrl} alt="" className="w-full h-full object-cover" />
           ) : (
@@ -564,10 +511,10 @@ function MusicMiniPlayer() {
           )}
         </div>
         <div className="flex flex-col items-start min-w-0 leading-tight">
-          <span className="text-xs font-semibold text-tp truncate max-w-[140px]">
+          <span className="mini-title text-xs font-semibold truncate max-w-[140px]">
             {currentTrack.title}
           </span>
-          <span className="text-[11px] text-ts truncate max-w-[140px]">
+          <span className="mini-artist text-[11px] truncate max-w-[140px]">
             {currentTrack.artist}
           </span>
         </div>
@@ -657,7 +604,6 @@ export default function TopBar() {
       {/* Left side in RTL: Utility buttons */}
       <div className="flex items-center gap-1">
         <MusicMiniPlayer />
-        <PersonPresence />
         <ShoppingListButton />
         <DarkModeToggle />
         <BrightnessButton />

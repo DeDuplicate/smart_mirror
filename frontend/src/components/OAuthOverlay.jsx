@@ -97,7 +97,7 @@ export default function OAuthOverlay({ provider, authUrl, onSuccess, onClose, on
     >
       {/* Semi-transparent backdrop */}
       <div
-        className="absolute inset-0 bg-tp/50"
+        className="absolute inset-0 bg-black/50"
         onClick={handleClose}
       />
 

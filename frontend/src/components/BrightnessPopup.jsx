@@ -1,5 +1,41 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// ─── Software dimming overlay ───────────────────────────────────────────────
+// Works on any hardware: dims the screen with a black overlay when the
+// hardware brightness control isn't available (or in addition to it).
+
+const STORAGE_KEY = 'screen_brightness';
+const MAX_DIM = 0.85; // never go fully black
+
+function getStoredBrightness() {
+  const v = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  return Number.isNaN(v) ? 100 : Math.max(0, Math.min(100, v));
+}
+
+function applyDimOverlay(value) {
+  let el = document.getElementById('brightness-dim-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'brightness-dim-overlay';
+    Object.assign(el.style, {
+      position: 'fixed',
+      inset: '0',
+      background: '#000',
+      pointerEvents: 'none',
+      zIndex: '9999',
+      transition: 'opacity 200ms ease',
+      opacity: '0',
+    });
+    document.body.appendChild(el);
+  }
+  el.style.opacity = String(((100 - value) / 100) * MAX_DIM);
+}
+
+// Apply persisted brightness on app load
+if (typeof document !== 'undefined') {
+  applyDimOverlay(getStoredBrightness());
+}
+
 // ─── Debounce helper ────────────────────────────────────────────────────────
 
 function useDebouncedCallback(fn, delay) {
@@ -51,7 +87,7 @@ function SunIcon({ className = '' }) {
 // ─── BrightnessPopup Component ──────────────────────────────────────────────
 
 export default function BrightnessPopup({ visible, onClose, anchorRef }) {
-  const [brightness, setBrightness] = useState(80);
+  const [brightness, setBrightness] = useState(getStoredBrightness);
   const popupRef = useRef(null);
   const sliderRef = useRef(null);
   const isDragging = useRef(false);
@@ -61,7 +97,7 @@ export default function BrightnessPopup({ visible, onClose, anchorRef }) {
     fetch('/api/system/brightness', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brightness: value }),
+      body: JSON.stringify({ value }),
     }).catch(() => {
       // Silently fail
     });
@@ -74,6 +110,8 @@ export default function BrightnessPopup({ visible, onClose, anchorRef }) {
     (value) => {
       const clamped = Math.max(0, Math.min(100, Math.round(value)));
       setBrightness(clamped);
+      applyDimOverlay(clamped);
+      localStorage.setItem(STORAGE_KEY, String(clamped));
       debouncedSend(clamped);
     },
     [debouncedSend]

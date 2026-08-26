@@ -7,6 +7,7 @@ backend/db/*.db-wal
 logs/
 dist/
 backend/cache/
+backend/backups/
 # PM2 runtime logs (ecosystem.config.js writes these next to the backend)
 backend/*.log
 .DS_Store

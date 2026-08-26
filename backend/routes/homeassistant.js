@@ -146,8 +146,11 @@ router.get('/todo/:entity_id', async (req, res) => {
 
   try {
     const { host } = getHAConfig();
+    // todo.get_items is a response-data service — HA 400s without
+    // ?return_response ("Service call requires responses but caller did
+    // not ask for responses").
     const response = await fetch(
-      `${host}/api/services/todo/get_items`,
+      `${host}/api/services/todo/get_items?return_response`,
       {
         method: 'POST',
         headers: haHeaders(),
@@ -161,10 +164,18 @@ router.get('/todo/:entity_id', async (req, res) => {
     }
 
     const result = await response.json();
-    // HA returns array of state objects; the items are within the response
-    // The todo.get_items response is an array with entity states containing items attribute
-    const entity = Array.isArray(result) ? result.find(e => e.entity_id === entityId) : null;
-    const items = entity?.attributes?.items || result?.items || [];
+    // With ?return_response the REST API wraps the service data:
+    // { changed_states: [...], service_response: { "<entity_id>": { items: [...] } } }.
+    // Older shapes (bare service response / state-objects array / flat
+    // {items}) kept as fallbacks.
+    const items =
+      result?.service_response?.[entityId]?.items ||
+      result?.[entityId]?.items ||
+      (Array.isArray(result)
+        ? result.find((e) => e.entity_id === entityId)?.attributes?.items
+        : null) ||
+      result?.items ||
+      [];
 
     res.json({ items });
   } catch (err) {

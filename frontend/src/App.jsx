@@ -14,7 +14,10 @@ import useHealth from './hooks/useHealth.js';
 import useIdleDetection from './hooks/useIdleDetection.js';
 import useDisplaySchedule from './hooks/useDisplaySchedule.js';
 import useRippleEffect from './hooks/useRippleEffect.js';
+import useAutoTheme from './hooks/useAutoTheme.js';
+import useWeather from './hooks/useWeather.js';
 import Screensaver from './components/Screensaver.jsx';
+import { applyTheme, normalizeThemeMode, resolveIsDark } from './theme.js';
 
 // ─── Lazy-loaded tab pages (code-split per tab) ────────────────────────────
 const CalendarPage = React.lazy(() => import('./components/pages/CalendarPage.jsx'));
@@ -535,6 +538,8 @@ export default function App() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useRippleEffect();
+  useAutoTheme();
+  useWeather();
 
   // ── Offline / online detection ──
   useEffect(() => {
@@ -551,10 +556,10 @@ export default function App() {
   // ── Multi-resolution scale ──
   useEffect(() => {
     function updateScale() {
-      const sx = window.innerWidth / 1920;
-      const sy = window.innerHeight / 1080;
-      const scale = Math.min(sx, sy);
-      document.getElementById('root')?.style.setProperty('--app-scale', String(scale));
+      const root = document.getElementById('root');
+      if (!root) return;
+      root.style.setProperty('--app-scale-x', String(window.innerWidth / 1920));
+      root.style.setProperty('--app-scale-y', String(window.innerHeight / 1080));
     }
     updateScale();
     window.addEventListener('resize', updateScale);
@@ -646,20 +651,16 @@ export default function App() {
         // was previously read as the raw response, so `data.firstRun` was
         // always undefined and the onboarding wizard reopened on every load.
         let data = body.settings || {};
-        // If darkMode has never been set, auto-detect from system preference
-        let { darkMode } = data;
-        if (darkMode == null) {
-          darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          data = { ...data, darkMode };
-        }
+        const themeMode = normalizeThemeMode(data.themeMode, data.darkMode);
+        const darkMode = resolveIsDark({
+          themeMode,
+          lat: data.latitude,
+          lon: data.longitude,
+        });
+        data = { ...data, themeMode, darkMode };
 
         setSettings({ ...data, loaded: true });
-        // Apply dark mode theme before first paint
-        if (darkMode) {
-          document.documentElement.dataset.theme = 'dark';
-        } else {
-          delete document.documentElement.dataset.theme;
-        }
+        applyTheme(darkMode);
         if (data.firstRun !== false) {
           setShowWizard(true);
         }
@@ -691,9 +692,23 @@ export default function App() {
       setAllConnectionStatuses(statuses);
     });
 
-    sock.on('settings:update', (data) => {
-      setSettings(data);
-    });
+    const applySettingsPatch = (data) => {
+      if (!data || typeof data !== 'object') return;
+      const current = useStore.getState().settings;
+      const next = { ...current, ...data };
+      const themeMode = normalizeThemeMode(next.themeMode, next.darkMode);
+      const darkMode = resolveIsDark({
+        themeMode,
+        daily: useStore.getState().weather.daily,
+        isDay: useStore.getState().weather.current.isDay,
+        lat: next.latitude,
+        lon: next.longitude,
+      });
+      setSettings({ ...data, themeMode, darkMode });
+      applyTheme(darkMode);
+    };
+    sock.on('settings:update', applySettingsPatch);
+    sock.on('settings:updated', applySettingsPatch);
 
     sock.on('toast', ({ type, message }) => {
       addToast(type, message);
@@ -705,6 +720,7 @@ export default function App() {
       sock.off('weather:update');
       sock.off('connections:status');
       sock.off('settings:update');
+      sock.off('settings:updated');
       sock.off('toast');
     };
   }, [setWeather, setConnectionStatus, setAllConnectionStatuses, setSettings, addToast]);
@@ -717,47 +733,6 @@ export default function App() {
     }, 15000);
     return () => clearInterval(interval);
   }, []);
-
-  // ── Weather polling (respects weatherSource setting) ──
-  const weatherSource = useStore((s) => s.settings.weatherSource) || 'openmeteo';
-  const temperatureUnit = useStore((s) => s.settings.temperatureUnit) || 'celsius';
-  const settingsLat = useStore((s) => s.settings.latitude);
-  const settingsLon = useStore((s) => s.settings.longitude);
-
-  useEffect(() => {
-    if (!settingsLoaded) return;
-    let mounted = true;
-
-    async function fetchWeather() {
-      try {
-        const units = temperatureUnit === 'fahrenheit' ? 'F' : 'C';
-        let url;
-        if (weatherSource === 'ims') {
-          url = `/api/weather/ims?units=${units}`;
-        } else {
-          const params = new URLSearchParams({ units });
-          if (settingsLat) params.set('lat', settingsLat);
-          if (settingsLon) params.set('lon', settingsLon);
-          url = `/api/weather?${params}`;
-        }
-        const data = await fetchApi(url);
-        if (!mounted) return;
-        if (data?.current) {
-          setWeather(data);
-        }
-      } catch {
-        // Silently fail — weather will update on next poll
-      }
-    }
-
-    fetchWeather();
-    const interval = setInterval(fetchWeather, 10 * 60 * 1000); // 10 minutes
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [settingsLoaded, weatherSource, temperatureUnit, settingsLat, settingsLon, setWeather]);
 
   // ── Wizard complete handler ──
   const handleWizardComplete = useCallback(() => {

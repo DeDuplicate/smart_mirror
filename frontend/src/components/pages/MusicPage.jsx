@@ -264,9 +264,9 @@ function PlaylistRow({ playlist, onOpen, disabled }) {
 function TrackRow({ track, isCurrent, onPlay, onQueue, onRemove, showQueueAction, showRemoveAction }) {
   return (
     <div
-      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
+      className={`track-row flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
                   transition-all duration-[var(--dur-fast)]
-                  ${isCurrent ? 'border-r-[3px] border-r-acc bg-s2/60' : 'hover:bg-s2'}`}
+                  ${isCurrent ? 'is-current border-r-[3px] border-r-acc' : ''}`}
     >
       <button
         onClick={onPlay}
@@ -274,12 +274,12 @@ function TrackRow({ track, isCurrent, onPlay, onQueue, onRemove, showQueueAction
       >
         <TrackThumb videoId={track.id} imageUrl={track.imageUrl} />
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${isCurrent ? 'text-acc' : 'text-tp'}`}>
+          <p className={`track-title text-sm font-medium truncate ${isCurrent ? 'text-acc' : 'text-tp'}`}>
             {track.title}
           </p>
-          <p className="text-xs text-ts truncate">{track.artist}</p>
+          <p className="track-meta text-xs truncate">{track.artist}</p>
         </div>
-        <span className="font-mono text-xs text-tm shrink-0">
+        <span className="track-meta font-mono text-xs shrink-0">
           {track.duration || formatTime(track.durationSeconds)}
         </span>
       </button>
@@ -504,7 +504,7 @@ export default function MusicPage() {
                 debounceSearch('');
                 setPanel('recommended');
               }}
-              className="w-10 h-10 flex items-center justify-center rounded-full text-ts hover:bg-s1"
+              className="w-10 h-10 flex items-center justify-center rounded-full text-ts hover:bg-s2"
             >
               <CloseIcon />
             </span>
@@ -517,7 +517,7 @@ export default function MusicPage() {
             }}
             title={t.music.chooseSpeaker}
             className={`w-12 h-12 flex items-center justify-center rounded-xl shrink-0
-                        ${outputId !== 'local' ? 'text-acc bg-acc/10' : 'text-ts hover:bg-s1'}`}
+                        ${outputId !== 'local' ? 'text-acc bg-acc/10' : 'text-ts hover:bg-s2'}`}
           >
             <SpeakerIconBtn />
           </button>
@@ -758,8 +758,8 @@ export default function MusicPage() {
 
       {speakerOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-tp/30" onClick={() => setSpeakerOpen(false)} />
-          <div className="relative w-full max-w-[640px] max-h-[78%] bg-s1 border border-bd rounded-t-3xl p-5 overflow-hidden flex flex-col">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setSpeakerOpen(false)} />
+          <div className="relative w-full max-w-[640px] max-h-[78%] bg-surf border border-bd rounded-t-3xl p-5 overflow-hidden flex flex-col">
             <div className="w-12 h-1.5 rounded-full bg-bd mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-tp mb-4 text-right">{t.music.chooseSpeaker}</h3>
             <div className="overflow-y-auto flex-1 -mx-1 px-1">

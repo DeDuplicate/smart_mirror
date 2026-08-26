@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <meta name="theme-color" content="#6b62e0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -36,6 +36,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        var r = document.getElementById('root');
+        if (!r) return;
+        r.style.setProperty('--app-scale-x', String(window.innerWidth / 1920));
+        r.style.setProperty('--app-scale-y', String(window.innerHeight / 1080));
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

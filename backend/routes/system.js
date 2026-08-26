@@ -1,6 +1,8 @@
 'use strict';
 
 const { Router } = require('express');
+const express = require('express');
+const Database = require('better-sqlite3');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -11,6 +13,8 @@ const IS_LINUX = os.platform() === 'linux';
 const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 const LOGS_DIR = path.join(__dirname, '..', 'logs');
 const BACKUP_DIR = path.join(__dirname, '..', 'backups');
+
+const { runMigrations } = require('../db/migrate');
 
 // PM2 process name for this backend — must match apps[].name for the backend
 // entry in ecosystem.config.js at the repo root.
@@ -111,7 +115,9 @@ router.get('/version', (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/brightness', async (req, res) => {
   const logger = req.app.locals.logger;
-  const value = Math.max(0, Math.min(100, parseInt(req.body.value, 10) || 50));
+  const raw = req.body.value ?? req.body.brightness;
+  const parsed = parseInt(raw, 10);
+  const value = Math.max(0, Math.min(100, Number.isNaN(parsed) ? 50 : parsed));
 
   if (!IS_LINUX) {
     return res.json({ ok: true, brightness: value, mock: true });
@@ -239,11 +245,38 @@ router.post('/backup', async (req, res) => {
       if (fs.existsSync(envBakPath)) fs.unlinkSync(envBakPath);
     }
 
-    res.json({ ok: true, path: backupPath, timestamp });
+    res.json({ ok: true, path: backupPath, file: path.basename(backupPath), date: new Date().toISOString(), timestamp });
   } catch (err) {
     logger.error('Backup error: %s', err.message);
     res.status(500).json({ error: 'Backup failed: ' + err.message });
   }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/system/backup/download/:file - download a backup file to the browser
+// ---------------------------------------------------------------------------
+router.get('/backup/download/:file', (req, res) => {
+  const logger = req.app.locals.logger;
+  const requested = req.params.file || '';
+
+  // Only allow our own backup files; reject anything with path separators or
+  // traversal so an attacker can't read arbitrary files off disk.
+  if (!/^smart-mirror-[\w.-]+\.db$/.test(requested)) {
+    return res.status(400).json({ error: 'Invalid backup filename' });
+  }
+
+  const filePath = path.join(BACKUP_DIR, requested);
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(BACKUP_DIR) + path.sep) || !fs.existsSync(resolved)) {
+    return res.status(404).json({ error: 'Backup not found' });
+  }
+
+  res.download(resolved, requested, (err) => {
+    if (err && !res.headersSent) {
+      logger.error('Backup download error: %s', err.message);
+      res.status(500).end();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -453,6 +486,189 @@ router.post('/reboot', (req, res) => {
       }
     });
   }, 500);
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/system/reset - factory reset: wipe and re-initialize the database.
+// Takes a safety backup first, drops every table, re-runs all migrations, and
+// preserves the device API token so already-authorized clients keep working.
+// ---------------------------------------------------------------------------
+router.post('/reset', async (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    // 1. Safety backup before the destructive wipe (best-effort).
+    try {
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      await db.backup(path.join(BACKUP_DIR, 'pre-reset-' + timestamp + '.db'));
+      logger.info('Pre-reset backup created');
+    } catch (bkErr) {
+      logger.warn('Pre-reset backup failed (continuing with reset): %s', bkErr.message);
+    }
+
+    // 2. Preserve the device API token so remote clients stay authorized.
+    let apiToken = null;
+    try {
+      apiToken = db.prepare("SELECT value FROM config WHERE key = 'api_token'").get()?.value || null;
+    } catch { /* config table may be missing — ignore */ }
+
+    // 3. Drop every user table (FK checks off so drop order doesn't matter).
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+      .all();
+
+    db.pragma('foreign_keys = OFF');
+    const wipe = db.transaction(() => {
+      for (const { name } of tables) {
+        db.exec(`DROP TABLE IF EXISTS "${name}"`);
+      }
+    });
+    wipe();
+    db.pragma('foreign_keys = ON');
+
+    // 4. Recreate the schema from scratch.
+    runMigrations(db, logger);
+
+    // 5. Restore the preserved API token.
+    if (apiToken) {
+      db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('api_token', ?)").run(apiToken);
+    }
+
+    // Flush the WAL so the shrunken database is fully materialized on disk.
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* non-fatal */ }
+
+    logger.warn('Device reset complete — database wiped and re-initialized');
+
+    const io = req.app.locals.io;
+    if (io) io.emit('system:reset');
+
+    res.json({ ok: true, message: 'Device reset complete' });
+  } catch (err) {
+    logger.error('Device reset failed: %s', err.message);
+    res.status(500).json({ error: 'Reset failed: ' + err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/system/restore - restore the database from an uploaded .db file.
+// The file is sent as a raw binary body (application/octet-stream). We validate
+// it is a genuine SQLite database that looks like one of our backups, take a
+// safety backup of the current data, then copy every table from the uploaded
+// file into the live connection. The device API token is preserved so already-
+// authorized clients keep working after the restore.
+// ---------------------------------------------------------------------------
+router.post('/restore', express.raw({ type: '*/*', limit: '64mb' }), async (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+  const io = req.app.locals.io;
+
+  const buf = req.body;
+  if (!Buffer.isBuffer(buf) || buf.length === 0) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  // Validate the SQLite header magic ("SQLite format 3\0").
+  const SQLITE_MAGIC = Buffer.from('SQLite format 3\0', 'latin1');
+  if (buf.length < 16 || !buf.subarray(0, 16).equals(SQLITE_MAGIC)) {
+    return res.status(400).json({ error: 'Not a valid SQLite database file' });
+  }
+
+  const uploadPath = path.join(os.tmpdir(), 'restore-upload-' + Date.now() + '.db');
+
+  try {
+    fs.writeFileSync(uploadPath, buf);
+
+    // Validate the uploaded db: it must open, pass an integrity check, and
+    // contain the config table (proof it is a Smart Mirror backup).
+    let srcTableCount = 0;
+    {
+      const src = new Database(uploadPath, { readonly: true });
+      try {
+        const integrity = src.pragma('integrity_check', { simple: true });
+        if (integrity !== 'ok') throw new Error('integrity check failed');
+        const names = src
+          .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+          .all()
+          .map((r) => r.name);
+        if (!names.includes('config')) {
+          throw new Error('not a Smart Mirror backup (missing config table)');
+        }
+        srcTableCount = names.length;
+      } finally {
+        src.close();
+      }
+    }
+
+    // Safety backup of the CURRENT database before overwriting it.
+    try {
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await db.backup(path.join(BACKUP_DIR, 'pre-restore-' + ts + '.db'));
+      logger.info('Pre-restore backup created');
+    } catch (bkErr) {
+      logger.warn('Pre-restore backup failed (continuing): %s', bkErr.message);
+    }
+
+    // Preserve the current device API token so remote clients stay authorized.
+    let apiToken = null;
+    try {
+      apiToken = db.prepare("SELECT value FROM config WHERE key = 'api_token'").get()?.value || null;
+    } catch { /* config table may be missing — ignore */ }
+
+    // Copy the uploaded database into the live connection. ATTACH cannot run
+    // inside a transaction, so attach/detach bracket the transactional copy.
+    db.pragma('foreign_keys = OFF');
+    db.exec(`ATTACH DATABASE '${uploadPath.replace(/'/g, "''")}' AS restore`);
+    try {
+      const copy = db.transaction(() => {
+        // Drop everything in the live db. Dropping a table also drops its
+        // indexes/triggers; drop any stray views explicitly too.
+        const existing = db
+          .prepare("SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%'")
+          .all();
+        for (const o of existing) db.exec(`DROP ${o.type} IF EXISTS "${o.name}"`);
+
+        // Recreate schema + data from the attached backup.
+        const objs = db
+          .prepare("SELECT name, type, sql FROM restore.sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'")
+          .all();
+        for (const o of objs.filter((o) => o.type === 'table')) db.exec(o.sql);
+        for (const o of objs.filter((o) => o.type === 'table')) {
+          db.exec(`INSERT INTO main."${o.name}" SELECT * FROM restore."${o.name}"`);
+        }
+        for (const o of objs.filter((o) => o.type !== 'table')) {
+          try { db.exec(o.sql); } catch { /* non-fatal index/trigger/view */ }
+        }
+      });
+      copy();
+    } finally {
+      db.exec('DETACH DATABASE restore');
+      db.pragma('foreign_keys = ON');
+    }
+
+    // Bring the schema up to date in case the backup is from an older version.
+    runMigrations(db, logger);
+
+    // Restore the preserved API token so this device stays authorized.
+    if (apiToken) {
+      db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('api_token', ?)").run(apiToken);
+    }
+
+    // Flush the WAL so the restored database is fully materialized on disk.
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* non-fatal */ }
+
+    logger.warn('Database restored from uploaded backup (%d tables)', srcTableCount);
+    if (io) io.emit('system:reset');
+
+    res.json({ ok: true, message: 'Restore complete', tables: srcTableCount });
+  } catch (err) {
+    logger.error('Restore failed: %s', err.message);
+    res.status(500).json({ error: 'Restore failed: ' + err.message });
+  } finally {
+    try { fs.unlinkSync(uploadPath); } catch { /* ignore */ }
+  }
 });
 
 module.exports = router;
