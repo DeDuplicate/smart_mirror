@@ -14,10 +14,7 @@ _(none)_
 
 ## In progress
 
-- [ ] **News section redesign** using the locally cloned Apple-HIG skill at
-      `.github/skills/apple-design-skill/` (agent running: HIG-cited design
-      review + implementation of the featured card, headline list, and the
-      full-article reading overlay).
+_(none)_
 
 ## Backlog — correctness / real bugs
 
@@ -35,6 +32,23 @@ _(none known — verify the new 56px controls and popup clamps on the real
 
 ## Backlog — design follow-ups
 
+- [ ] **`--tm` is used as real text 77 times at 2.05:1 (light) / 2.78:1 (dark).**
+      Needs a per-usage audit, NOT a token change: `--tm` is the muted/tertiary
+      tier, and darkening it to 4.5:1 would collapse it into `--ts` and destroy
+      the three-tier text hierarchy. WCAG exempts genuinely decorative and
+      disabled text, so the work is deciding, per call site, which `text-tm`
+      instances are real readable content (→ move to `--ts`) and which are
+      decorative marks/placeholders (→ leave, and ideally stop using a *text*
+      colour for them). The News redesign already did this for its own screen.
+- [ ] **No scalable-text support.** The HIG accessibility reference asks for up
+      to 200% text scaling; the app is a fixed 1920x1080 transform-scaled canvas
+      with no text-size setting. Would need a Settings control + `global.css`.
+- [ ] **`bg-acc` + `text-white` is 3.21:1 in dark mode** (4.72:1 light). It's the
+      app-wide primary-button pairing. Currently only legal where it's bold and
+      ≥19px (the HIG 3:1 row). Proper fix is a token change to `--acc`.
+- [ ] `SkeletonBlock`'s default 8px radius is off the locked radius scale, but
+      it's shared by six skeletons — change it deliberately, in one pass.
+
 - [ ] `--amber` (`#e0a630` light / `#f0b840` dark) is the only color token with
       no `-rgb` channel sibling and no `tailwind.config.js` entry, so it can't
       be used as a utility or with an opacity modifier. Add the triplet if the
@@ -42,6 +56,32 @@ _(none known — verify the new 56px controls and popup clamps on the real
 
 ## Done
 
+- [x] **News section redesigned against the Apple HIG** (using the cloned skill
+      at `.github/skills/apple-design-skill/`, HIG-cited review then
+      implementation). The old page was a phone layout on a 1920x1080 wall
+      panel: one 1872px column, 11-15px metadata, 16px body, headlines over
+      arbitrary news photography. Rebuilt as a front page (lead + two seconds +
+      a scrolling timeline rail), body 16px → 22px/1.8, reading measure
+      1872px → 856px (~78ch) for ~2.5m viewing.
+      Real accessibility violations fixed, ratios independently re-verified by
+      hand: the category badge failed in every colour and both themes
+      (2.61-4.02:1 → 11.34-13.49:1); secondary text was 3.91:1 and separators
+      2.05:1 → `text-tp/70` at 6.21:1 light / 7.44:1 dark; and **no text sits
+      on an image anywhere on the screen any more**, so headline contrast no
+      longer depends on whatever the newsroom published (16.8:1 on `bg-surf`).
+      Added an onscreen refresh (pull-to-refresh was the only way to reload),
+      an explicit notice + retry when article extraction fails (it used to
+      silently show the RSS summary under a full-size headline), and
+      Escape/`role="dialog"`/reduced-motion on the overlay.
+      Notable interaction: `text-tp/70` only emits CSS *because* of the
+      `<alpha-value>` token fix — before it, an opacity modifier on a theme
+      colour produced no rule at all, so all 14 usages would have silently
+      failed.
+- [x] **Fixed the app-wide secondary-text contrast the review surfaced** —
+      light-mode `--ts` was 3.91:1 on `--surf`, 3.46:1 on `--s2`, 3.58:1 on
+      `--bg`, all below the 4.5:1 floor, across 118 usages. Darkened to
+      `#676b85` preserving hue (5.23 / 4.63 / 4.79:1). Dark mode already passed
+      at 6.54:1 and is untouched.
 - [x] **Verified the dark-mode rewrite rather than trusting it** — the change
       swapped every color token to RGB channel triplets, where a single
       hex→decimal slip would silently shift the palette. Checked all 18
