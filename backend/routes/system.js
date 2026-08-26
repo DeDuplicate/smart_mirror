@@ -375,19 +375,39 @@ router.post('/update', (req, res) => {
   const logger = req.app.locals.logger;
   const { exec } = require('child_process');
 
-  // Hardcoded command string — no user input, safe to use exec for shell chaining
-  const cmd = 'git pull origin main && cd frontend && npm install && npx vite build';
+  // Hardcoded command string — no user input, safe to use exec for shell chaining.
+  // Backend deps are installed too: a pulled commit may add a backend dependency
+  // (the frontend-only install here previously left those missing).
+  const cmd =
+    'git pull origin main && cd backend && npm install && cd ../frontend && npm install && npx vite build';
 
   logger.info('Starting update: %s', cmd);
 
-  exec(cmd, { cwd: PROJECT_ROOT, timeout: 300000 }, (err, stdout, stderr) => {
+  exec(cmd, { cwd: PROJECT_ROOT, timeout: 300000 }, (err, stdout) => {
     if (err) {
       logger.error('Update failed: %s', err.message);
       return res.json({ success: false, message: err.message });
     }
 
-    logger.info('Update completed successfully');
-    res.json({ success: true, message: stdout.toString().slice(-500) });
+    logger.info('Update completed successfully — restarting to load the new code');
+
+    // Respond BEFORE restarting: the restart kills this very process, so the
+    // client has to receive its response first. Without this restart the pulled
+    // code sits on disk but the running process keeps serving the old version,
+    // which made the update look like it had silently done nothing.
+    res.json({
+      success: true,
+      restarting: true,
+      message: stdout.toString().slice(-500),
+    });
+
+    setTimeout(() => {
+      run('pm2', ['restart', PM2_APP_NAME], 15000).then((result) => {
+        if (!result.ok) {
+          logger.error('Post-update restart failed: %s', result.stderr);
+        }
+      });
+    }, 500);
   });
 });
 
