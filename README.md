@@ -169,7 +169,20 @@ smart_mirror/
 
 ## Screenshots
 
-> Screenshots coming soon.
+### :calendar: Calendar — weekly grid with Google Calendar sync
+![Calendar](docs/screenshots/calendar.png)
+
+### :white_check_mark: Tasks — kanban board with drag-and-drop
+![Tasks](docs/screenshots/tasks.png)
+
+### :star: Chores — per-person columns with progress & celebrations
+![Chores](docs/screenshots/chores.png)
+
+### :musical_note: Music — YouTube search, queue & player
+![Music](docs/screenshots/music.png)
+
+### :newspaper: News — Hebrew RSS headlines with article view
+![News](docs/screenshots/news.png)
 
 ---
 
