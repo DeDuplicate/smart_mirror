@@ -8,6 +8,8 @@ import WeatherIcon from './WeatherIcon.jsx';
 export default function WeatherPopup({ anchorRef, onClose }) {
   const weather = useStore((s) => s.weather);
   const temperatureUnit = useStore((s) => s.settings.temperatureUnit);
+  const locationName = useStore((s) => s.settings.location);
+  const locationCountry = useStore((s) => s.settings.locationCountry);
   const popupRef = useRef(null);
 
   const unitLabel = temperatureUnit === 'celsius' ? t.weather.celsius : t.weather.fahrenheit;
@@ -60,6 +62,29 @@ export default function WeatherPopup({ anchorRef, onClose }) {
         <div className="absolute -top-2 right-8 w-4 h-4 bg-surf border-t border-r border-bd rotate-[-45deg] rounded-sm" />
 
         <div className="bg-surf border border-bd rounded-2xl shadow-popover p-5 relative">
+          {/* Configured city — saved by the Settings city picker */}
+          {locationName && (
+            <div className="flex items-center gap-1.5 mb-3 text-sm">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4 text-ts shrink-0"
+                aria-hidden="true"
+              >
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span className="font-medium text-tp">{locationName}</span>
+              {locationCountry && (
+                <span className="text-ts">{locationCountry}</span>
+              )}
+            </div>
+          )}
+
           {/* Current conditions */}
           <div className="flex items-center gap-4 mb-4 pb-4 border-b border-bd">
             <WeatherIcon code={cur.code} size={80} />
