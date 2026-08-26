@@ -10,13 +10,7 @@ source note.
 
 ## Requested
 
-- [ ] **Redesign the News section** using the Apple-design/`frontend-design`
-      skill. Now that the design-system rules exist (press-feedback tiers,
-      radius-by-element-class, semantic elevation — documented at the top of
-      `frontend/src/styles/global.css`), News should be reworked to follow them
-      deliberately rather than merely comply. Scope: `NewsPage.jsx` featured
-      card + headline list + full-article overlay. Fold in the pre-existing raw
-      hex on the category badge → tokens.
+_(none)_
 
 ## In progress
 
@@ -24,79 +18,129 @@ _(none)_
 
 ## Backlog — correctness / real bugs
 
-- [ ] **Dark mode is substantially broken (systemic).** `tailwind.config.js`
-      defines theme colors as literal hex, so `bg-surf` compiles to
-      `rgb(255 255 255)` and `text-tp` to `rgb(26 28 46)` — neither responds to
-      the `data-theme="dark"` attribute this app themes with. 477 such utility
-      usages across 21 files vs only 74 theme-aware `[var(--x)]` ones, while
-      `body` itself *is* theme-aware (`background-color: var(--bg)`) — so in
-      dark mode the page goes dark but most surfaces/text stay light. Verified:
-      no `darkMode` key in the config, no utility-override shim in `global.css`.
-      Good news: no *unreadable* combos exist today (checked — no theme-aware
-      background meets a literal text color).
-      The tempting one-line fix (`surf: 'var(--surf)'`) is NOT safe: ~9 call
-      sites use opacity modifiers on these tokens (`bg-tp/50`, `bg-tp/20`,
-      `border-bd/50`, `border-bd/40`, `bg-s2/60`, `text-tm/40`, `bg-tp/40`) and
-      Tailwind cannot apply `/opacity` to a plain `var()` color — it silently
-      emits no rule (same failure mode as the `bg-[var(--coral-bg)]/30` bug
-      already fixed). Doing it properly means the `<alpha-value>` approach:
-      store the vars as RGB channels, define colors as
-      `rgb(var(--surf-rgb) / <alpha-value>)`. Needs its own pass.
-- [ ] **Locked 56px touch-target minimum still violated by *labelled*
-      controls.** The a11y pass correctly scoped itself to icon-only controls;
-      these remain under the CLAUDE.md-locked minimum: `ACControlPopup` temp
-      chips (`w-11 h-11` = 44px) and mode/fan-speed buttons (`py-2.5` ≈ 40px);
-      `ShoppingListPopup` item toggle rows (≈40px) and text input (≈38px);
-      `HomePage` `ClimateModeSelector` (`px-3 py-1.5` ≈ 28px, ~line 590);
-      `ChoresPage` add-task button (`min-h-[48px]`).
-- [ ] **Popup clamp uses a stale hardcoded height.** `HomePage.jsx`
-      `popupH = 320` (~line 618) and `CurtainPopup` `popupH = 360` (~line 964)
-      estimate popup height to clamp position, but the close buttons grew 28px
-      in the a11y pass — so a popup opened near the bottom edge can overflow by
-      ~28px. Fix by measuring the real height (a `popupRef` already exists)
-      rather than bumping the magic number.
-- [ ] `ShoppingListPopup` positioning math recomputes only on render, not on
-      window resize — needs verification on the real 1920x1080 kiosk frame.
-- [ ] `useWifi.js` stale-closure bug on first scan (self-corrects after one
-      manual re-scan) — low impact.
-      _(Both the duplicate `CREATE TABLE` in `tasks.js` and TopBar's hardcoded
-      English `aria-label="Weather"` were on this list and are now fixed —
-      see Done.)_
+_(none known — verify the new 56px controls and popup clamps on the real
+1920x1080 kiosk frame when next on-device.)_
 
 ## Backlog — features / gaps
 
-- [ ] Wire the "install update" UI path. Backend is ready (`POST
-      /api/system/update` now installs backend+frontend deps, rebuilds, and
-      restarts via PM2), but Settings only calls `/check-update` — it reports
-      "update available" with no way to apply it.
-- [ ] Shopping list: no offline/dev-mode fallback when HA is unreachable — the
-      popup silently shows "empty" instead of a clear offline state. Also no
-      "clear completed" / "check all" bulk actions.
 - [ ] Calendar month view (PLAN.md Known Issues #7 — genuine future
       enhancement, larger scope).
 - [ ] Task column names (`taskCol1/2/3`) and `taskCleanupInterval` in Settings
       have no effect — `TasksPage.jsx`'s `COLUMNS` is a hardcoded constant that
       never reads them. Needs a design decision (what should cleanup-interval
       even do?), not a quick fix.
-- [ ] `TouchRipple.jsx` and `ConnectionBanner.jsx` are fully built and working
-      but imported nowhere. PLAN.md marks both complete ([x] "Touch feedback
-      system (tap ripple, press states)" and "Connection status banners"), so
-      these are documented-as-done features that aren't actually active —
-      decide deliberately, don't just delete.
-- [ ] Consider extending the new screensaver weather row to slideshow mode too
-      (currently clock mode only, which is what was asked for).
+- [ ] TopBar/WeatherPopup never display the configured city name — only the
+      Settings page confirmation card (added in the city-picker fix) shows it.
+      Consider surfacing it in the weather popup too so it's visible outside
+      Settings.
 
 ## Backlog — design follow-ups
 
-_(source: design-system consolidation agent — deliberately left out of scope)_
-
-- [ ] `HomePage` electricity-tile hex: `#2ab58a`/`#c95454` have tokens but the
-      amber `#e0a630` does not — converting two of three would be *less*
-      consistent, so this needs a new token first.
-- [ ] `NewsPage` category-badge raw hex → tokens (folded into the News redesign
-      above).
+_(none)_
 
 ## Done
+
+- [x] **News section redesign** (the "Requested" item) — `NewsPage.jsx`
+      reworked to the design-system rules deliberately: featured article is a
+      full-width hero (340px, `rounded-3xl`, category-driven pastel gradient +
+      legibility scrim, `active:scale-[0.98]` surface-tier press, `shadow-card
+      → shadow-raised` on hover); the 2×2 card grid became a real headline
+      list (`rounded-xl` rows with pastel category thumbnails, meta line,
+      RTL chevron); the full-article overlay is an edge-anchored
+      `rounded-t-3xl`/`shadow-modal` sheet with 56px close + footer controls.
+      Category-badge raw hex folded into the existing pastel tokens
+      (`var(--*-bg)`/`var(--*-d)`), `ConnectionBanner` mounts on feed errors,
+      and the concurrently-developed unread-dot feature was preserved.
+- [x] **Dark mode fixed systemically** — `tailwind.config.js` colors now
+      resolve as `rgb(var(--x-rgb) / <alpha-value>)` with per-theme channel
+      triplets in `global.css`, so all ~477 utility usages (incl. `/opacity`
+      modifiers like `bg-tp/50`, verified in the built CSS) follow
+      `data-theme="dark"`. Also added the missing `--amber` token (both
+      themes) and converted the HomePage electricity tile's `#e0a630` to it.
+- [x] **56px touch-target minimum on the remaining labelled controls** —
+      ACControlPopup temp chips (`w-14 h-14`) + mode/fan buttons,
+      ShoppingListPopup item rows + input, ClimateModeSelector pills,
+      ChoresPage add-task button all ≥56px. Popup-clamp item verified a
+      non-issue: both popups already measure real height via `popupRef` +
+      `useLayoutEffect` (the 320/360 are just initial seeds).
+- [x] **Shopping list: offline state + bulk actions + resize handling** —
+      distinct "list unavailable, check HA" state with retry (no longer looks
+      like an empty list), "סמן הכל"/"בטל סימון הכל"/"נקה שהושלמו" bulk
+      actions (client-side `Promise.allSettled` loops over the existing todo
+      endpoints, optimistic with rollback), and position now recomputes on
+      window resize.
+- [x] **"Install update" UI wired** — Settings shows an "התקן עדכון" button
+      when `/check-update` reports an update; confirm dialog → spinner state
+      (double-click guarded) → polls `/api/system/health` through the PM2
+      restart → re-checks and toasts success/failure. Also fixed the check
+      result reading a `latestVersion` field the backend never returns.
+- [x] **TouchRipple/ConnectionBanner decision made: activate, not delete** —
+      ripple works app-wide via `useRippleEffect` (delegated pointerdown →
+      `.active` toggle; the separate `TouchRipple.jsx` wrapper was deleted as
+      a duplicate of the `.ripple` CSS convention). `ConnectionBanner` now
+      mounts in HomePage (HA degraded), CalendarPage (Google not connected),
+      MusicPage (Spotify error) using the `connection.*` i18n strings.
+- [x] **Screensaver weather row extended to slideshow mode** — same
+      `ScreensaverWeather` component, small drop-shadowed overlay under the
+      clock/date, reuses store weather (no new fetching).
+- [x] **`useWifi.js` stale-closure on first scan** — fixed in cf7ebcc
+      (was still listed as open here; reconciled).
+- [x] **IMS weather (`https://ims.gov.il/he` via HA) showed no real week
+      forecast — same root fix also adds an IMS week prediction matching
+      Open-Meteo (both user-reported).** IMS *current conditions* were always
+      real (verified live: 30.1°C, 71% humidity, etc. straight from HA entity
+      `weather.ims_weather`) — the actual bug was `daily` always being `[]`.
+      Root cause: Home Assistant 2024.6+ removed the `forecast` attribute from
+      weather entity state entirely; forecasts must now be fetched via the
+      `weather.get_forecasts` **service call** (`POST
+      /api/services/weather/get_forecasts?return_response` with body
+      `{entity_id, type: 'daily'}`), not read from `attrs.forecast` (which the
+      old code did, and which HA now always leaves undefined). Verified the
+      exact working request/response shape live against the real HA instance
+      before implementing. Fixed in `backend/routes/weather.js`'s `/ims`
+      route: added a second HA call for the forecast (non-fatal — current
+      conditions still render if this call fails) and mapped the returned
+      7-day `forecast` array into the same `daily` shape Open-Meteo returns
+      (date, dayName, code, high/low, description, icon, precipitation),
+      reusing the existing `imsConditionToWmo`/`wmoDescription`/`wmoIcon`
+      helpers. Verified end-to-end against the live HA instance: `daily` now
+      returns a real 7-day forecast (previously always `[]`). No frontend
+      changes needed — `WeatherPopup`/screensaver already consume `daily`
+      generically. Frontend build clean (unaffected).
+
+- [x] **Settings "not saving" + weather city picker (user-reported).** Root
+      cause: `LocationSection` had a free-text "עיר" field saving to
+      `settings.location`, but the weather poll in `App.jsx` only ever reads
+      `settings.latitude`/`longitude` — typing a city name did nothing to the
+      weather shown, and there was no way to verify a typed city resolved to
+      the right coordinates (no geocoding at all; lat/lon had to be
+      hand-entered separately). Backend PUT/GET `/api/settings` itself was
+      verified working via direct curl test, so "not saving" was this
+      disconnect, not a persistence bug. Fixed:
+      1. New `GET /api/weather/geocode?q=` route proxying Open-Meteo's free
+         geocoding API (`geocoding-api.open-meteo.com/v1/search`,
+         `language=he`, no API key, 24h in-memory cache) — verified live
+         against real city names (Tel Aviv, Haifa).
+      2. New `CitySearchBox` in `LocationSection`: debounced search-as-you-type
+         with a results dropdown (city + region + country in Hebrew), and
+         selecting a result saves `location`/`locationAdmin`/`locationCountry`
+         + `latitude`/`longitude` together in one request. Added a persistent
+         confirmation card below the search box showing the currently
+         configured city, region/country, and exact coordinates, so the user
+         can directly verify the picker resolved the correct place — this was
+         the actual "doesn't show if I picked the correct city" complaint.
+         Manual lat/lon inputs kept for advanced override, now labelled as
+         auto-filled-by-picker.
+      3. Fixed a secondary bug found along the way: every `SettingsPage.jsx`
+         section calls `useSettings()` independently, each firing its own
+         `GET /api/settings` on mount (8 redundant requests every time the
+         Settings tab opened), and a section remounting mid-debounce (e.g. tab
+         away-and-back within 800ms of an edit) could visually revert a field
+         to stale data before the pending save landed. Fixed by skipping the
+         mount-fetch in `useSettings.js` once `settings.loaded` is already
+         true. End-to-end verified: geocode search → select → GET
+         `/api/settings` reflects the matching name + lat/lon. Frontend build
+         clean.
 
 - [x] **Screensaver: Shabbat times on Friday + Saturday only** — a time row
       below the weather, hidden the rest of the week. Friday shows כניסת שבת
