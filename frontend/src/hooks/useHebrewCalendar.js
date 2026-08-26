@@ -25,6 +25,18 @@ function getCached() {
   }
 }
 
+// Ignores the TTL — used as a last-resort fallback when a fresh fetch fails,
+// so a stale-but-real cached value is preferred over fabricated mock data.
+function getStaleCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw).data;
+  } catch {
+    return null;
+  }
+}
+
 function setCache(data) {
   try {
     localStorage.setItem(
@@ -36,7 +48,12 @@ function setCache(data) {
   }
 }
 
-// ─── Mock data ─────────────────────────────────────────────────────────────
+// ─── Mock data (dev fallback only) ──────────────────────────────────────────
+
+const isDev =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
+  import.meta.env.DEV;
 
 function generateMockData() {
   // Simulate a Friday with candle lighting
@@ -173,9 +190,18 @@ export default function useHebrewCalendar() {
       setData(parsed);
     } catch (_err) {
       if (!mountedRef.current) return;
-      // Fall back to mock data
-      const mock = generateMockData();
-      setData(mock);
+      // A fresh fetch failed. Prefer a stale-but-real cached value over
+      // fabricating data; only fall back to mock data in dev (no cache to
+      // show yet, e.g. first run with no network).
+      const stale = getStaleCache();
+      if (stale) {
+        setData(stale);
+      } else if (isDev) {
+        setData(generateMockData());
+      }
+      // else: leave `data` at its initial empty state — consumers already
+      // render nothing until a value is available, per the existing
+      // "renders nothing until first successful fetch" convention.
     } finally {
       if (mountedRef.current) {
         setLoading(false);
