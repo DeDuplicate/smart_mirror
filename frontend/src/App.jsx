@@ -897,6 +897,8 @@ export default function App() {
   // ── Weather polling (respects weatherSource setting) ──
   const weatherSource = useStore((s) => s.settings.weatherSource) || 'openmeteo';
   const temperatureUnit = useStore((s) => s.settings.temperatureUnit) || 'celsius';
+  const settingsLat = useStore((s) => s.settings.latitude);
+  const settingsLon = useStore((s) => s.settings.longitude);
 
   useEffect(() => {
     if (!settingsLoaded) return;
@@ -909,7 +911,10 @@ export default function App() {
         if (weatherSource === 'ims') {
           url = `/api/weather/ims?units=${units}`;
         } else {
-          url = `/api/weather?units=${units}`;
+          const params = new URLSearchParams({ units });
+          if (settingsLat) params.set('lat', settingsLat);
+          if (settingsLon) params.set('lon', settingsLon);
+          url = `/api/weather?${params}`;
         }
         const data = await fetchApi(url);
         if (!mounted) return;
@@ -928,7 +933,7 @@ export default function App() {
       mounted = false;
       clearInterval(interval);
     };
-  }, [settingsLoaded, weatherSource, temperatureUnit, setWeather]);
+  }, [settingsLoaded, weatherSource, temperatureUnit, settingsLat, settingsLon, setWeather]);
 
   // ── Wizard complete handler ──
   const handleWizardComplete = useCallback(() => {
