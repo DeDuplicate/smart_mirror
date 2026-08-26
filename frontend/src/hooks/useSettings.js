@@ -10,10 +10,22 @@ export default function useSettings() {
   const { settings, setSettings, markSettingsLoaded } = useStore();
   const mountedRef = useRef(true);
 
-  // Fetch all settings on mount
+  // Fetch all settings on mount — but only once per app session. Every
+  // Settings section mounts its own useSettings() instance; without this
+  // guard each one fires its own GET (redundant load) and a section that
+  // remounts (e.g. tab switch away/back) while another section's debounced
+  // save is still pending can clobber it with stale data.
   useEffect(() => {
     mountedRef.current = true;
     let cancelled = false;
+
+    if (useStore.getState().settings.loaded) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+        mountedRef.current = false;
+      };
+    }
 
     async function load() {
       try {

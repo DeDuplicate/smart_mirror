@@ -5,6 +5,7 @@ import useSettings from '../../hooks/useSettings.js';
 import useAuth from '../../hooks/useAuth.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import WifiPopup from '../WifiPopup.jsx';
+import OAuthOverlay from '../OAuthOverlay.jsx';
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -286,23 +287,180 @@ function ProfileSection() {
 
 // ─── Section: Location ───────────────────────────────────────────────────────
 
+function SearchIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function PinIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
+/** City search-as-you-type with a results dropdown, backed by the Open-Meteo
+ * geocoding proxy at /api/weather/geocode. Selecting a result saves
+ * location + latitude + longitude together so weather always matches what
+ * the user actually picked (previously the free-text "city" field did
+ * nothing — weather only ever read latitude/longitude, which had to be
+ * hand-entered separately with no way to verify they matched the city). */
+function CitySearchBox({ onSelect }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef(null);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const data = await fetchApi(`/api/weather/geocode?q=${encodeURIComponent(trimmed)}`);
+        setResults(data?.results || []);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('pointerdown', handleClick);
+    return () => document.removeEventListener('pointerdown', handleClick);
+  }, [open]);
+
+  return (
+    <div ref={boxRef} className="relative flex flex-col gap-1.5">
+      <label className="text-sm font-medium text-ts">{t.settings.city}</label>
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder={t.settings.citySearchPlaceholder}
+          className="bg-s2 border border-bd rounded-xl p-3 ps-10 text-tp text-sm
+                     placeholder:text-tm focus:outline-none focus:border-acc
+                     transition-colors duration-[var(--dur-fast)] w-full"
+          dir="auto"
+        />
+        <SearchIcon className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-tm pointer-events-none" />
+      </div>
+
+      {open && (searching || results.length > 0 || query.trim().length >= 2) && (
+        <div className="absolute top-full inset-x-0 mt-1 z-10 bg-surf border border-bd rounded-xl
+                        shadow-popover max-h-64 overflow-y-auto">
+          {searching ? (
+            <div className="px-4 py-3 text-sm text-tm">{t.settings.citySearching}</div>
+          ) : results.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-tm">{t.settings.cityNoResults}</div>
+          ) : (
+            results.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => {
+                  onSelect(r);
+                  setQuery('');
+                  setResults([]);
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-s2
+                           transition-colors active:scale-[0.98]"
+              >
+                <PinIcon className="w-4 h-4 text-acc shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm text-tp truncate">{r.name}</span>
+                  <span className="text-xs text-tm truncate">
+                    {[r.admin1, r.country].filter(Boolean).join(', ')}
+                  </span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LocationSection() {
   const { settings, updateSettings } = useSettings();
-  const { setSettings } = useStore();
+  const { setSettings, addToast } = useStore();
   const debouncedSave = useDebouncedSave(updateSettings);
+
+  const hasCoords = settings.latitude && settings.longitude;
+
+  const handleSelectCity = useCallback((r) => {
+    const patch = {
+      location: r.name,
+      locationAdmin: r.admin1 || '',
+      locationCountry: r.country || '',
+      latitude: r.latitude,
+      longitude: r.longitude,
+    };
+    setSettings(patch);
+    updateSettings(patch);
+    addToast('success', `${t.settings.citySelected}: ${r.name}`);
+  }, [setSettings, updateSettings, addToast]);
 
   return (
     <Section title={t.settings.location}>
       <div className="flex flex-col gap-4">
-        <InputRow
-          label={t.settings.city}
-          placeholder={t.settings.cityPlaceholder}
-          value={settings.location || ''}
-          onChange={(e) => {
-            setSettings({ location: e.target.value });
-            debouncedSave({ location: e.target.value });
-          }}
-        />
+        <CitySearchBox onSelect={handleSelectCity} />
+
+        {/* Clear confirmation of what's currently configured, so the user
+            can verify the picker resolved the correct city. */}
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border
+                          ${hasCoords ? 'bg-[var(--mint-bg)] border-transparent' : 'bg-s2 border-bd'}`}>
+          <PinIcon className={`w-5 h-5 shrink-0 ${hasCoords ? 'text-[var(--mint-d)]' : 'text-tm'}`} />
+          {hasCoords ? (
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs text-tm">{t.settings.cityCurrentlySet}</span>
+              <span className="text-sm font-semibold text-tp truncate">
+                {settings.location}
+                {(settings.locationAdmin || settings.locationCountry) && (
+                  <span className="font-normal text-ts">
+                    {' — '}
+                    {[settings.locationAdmin, settings.locationCountry].filter(Boolean).join(', ')}
+                  </span>
+                )}
+              </span>
+              <span className="text-xs text-tm tabular-nums" style={{ direction: 'ltr', textAlign: 'right' }}>
+                {Number(settings.latitude).toFixed(4)}, {Number(settings.longitude).toFixed(4)}
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm text-tm">{t.settings.cityNotSet}</span>
+          )}
+        </div>
+
         <div className="flex gap-3">
           <InputRow
             label={t.settings.latitude}
@@ -325,6 +483,7 @@ function LocationSection() {
             className="flex-1"
           />
         </div>
+        <span className="text-xs text-tm -mt-2">{t.settings.cityCoordsHint}</span>
       </div>
     </Section>
   );
@@ -339,7 +498,10 @@ function GoogleSection() {
     removeGoogleAccount,
     isAuthenticating,
     provider,
+    authUrl,
     error,
+    retryAuth,
+    cancelAuth,
   } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -383,50 +545,67 @@ function GoogleSection() {
   );
 
   return (
-    <Section title={t.settings.googleAccounts}>
-      <div className="flex flex-col gap-4">
-        {/* Show error if auth not configured */}
-        {error && provider === 'google' && (
-          <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm">
-            <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
-            <p className="text-[var(--ts)] text-xs">
-              הגדר GOOGLE_CLIENT_ID ו-GOOGLE_CLIENT_SECRET בקובץ .env בשרת
-            </p>
-          </div>
-        )}
-        <Btn
-          variant="primary"
-          icon={isAuthenticating && provider === 'google' ? <Spinner /> : <PlusIcon />}
-          onClick={handleAdd}
-          disabled={isAuthenticating}
-        >
-          {t.settings.addAccount}
-        </Btn>
+    <>
+      <Section title={t.settings.googleAccounts}>
+        <div className="flex flex-col gap-4">
+          {/* Show error if auth not configured */}
+          {error && provider === 'google' && (
+            <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm">
+              <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
+              <p className="text-[var(--ts)] text-xs">
+                הגדר GOOGLE_CLIENT_ID ו-GOOGLE_CLIENT_SECRET בקובץ .env בשרת
+              </p>
+            </div>
+          )}
+          <Btn
+            variant="primary"
+            icon={isAuthenticating && provider === 'google' ? <Spinner /> : <PlusIcon />}
+            onClick={handleAdd}
+            disabled={isAuthenticating}
+          >
+            {t.settings.addAccount}
+          </Btn>
 
-        {loadingAccounts ? (
-          <div className="flex items-center gap-2 text-sm text-tm">
-            <Spinner className="w-4 h-4" />
-            {t.common.loading}
-          </div>
-        ) : accounts.length === 0 ? (
-          <p className="text-sm text-tm">{t.settings.linkedAccounts}: &mdash;</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {accounts.map((acc) => (
-              <li key={acc.email}
-                className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
-                <span className="text-sm text-tp">{acc.email}</span>
-                <Btn variant="danger" icon={<TrashIcon />} onClick={() => handleRemove(acc.email)}>
-                  {t.settings.removeAccount}
-                </Btn>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Section>
+          {loadingAccounts ? (
+            <div className="flex items-center gap-2 text-sm text-tm">
+              <Spinner className="w-4 h-4" />
+              {t.common.loading}
+            </div>
+          ) : accounts.length === 0 ? (
+            <p className="text-sm text-tm">{t.settings.linkedAccounts}: &mdash;</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {accounts.map((acc) => (
+                <li key={acc.email}
+                  className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
+                  <span className="text-sm text-tp">{acc.email}</span>
+                  <Btn variant="danger" icon={<TrashIcon />} onClick={() => handleRemove(acc.email)}>
+                    {t.settings.removeAccount}
+                  </Btn>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Section>
+
+      {isAuthenticating && authUrl && (
+        <OAuthOverlay
+          provider={provider}
+          authUrl={authUrl}
+          onSuccess={async () => {
+            const list = await getGoogleAccounts();
+            setAccounts(list);
+            addToast('success', t.settings.accountAdded);
+          }}
+          onClose={cancelAuth}
+          onRetry={retryAuth}
+        />
+      )}
+    </>
   );
 }
+
 
 // ─── Section: ICS Calendar URLs ─────────────────────────────────────────────
 
@@ -622,7 +801,10 @@ function SpotifySection() {
     removeSpotifyAccount,
     isAuthenticating,
     provider,
+    authUrl,
     error,
+    retryAuth,
+    cancelAuth,
   } = useAuth();
   const addToast = useStore((s) => s.addToast);
   const isConnected = connections.spotify === 'connected';
@@ -643,35 +825,47 @@ function SpotifySection() {
   }, [removeSpotifyAccount, addToast]);
 
   return (
-    <Section title={t.settings.spotify}>
-      {/* Show error if auth not configured */}
-      {error && provider === 'spotify' && (
-        <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm mb-3">
-          <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
-          <p className="text-[var(--ts)] text-xs">
-            הגדר SPOTIFY_CLIENT_ID ו-SPOTIFY_CLIENT_SECRET בקובץ .env בשרת
-          </p>
-        </div>
-      )}
-      {isConnected ? (
-        <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium text-tp">{t.settings.connectedAs}</span>
-            <span className="text-xs text-ts">Spotify</span>
+    <>
+      <Section title={t.settings.spotify}>
+        {/* Show error if auth not configured */}
+        {error && provider === 'spotify' && (
+          <div className="p-3 rounded-xl bg-[var(--coral-bg)] border border-[var(--coral-d)]/20 text-sm mb-3">
+            <p className="text-[var(--coral-d)] font-medium mb-1">{error}</p>
+            <p className="text-[var(--ts)] text-xs">
+              הגדר SPOTIFY_CLIENT_ID ו-SPOTIFY_CLIENT_SECRET בקובץ .env בשרת
+            </p>
           </div>
-          <Btn variant="danger" onClick={handleDisconnect}>{t.settings.disconnectSpotify}</Btn>
-        </div>
-      ) : (
-        <Btn
-          variant="primary"
-          icon={isAuthenticating && provider === 'spotify' ? <Spinner /> : <LinkIcon />}
-          onClick={handleConnect}
-          disabled={isAuthenticating}
-        >
-          {t.settings.connectSpotify}
-        </Btn>
+        )}
+        {isConnected ? (
+          <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-tp">{t.settings.connectedAs}</span>
+              <span className="text-xs text-ts">Spotify</span>
+            </div>
+            <Btn variant="danger" onClick={handleDisconnect}>{t.settings.disconnectSpotify}</Btn>
+          </div>
+        ) : (
+          <Btn
+            variant="primary"
+            icon={isAuthenticating && provider === 'spotify' ? <Spinner /> : <LinkIcon />}
+            onClick={handleConnect}
+            disabled={isAuthenticating}
+          >
+            {t.settings.connectSpotify}
+          </Btn>
+        )}
+      </Section>
+
+      {isAuthenticating && authUrl && (
+        <OAuthOverlay
+          provider={provider}
+          authUrl={authUrl}
+          onSuccess={() => addToast('success', t.settings.spotifyConnected)}
+          onClose={cancelAuth}
+          onRetry={retryAuth}
+        />
       )}
-    </Section>
+    </>
   );
 }
 
@@ -986,6 +1180,32 @@ function DisplaySection() {
 
 // ─── Section: System ─────────────────────────────────────────────────────────
 
+// Poll the health endpoint until the backend responds again (used after an
+// update, where PM2 restarts the process and may drop the HTTP connection).
+const HEALTH_POLL_INTERVAL = 3_000;
+const HEALTH_POLL_MAX_ATTEMPTS = 60; // up to ~3 minutes
+
+function waitForBackend() {
+  return new Promise((resolve) => {
+    let attempts = 0;
+    const poll = async () => {
+      attempts += 1;
+      try {
+        await fetchApi('/api/system/health');
+        resolve(true);
+      } catch {
+        if (attempts >= HEALTH_POLL_MAX_ATTEMPTS) {
+          resolve(false);
+        } else {
+          setTimeout(poll, HEALTH_POLL_INTERVAL);
+        }
+      }
+    };
+    // First poll immediately — the backend may never have gone down
+    poll();
+  });
+}
+
 function SystemSection() {
   const addToast = useStore((s) => s.addToast);
   const showConfirm = useStore((s) => s.showConfirm);
@@ -994,6 +1214,11 @@ function SystemSection() {
   const [checking, setChecking] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  // Ref guard so double-clicks can't start a second install while a confirm
+  // dialog or an in-flight update is active
+  const updatingRef = useRef(false);
 
   // Fetch version on mount
   useEffect(() => {
@@ -1006,12 +1231,21 @@ function SystemSection() {
     return () => { cancelled = true; };
   }, []);
 
+  const runCheckUpdate = useCallback(async () => {
+    const data = await fetchApi('/api/system/check-update');
+    setUpdateInfo(data?.updateAvailable ? data : null);
+    return data;
+  }, []);
+
   const handleCheckUpdates = useCallback(async () => {
+    if (updatingRef.current) return;
     setChecking(true);
     try {
-      const data = await fetchApi('/api/system/check-update');
+      const data = await runCheckUpdate();
       if (data?.updateAvailable) {
-        addToast('info', `${t.settings.updateAvailable}: v${data.latestVersion}`);
+        addToast('info', t.settings.updateAvailable);
+      } else if (data?.error) {
+        addToast('error', t.settings.updateCheckFailed);
       } else {
         addToast('success', t.settings.upToDate);
       }
@@ -1020,7 +1254,55 @@ function SystemSection() {
     } finally {
       setChecking(false);
     }
-  }, [addToast]);
+  }, [addToast, runCheckUpdate]);
+
+  const handleInstallUpdate = useCallback(() => {
+    if (updatingRef.current) return;
+    showConfirm({
+      title: t.settings.installUpdateTitle,
+      message: t.settings.installUpdateConfirm,
+      onConfirm: async () => {
+        if (updatingRef.current) return;
+        updatingRef.current = true;
+        setUpdating(true);
+        try {
+          let installFailed = false;
+          try {
+            const res = await fetchApi('/api/system/update', { method: 'POST' });
+            if (!res?.success) installFailed = true;
+          } catch {
+            // Connection dropped — expected when PM2 restarts the backend
+            // mid-response. Fall through and wait for it to come back.
+          }
+
+          if (installFailed) {
+            addToast('error', t.settings.updateFailed);
+            return;
+          }
+
+          const backOnline = await waitForBackend();
+          if (!backOnline) {
+            addToast('error', t.settings.updateFailed);
+            return;
+          }
+
+          try {
+            const data = await runCheckUpdate();
+            if (data?.updateAvailable) {
+              addToast('error', t.settings.updateNotApplied);
+            } else {
+              addToast('success', t.settings.updateSuccess);
+            }
+          } catch {
+            addToast('error', t.settings.updateCheckFailed);
+          }
+        } finally {
+          updatingRef.current = false;
+          setUpdating(false);
+        }
+      },
+    });
+  }, [showConfirm, addToast, runCheckUpdate]);
 
   const handleRestart = useCallback(() => {
     showConfirm({
@@ -1079,12 +1361,31 @@ function SystemSection() {
           <span className="text-sm font-semibold text-tp font-mono">{version}</span>
         </div>
 
+        {/* Update available notice + install action */}
+        {(updateInfo?.updateAvailable || updating) && (
+          <div className="flex items-center justify-between bg-acc/10 border border-acc/30 rounded-xl px-4 py-3">
+            <span className="text-sm font-medium text-tp">
+              {updating
+                ? t.settings.updatingSystem
+                : `${t.settings.updateAvailable}${updateInfo?.behindBy > 0 ? ` · ${updateInfo.behindBy} ${t.settings.commitsBehind}` : ''}`}
+            </span>
+            <Btn
+              variant="primary"
+              icon={updating ? <Spinner /> : <RefreshIcon />}
+              onClick={handleInstallUpdate}
+              disabled={updating || checking}
+            >
+              {updating ? t.settings.updatingSystem : t.settings.installUpdate}
+            </Btn>
+          </div>
+        )}
+
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3">
           <Btn
             icon={checking ? <Spinner /> : <RefreshIcon />}
             onClick={handleCheckUpdates}
-            disabled={checking}
+            disabled={checking || updating}
           >
             {t.settings.checkUpdates}
           </Btn>
