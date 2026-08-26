@@ -28,19 +28,27 @@ export default function useWifi() {
     }
   }, [setConnectionStatus]);
 
-  // Scan for available networks
-  const scan = useCallback(async () => {
+  // Scan for available networks. Accepts an optional `statusOverride` so
+  // callers that just fetched a fresher status (e.g. `init()` below) can
+  // pass it straight through instead of relying on the `status` state,
+  // which is stale inside this closure until the component re-renders —
+  // on first mount `init()` awaits getStatus() then scan() in the same
+  // effect tick, so `status` here was still `null` even after getStatus()
+  // resolved, making every network wrongly show as not-connected until a
+  // manual re-scan happened to run in a fresh closure.
+  const scan = useCallback(async (statusOverride) => {
     try {
       setScanning(true);
       setError(null);
       const data = await fetchApi('/api/wifi/scan');
       if (!mountedRef.current) return data?.networks || [];
+      const effectiveStatus = statusOverride !== undefined ? statusOverride : status;
       const list = (data?.networks || []).map((n) => ({
         ssid: n.ssid,
         signal: n.signal,
         security: n.security || 'Open',
         frequency: n.frequency || '',
-        connected: status?.connected && status?.ssid === n.ssid,
+        connected: effectiveStatus?.connected && effectiveStatus?.ssid === n.ssid,
       }));
       setNetworks(list);
       return list;
@@ -104,8 +112,8 @@ export default function useWifi() {
 
     async function init() {
       setLoading(true);
-      await getStatus();
-      await scan();
+      const freshStatus = await getStatus();
+      await scan(freshStatus);
       setLoading(false);
     }
 
