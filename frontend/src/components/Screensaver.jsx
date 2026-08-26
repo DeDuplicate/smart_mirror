@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 import WeatherIcon, { getConditionLabel } from './WeatherIcon.jsx';
+import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
 
 // ─── Screensaver Component ───────────────────────────────────────────────────
 // Two modes: "clock" (full-screen dark clock) or "slideshow" (Ken Burns photos).
@@ -96,6 +97,61 @@ function ScreensaverWeather({ iconSize = 44 }) {
   );
 }
 
+// ─── Shabbat times (Friday + Saturday only) ──────────────────────────────────
+
+function FlameIcon({ size = 20 }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path d="M12 2c1.5 3.5 5 5.5 5 9.5a5 5 0 0 1-10 0C7 8.5 10.5 6 12 2z" />
+    </svg>
+  );
+}
+
+/**
+ * Shabbat times on the screensaver — only rendered on Friday and Saturday.
+ * `date` comes from the caller's ticking clock so the day flips correctly if
+ * the screensaver stays up across midnight.
+ *
+ * Friday shows when Shabbat comes IN; Saturday shows when it goes OUT — an
+ * "entry" time is meaningless once Shabbat has already begun.
+ */
+function ScreensaverShabbat({ date }) {
+  const { shabbatCandles, shabbatHavdalah } = useHebrewCalendar();
+
+  const day = date.getDay(); // 0=Sun … 5=Fri, 6=Sat
+  const isFriday = day === 5;
+  const isSaturday = day === 6;
+  if (!isFriday && !isSaturday) return null;
+
+  const label = isFriday ? t.holidays.shabbatEntry : t.holidays.shabbatExit;
+  const timeStr = isFriday ? shabbatCandles : shabbatHavdalah;
+  if (!timeStr) return null;
+
+  return (
+    <div className="flex items-center gap-2 select-none text-white/50" dir="rtl">
+      <FlameIcon size={18} />
+      <span className="text-base font-light">{label}</span>
+      <span
+        className="text-white/75 text-base"
+        style={{ fontFamily: "'DM Mono', monospace" }}
+      >
+        {timeStr}
+      </span>
+    </div>
+  );
+}
+
 // ─── Clock Mode ──────────────────────────────────────────────────────────────
 
 function ClockMode() {
@@ -136,6 +192,11 @@ function ClockMode() {
       {/* Current weather */}
       <div className="mt-8">
         <ScreensaverWeather />
+      </div>
+
+      {/* Shabbat times — Friday and Saturday only */}
+      <div className="mt-4">
+        <ScreensaverShabbat date={time} />
       </div>
     </div>
   );
