@@ -102,6 +102,7 @@
     "disconnected": "מנותק"
   },
   "weather": {
+    "title": "מזג אוויר",
     "humidity": "לחות",
     "wind": "רוח",
     "feelsLike": "מרגיש כמו",
@@ -285,7 +286,8 @@
     "noActiveMusic": "אין מוזיקה פעילה",
     "comingSoon": "בקרוב",
     "connectSpotify": "חבר ספוטיפיי",
-    "goToSettings": "עבור להגדרות"
+    "goToSettings": "עבור להגדרות",
+    "playbackError": "פעולת ניגון נכשלה"
   },
   "news": {
     "featured": "כתבה ראשית",
@@ -507,6 +509,9 @@
     "havdalah": "הבדלה",
     "erevShabbat": "ערב שבת",
     "shabbat": "שבת",
-    "upcoming": "חגים קרובים"
+    "upcoming": "חגים קרובים",
+    "shabbatTimes": "זמני כניסת שבת",
+    "shabbatEntry": "כניסת שבת",
+    "shabbatExit": "יציאת שבת"
   }
 }
