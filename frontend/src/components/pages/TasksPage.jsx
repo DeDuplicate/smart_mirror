@@ -639,6 +639,18 @@ export default function TasksPage() {
 
   const addToast = useStore((s) => s.addToast);
 
+  // Column names are configurable in Settings (taskCol1/2/3)
+  const colName1 = useStore((s) => s.settings.taskCol1);
+  const colName2 = useStore((s) => s.settings.taskCol2);
+  const colName3 = useStore((s) => s.settings.taskCol3);
+  const columnDefs = useMemo(() => {
+    const names = [colName1, colName2, colName3];
+    return COLUMNS.map((col, i) => ({
+      ...col,
+      label: names[i]?.trim() || col.label,
+    }));
+  }, [colName1, colName2, colName3]);
+
   // Pull to refresh
   const { pullDistance, isPulling, bind: pullBind } = usePullToRefresh(refetch);
 
@@ -829,7 +841,7 @@ export default function TasksPage() {
 
       {/* Kanban columns */}
       <div className="flex flex-1 gap-5 p-6 overflow-x-auto" {...pullBind}>
-        {COLUMNS.map((col) => {
+        {columnDefs.map((col) => {
           const items = columns[col.key] || [];
           const isDone = col.key === 'done';
           const isDropHere = dropTarget === col.key;
