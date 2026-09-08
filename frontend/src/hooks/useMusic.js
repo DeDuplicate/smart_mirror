@@ -130,7 +130,48 @@ async function waitUntilPlaying(entityId) {
   return false;
 }
 
-async function castViaStream(track, entityId) {
+// How long to wait for a cold track to finish converting before giving up.
+// Measured on a Pi 2 (the slowest target): ~81s for a 3:47 track at 160k.
+const WARM_TIMEOUT_MS = 240 * 1000;
+const WARM_POLL_MS = 3000;
+
+/**
+ * Block until the track is fully in the server-side cache.
+ *
+ * Casting a track that is still converting does not work: the stream is
+ * produced at roughly realtime on weak hardware, and a Google Cast receiver
+ * abandons a source it has to wait on — it loads, then drops to `idle`. A
+ * cached file is served with Content-Length and Range support and starts
+ * immediately.
+ *
+ * POST /api/music/prewarm/:id answers `ready` or `warming` and de-duplicates
+ * concurrent conversions server-side, so polling it is cheap and safe.
+ */
+async function waitUntilWarm(id, onWaiting) {
+  const deadline = Date.now() + WARM_TIMEOUT_MS;
+  let announced = false;
+  while (Date.now() < deadline) {
+    let status;
+    try {
+      status = (await fetchApi(`/api/music/prewarm/${id}`, { method: 'POST' }))?.status;
+    } catch {
+      return false; // backend unreachable; let the caller fall back
+    }
+    if (status === 'ready') return true;
+    if (!announced) {
+      announced = true;
+      onWaiting?.();
+    }
+    await sleep(WARM_POLL_MS);
+  }
+  return false;
+}
+
+async function castViaStream(track, entityId, onWaiting) {
+  // Convert first, cast second. The reverse order is why picking a song the
+  // server had not cached yet left the speaker silent.
+  await waitUntilWarm(track.id, onWaiting);
+
   const data = await fetchApi(`/api/music/cast-url/${track.id}`);
   const url = data?.url;
   if (!url) throw new Error('no stream url');
@@ -149,7 +190,7 @@ async function castViaStream(track, entityId) {
   });
 }
 
-async function castTrack(track, speaker) {
+async function castTrack(track, speaker, onWaiting) {
   const entityId = typeof speaker === 'string' ? speaker : speaker?.id;
   const name = typeof speaker === 'string' ? speaker : speaker?.name || entityId;
   const audioOnly = typeof speaker === 'object'
@@ -167,7 +208,7 @@ async function castTrack(track, speaker) {
     // Primary: self-hosted yt-dlp MP3 stream. Nest Mini / Google Home speakers
     // cannot render the YouTube app, but they play a plain MP3 URL directly.
     try {
-      await castViaStream(track, entityId);
+      await castViaStream(track, entityId, onWaiting);
       return;
     } catch (streamErr) {
       // Fall back to the Google Assistant voice command below.
@@ -203,7 +244,7 @@ async function castTrack(track, speaker) {
 
   // Final fallback for video-capable targets: the transcoded MP3 stream.
   try {
-    await castViaStream(track, entityId);
+    await castViaStream(track, entityId, onWaiting);
     return;
   } catch (streamErr) {
     lastErr = streamErr;
@@ -363,7 +404,7 @@ export default function useMusic() {
       try { playerRef.current.pause?.(); } catch { /* ignore */ }
       const speaker = speakersRef.current.find((item) => item.id === outputRef.current)
         || { id: outputRef.current, name: outputRef.current, audioOnly: /nestmini|googlehome|nest_audio/.test(outputRef.current) };
-      castTrack(track, speaker)
+      castTrack(track, speaker, () => addToast('info', t.music.preparingTrack, 90000))
         .then(() => setCastPlaying(true))
         .catch(() => {
           addToast('error', t.music.castYoutubeBlocked);
@@ -716,7 +757,7 @@ export default function useMusic() {
       if (track?.id) {
         const speaker = speakersRef.current.find((item) => item.id === next)
           || { id: next, name: next, audioOnly: /nestmini|googlehome|nest_audio/.test(next) };
-        castTrack(track, speaker)
+        castTrack(track, speaker, () => addToast('info', t.music.preparingTrack, 90000))
           .then(() => setCastPlaying(true))
           .catch(() => {
             addToast('error', t.music.castYoutubeBlocked);
