@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import t from '../../i18n/he.json';
 import { useMusicContext } from '../../context/MusicContext.jsx';
+import { speakerStatus, nowPlayingLine } from '../../hooks/speakerStatus.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 
 function formatTime(seconds) {
@@ -336,22 +337,139 @@ function CheckIcon({ className = 'w-5 h-5' }) {
   );
 }
 
-function SpeakerChoice({ selected, title, subtitle, offline, onClick }) {
+function ChevronIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+// ─── Output picker rows (AirPlay-style grouped list) ────────────────────────
+//
+// One inset card per group with hairline dividers, rather than a stack of
+// separate rounded blocks: that is the idiom this borrows from, and it makes a
+// long device list read as one scannable column.
+
+function DeviceGlyph({ kind, className = 'w-6 h-6' }) {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.7,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    className,
+  };
+  if (kind === 'speaker') {
+    return (
+      <svg {...common}>
+        <rect x="6" y="2.5" width="12" height="19" rx="4" />
+        <circle cx="12" cy="15" r="3.2" />
+        <path d="M9.5 7h5" />
+      </svg>
+    );
+  }
+  if (kind === 'tv') {
+    return (
+      <svg {...common}>
+        <rect x="2.5" y="4" width="19" height="12.5" rx="2" />
+        <path d="M8 20.5h8M12 16.5v4" />
+      </svg>
+    );
+  }
+  if (kind === 'other') {
+    // Deliberately generic: we do not know what this device is, so the
+    // icon should not imply a TV or a speaker.
+    return (
+      <svg {...common}>
+        <rect x="3" y="5" width="18" height="14" rx="2.5" />
+        <path d="M7.5 15.5h4" />
+        <circle cx="16.5" cy="15.5" r="1.1" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  // 'local' - this display
+  return (
+    <svg {...common}>
+      <rect x="2.5" y="3.5" width="19" height="14" rx="2" />
+      <path d="M7 21h10" />
+      <path d="M12 17.5V21" />
+    </svg>
+  );
+}
+
+const STATE_DOT = {
+  active: 'var(--acc)',
+  ready: 'var(--mint-d)',
+  asleep: 'var(--tm)',
+  gone: 'transparent',
+};
+
+/**
+ * One device row. `status` is {key, tone, selectable} from speakerStatus();
+ * `detail` is an optional now-playing line.
+ */
+function OutputRow({ selected, title, status, detail, kind, first, last, onClick }) {
+  const disabled = status && status.selectable === false;
+  const tone = status?.tone || 'asleep';
+
   return (
     <button
-      onClick={onClick}
-      className={`ripple w-full min-h-[64px] px-4 mb-2 rounded-2xl flex items-center gap-3 text-right
-                  ${selected ? 'bg-acc/10 text-acc border border-acc' : 'bg-s2 text-tp border border-transparent'}
-                  ${offline ? 'opacity-60' : ''}`}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      aria-current={selected ? 'true' : undefined}
+      className={`ripple w-full min-h-[64px] px-4 flex items-center gap-3.5 text-right
+                  transition-colors duration-[var(--dur-fast)]
+                  ${first ? 'rounded-t-2xl' : ''} ${last ? 'rounded-b-2xl' : ''}
+                  ${selected ? 'bg-acc/10' : 'bg-s2'}
+                  ${disabled ? 'opacity-45 cursor-default' : 'active:bg-bd/60'}`}
     >
-      <div className="flex-1 min-w-0">
-        <p className="text-base font-medium truncate">{title}</p>
-        <p className={`text-xs truncate ${offline ? 'text-tm' : 'text-ts'}`}>{subtitle}</p>
-      </div>
-      {selected && <CheckIcon className="w-5 h-5 shrink-0" />}
+      <span className={`shrink-0 ${selected ? 'text-acc' : 'text-ts'}`}>
+        <DeviceGlyph kind={kind} />
+      </span>
+
+      <span className="flex-1 min-w-0">
+        <span className={`block text-base font-medium truncate ${selected ? 'text-acc' : 'text-tp'}`}>
+          {title}
+        </span>
+        <span className="flex items-center gap-1.5 justify-start">
+          {tone !== 'gone' && (
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: STATE_DOT[tone] }}
+            />
+          )}
+          <span className="text-xs text-ts truncate">
+            {detail ? `${status ? t.music.state[status.key] : ''} · ${detail}` : (status ? t.music.state[status.key] : '')}
+          </span>
+        </span>
+      </span>
+
+      {selected && <CheckIcon className="w-5 h-5 shrink-0 text-acc" />}
     </button>
   );
 }
+
+/** Group wrapper: hairline dividers between rows, one rounded card overall. */
+function OutputGroup({ label, children }) {
+  return (
+    <div className="mb-4">
+      {label && (
+        <p className="text-xs font-semibold text-tm mb-1.5 px-1 text-right tracking-wide">{label}</p>
+      )}
+      {/* divide-bd, not an inline borderColor: Tailwind's preflight sets the
+          border colour on the children, so a colour on this parent is ignored
+          (border-color does not inherit) and dark mode would keep the default
+          light hairline. */}
+      <div className="rounded-2xl overflow-hidden divide-y divide-bd">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 
 function SpeakerIconBtn({ className = 'w-5 h-5' }) {
   return (
@@ -368,6 +486,9 @@ export default function MusicPage() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [panel, setPanel] = useState('recommended');
   const [speakerOpen, setSpeakerOpen] = useState(false);
+  // Unreachable outputs are collapsed by default - a real HA install
+  // reports a couple of dozen of them.
+  const [showGone, setShowGone] = useState(false);
   const {
     currentTrack,
     queue,
@@ -479,6 +600,15 @@ export default function MusicPage() {
     setSpeakerOpen(true);
     loadSpeakers();
   }, [loadSpeakers]);
+
+  // Keep the statuses honest while the sheet is on screen: a device can start
+  // or stop playing after it opened, and a row claiming "playing" for an idle
+  // speaker defeats the point of showing real state. Only polls while open.
+  useEffect(() => {
+    if (!speakerOpen) return undefined;
+    const id = setInterval(loadSpeakers, 15000);
+    return () => clearInterval(id);
+  }, [speakerOpen, loadSpeakers]);
 
   const track = currentTrack || { title: t.music.noActiveMusic, artist: t.music.searchHint, imageUrl: null };
 
@@ -763,40 +893,92 @@ export default function MusicPage() {
             <div className="w-12 h-1.5 rounded-full bg-bd mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-tp mb-4 text-right">{t.music.chooseSpeaker}</h3>
             <div className="overflow-y-auto flex-1 -mx-1 px-1">
-              <SpeakerChoice
-                selected={outputId === 'local'}
-                title={t.music.thisScreen}
-                subtitle={t.music.youtubeMusic}
-                onClick={() => { setOutputId('local'); setSpeakerOpen(false); }}
-              />
-              <p className="text-xs font-semibold text-ts mt-4 mb-2 text-right">{t.music.speakers}</p>
-              {speakers.filter((s) => s.kind === 'speaker').length ? (
-                speakers.filter((s) => s.kind === 'speaker').map((speaker) => (
-                  <SpeakerChoice
+              <OutputGroup>
+                <OutputRow
+                  first
+                  last
+                  kind="local"
+                  selected={outputId === 'local'}
+                  title={t.music.thisScreen}
+                  status={{ key: 'thisScreen', tone: 'ready', selectable: true }}
+                  onClick={() => { setOutputId('local'); setSpeakerOpen(false); }}
+                />
+              </OutputGroup>
+
+              {(() => {
+                const live = (s) => speakerStatus(s).selectable;
+                // Three groups, not two: 'other' means we could not identify
+                // the device, which is not the same claim as "it is a TV".
+                const groups = [
+                  { label: t.music.speakers, items: speakers.filter((s) => s.kind === 'speaker' && live(s)) },
+                  { label: t.music.otherDevices, items: speakers.filter((s) => s.kind === 'tv' && live(s)) },
+                  { label: t.music.unknownDevices, items: speakers.filter((s) => s.kind === 'other' && live(s)) },
+                ];
+                const gone = speakers.filter((s) => !live(s));
+
+                const row = (speaker, i, arr) => (
+                  <OutputRow
                     key={speaker.id}
+                    first={i === 0}
+                    last={i === arr.length - 1}
+                    kind={speaker.kind}
                     selected={outputId === speaker.id}
                     title={speaker.name}
-                    subtitle={speaker.available ? t.music.speakerLimit : t.music.offline}
-                    offline={!speaker.available}
+                    status={speakerStatus(speaker)}
+                    detail={nowPlayingLine(speaker)}
                     onClick={() => { setOutputId(speaker.id); setSpeakerOpen(false); }}
                   />
-                ))
-              ) : (
-                <p className="text-sm text-tm text-right py-3">{t.music.noSpeakers}</p>
-              )}
-              {speakers.some((s) => s.kind !== 'speaker' && s.available) && (
-                <>
-                  <p className="text-xs font-semibold text-ts mt-4 mb-2 text-right">{t.music.otherDevices}</p>
-                  {speakers.filter((s) => s.kind !== 'speaker' && s.available).map((speaker) => (
-                    <SpeakerChoice
-                      key={speaker.id}
-                      selected={outputId === speaker.id}
-                      title={speaker.name}
-                      subtitle={t.music.online}
-                      onClick={() => { setOutputId(speaker.id); setSpeakerOpen(false); }}
-                    />
-                  ))}
-                </>
+                );
+
+                return (
+                  <>
+                    {groups.map(({ label, items }) => {
+                      if (!items.length) {
+                        return label === t.music.speakers ? (
+                          <OutputGroup key={label} label={label}>
+                            <p className="text-sm text-tm text-right py-4 px-4 bg-s2">{t.music.noSpeakers}</p>
+                          </OutputGroup>
+                        ) : null;
+                      }
+                      return (
+                        <OutputGroup key={label} label={label}>
+                          {items.map(row)}
+                        </OutputGroup>
+                      );
+                    })}
+
+                    {/* Unreachable devices stay listed - the status is the
+                        point - but collapsed, because a real HA install
+                        reports a couple of dozen of them. */}
+                    {gone.length > 0 && (
+                      <OutputGroup>
+                        <button
+                          onClick={() => setShowGone((v) => !v)}
+                          className="ripple w-full min-h-[56px] px-4 bg-s2 flex items-center justify-between
+                                     text-right active:bg-bd/60 transition-colors duration-[var(--dur-fast)]
+                                     rounded-t-2xl"
+                        >
+                          <ChevronIcon
+                            className={`w-4 h-4 text-tm shrink-0 transition-transform duration-[var(--dur-fast)]
+                                        ${showGone ? 'rotate-180' : ''}`}
+                          />
+                          <span className="text-sm text-ts">
+                            {t.music.unavailableCount.replace('{n}', String(gone.length))}
+                          </span>
+                        </button>
+                        {showGone && gone.map(row)}
+                      </OutputGroup>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* Capability caveat, not a device state - so it belongs here
+                  once rather than masquerading as each speaker's status. */}
+              {speakers.some((s) => s.kind === 'speaker' && s.available) && (
+                <p className="text-xs text-tm text-right px-1 pb-2 leading-relaxed">
+                  {t.music.speakerLimit}
+                </p>
               )}
             </div>
           </div>

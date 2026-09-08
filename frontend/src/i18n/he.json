@@ -370,7 +370,19 @@
     "playlistSongs": "שירים",
     "openPlaylist": "נגן פלייליסט",
     "loadingPlaylist": "טוען פלייליסט...",
-    "loadMore": "טען עוד"
+    "loadMore": "טען עוד",
+    "state": {
+      "thisScreen": "מנגן כאן",
+      "playing": "מנגן",
+      "paused": "מושהה",
+      "ready": "מוכן",
+      "on": "דולק",
+      "off": "כבוי · יידלק בהשמעה",
+      "unavailable": "לא זמין",
+      "unknown": "מצב לא ידוע"
+    },
+    "unavailableCount": "לא זמינים ({n})",
+    "unknownDevices": "מכשירים נוספים"
   },
   "news": {
     "featured": "כתבה ראשית",
