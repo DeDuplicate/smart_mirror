@@ -7,7 +7,11 @@ Wants=network-online.target
 Type=simple
 User=FIRST_USER_NAME
 WorkingDirectory=/opt/smart-mirror/backend
-ExecStart=/usr/bin/node server.js
+# node/npx are resolved via PATH, not hardcoded: the official
+# nodejs.org tarball installs to /usr/local/bin while the apt package
+# uses /usr/bin, and pinning the wrong one makes the unit fail with
+# "no such file or directory" - which looks like an X/kiosk fault.
+ExecStart=/usr/bin/env node server.js
 Environment=NODE_ENV=production
 Restart=always
 RestartSec=3

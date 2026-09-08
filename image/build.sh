@@ -9,18 +9,49 @@
 #   CONTINUE=1 ./build.sh     # resume a previously failed build
 #
 # Optional env vars:
+#   SMART_MIRROR_ARCH  arm64 (default) or armhf — see the note below. Getting
+#                      this wrong gives a rainbow splash and no boot.
 #   SMART_MIRROR_REPO  git URL baked into the image (default: this repo's origin)
 #   SMART_MIRROR_REF   branch/tag to bake (default: main)
+#   PIGEN_WORK_DIR     where to build (must be a space-free native Linux path)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PIGEN_DIR="${PIGEN_WORK_DIR:-${SCRIPT_DIR}/pi-gen}"
 PIGEN_REPO="https://github.com/RPi-Distro/pi-gen.git"
-# bookworm-arm64 = 64-bit Raspberry Pi OS pinned to Bookworm, matching RELEASE
-# in ./config. The plain `arm64` branch has moved on to Trixie, and forcing
-# RELEASE=bookworm against Trixie-era stages is not supported by pi-gen.
-PIGEN_BRANCH="${PIGEN_BRANCH:-bookworm-arm64}"
+
+# Target architecture. This is NOT cosmetic: a 64-bit image contains only
+# kernel8.img, so a 32-bit-only Pi shows the rainbow splash and then stops
+# dead, because the GPU firmware finds no kernel it can execute.
+#
+#   arm64 (default) - Pi 3, 3A+, 3B+, 4, 400, 5, 500, Zero 2 W, CM3/4/5,
+#                     and Pi 2 v1.2 (BCM2837 only)
+#   armhf           - everything older: Pi 1, Pi 2 v1.1 (BCM2836), Zero, Zero W
+#
+# Check yours with `cat /proc/cpuinfo | grep Revision` on an existing card, or
+# read the board: "Pi 2 Model B V1.1" cannot run arm64, V1.2 can.
+SMART_MIRROR_ARCH="${SMART_MIRROR_ARCH:-arm64}"
+
+case "${SMART_MIRROR_ARCH}" in
+  arm64)
+    # bookworm-arm64 pins Bookworm, matching RELEASE in ./config. The plain
+    # `arm64` branch has moved on to Trixie, and forcing RELEASE=bookworm
+    # against Trixie-era stages is not supported by pi-gen.
+    DEFAULT_BRANCH="bookworm-arm64"
+    QEMU_BIN="qemu-aarch64-static"
+    ;;
+  armhf)
+    DEFAULT_BRANCH="bookworm"
+    QEMU_BIN="qemu-arm-static"
+    ;;
+  *)
+    echo "[image] ERROR: SMART_MIRROR_ARCH must be arm64 or armhf, got '${SMART_MIRROR_ARCH}'." >&2
+    exit 1
+    ;;
+esac
+PIGEN_BRANCH="${PIGEN_BRANCH:-${DEFAULT_BRANCH}}"
+echo "[image] Building for ${SMART_MIRROR_ARCH} (pi-gen branch: ${PIGEN_BRANCH})"
 
 if ! command -v docker &>/dev/null; then
   echo "[image] ERROR: Docker is required. Install Docker and retry." >&2
@@ -60,17 +91,17 @@ if [ -z "${DOCKER_CONFIG:-}" ] && grep -qs '\.exe' "${HOME}/.docker/config.json"
   export DOCKER_CONFIG
 fi
 
-# pi-gen's build-docker.sh hard-requires qemu-aarch64-static on the HOST PATH when
-# cross-building arm64, even though the privileged build container registers its own
-# binfmt handler. Docker Desktop already registers an aarch64 handler, so emulation
-# works -- only the `which` check fails.
-if [ "$(uname -m)" = "x86_64" ] && ! command -v qemu-aarch64-static &>/dev/null; then
-  echo "[image] ERROR: qemu-aarch64-static not on PATH (pi-gen requires it)." >&2
+# pi-gen's build-docker.sh hard-requires the qemu user-mode binary for the
+# target arch on the HOST PATH, even though the privileged build container
+# registers its own binfmt handler and Docker Desktop already provides one.
+# Emulation works either way - only the `which` check fails.
+if [ "$(uname -m)" = "x86_64" ] && ! command -v "${QEMU_BIN}" &>/dev/null; then
+  echo "[image] ERROR: ${QEMU_BIN} not on PATH (pi-gen requires it for ${SMART_MIRROR_ARCH})." >&2
   echo "[image] Install it:      sudo apt-get install -y qemu-user-static" >&2
   echo "[image] Or, without sudo, lift it out of the pi-gen build image:" >&2
   echo "[image]   docker build -t pi-gen \"${PIGEN_DIR}\" && mkdir -p ~/.local/bin &&" >&2
   echo "[image]   cid=\$(docker create pi-gen true) &&" >&2
-  echo "[image]   docker cp \"\$cid:/usr/bin/qemu-aarch64-static\" ~/.local/bin/ &&" >&2
+  echo "[image]   docker cp \"\$cid:/usr/bin/${QEMU_BIN}\" ~/.local/bin/ &&" >&2
   echo "[image]   docker rm -f \"\$cid\" && export PATH=\"\$HOME/.local/bin:\$PATH\"" >&2
   exit 1
 fi
@@ -88,7 +119,7 @@ cp -r "${SCRIPT_DIR}/stage-smartmirror" "${PIGEN_DIR}/stage-smartmirror"
 cp "${SCRIPT_DIR}/config" "${PIGEN_DIR}/config"
 
 # `hardlink -t /usr/share/doc` in export-image/05-finalise segfaults under
-# qemu-aarch64. Combined with WSL2's core_pattern (see below) that wedges the
+# qemu user-mode emulation (both arm64 and armhf). Combined with WSL2's core_pattern (see below) that wedges the
 # build forever; on its own it just aborts it. Doc dedup is a size optimisation
 # only, so neuter the call. Idempotent - pi-gen is re-cloned/reused every run.
 FINALISE="${PIGEN_DIR}/export-image/05-finalise/01-run.sh"
@@ -96,7 +127,7 @@ if grep -q '^[[:space:]]*hardlink -t /usr/share/doc' "${FINALISE}"; then
   echo "[image] Neutering emulation-hostile 'hardlink' step in 05-finalise..."
   # Substitute ':' for the body rather than deleting the line - the enclosing
   # `if hash hardlink ...; then ... fi` would otherwise have an empty body.
-  sed -i 's|^[[:space:]]*hardlink -t /usr/share/doc.*|\t: # dropped by image/build.sh: segfaults under qemu-aarch64|' "${FINALISE}"
+  sed -i 's|^[[:space:]]*hardlink -t /usr/share/doc.*|\t: # dropped by image/build.sh: segfaults under qemu emulation|' "${FINALISE}"
   if grep -q '^[[:space:]]*hardlink -t /usr/share/doc' "${FINALISE}"; then
     echo "[image] ERROR: failed to patch 05-finalise." >&2
     exit 1

@@ -4,9 +4,14 @@
 # within its timeout (slow first boot: filesystem expansion + cold `vite
 # preview`), and X itself can die. Without the loop either one leaves a dead
 # console until someone SSHes in.
+# No `-nocursor`: that suppresses the pointer permanently, so a USB mouse looks
+# broken (it moves, you just cannot see it). .xinitrc runs `unclutter -idle 1`
+# instead, which hides the cursor after a second of stillness and brings it back
+# the moment the mouse moves — right for a touch frame that also gets a mouse
+# plugged in for setup.
 if [ -z "${DISPLAY}" ] && [ "$(tty)" = "/dev/tty1" ]; then
   while :; do
-    startx -- -nocursor
+    startx
     echo "[kiosk] X session exited; restarting in 5s..."
     sleep 5
   done
