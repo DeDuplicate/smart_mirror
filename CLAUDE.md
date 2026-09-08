@@ -104,7 +104,7 @@ TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiP
 - **Home Assistant:** `https://nadav7.duckdns.org:8123`, token in `.env` (gitignored)
 - **HA Entities:** 383 entities including lights, covers, scripts (AC via IR), media players, remotes, power meter, todo list
 - **AC Control:** 38 `script.aircon_*` entities mapped by temp/mode/speed in ACControlPopup
-- **Weather:** Open-Meteo default, IMS via HA toggle in Settings
+- **Weather:** Open-Meteo default, direct IMS toggle in Settings
 - **Hebrew Calendar:** Hebcal API, holidays in TopBar + Calendar grid
 - **Sync intervals:** Calendar 5 min, Tasks/Chores 2 min, News 30 min, Weather 10 min, Health 30s
 - **Chores:** Person-based columns, family configured in Settings, photos in localStorage, clap + fireworks celebrations with sound

@@ -20,6 +20,21 @@ const { runMigrations } = require('../db/migrate');
 // entry in ecosystem.config.js at the repo root.
 const PM2_APP_NAME = 'mirror-backend';
 
+function getConfigValue(db, key) {
+  try {
+    const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
+    if (!row || row.value == null) return '';
+    try {
+      const parsed = JSON.parse(row.value);
+      return typeof parsed === 'string' ? parsed : String(row.value);
+    } catch {
+      return String(row.value);
+    }
+  } catch {
+    return '';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Safe shell helper - uses execFile (no shell injection risk)
 // ---------------------------------------------------------------------------
@@ -53,26 +68,19 @@ router.get('/health', async (req, res) => {
     integrations: {},
   };
 
-  // Check Spotify — credentials may live in .env or in the settings table
-  const { getSpotifyCredentials } = require('./auth');
-  const spotifyCreds = getSpotifyCredentials(db);
-  const spotifyAccounts = db.prepare("SELECT COUNT(*) AS cnt FROM tokens WHERE provider = 'spotify'").get();
-  health.integrations.spotify = {
-    configured: Boolean(spotifyCreds.clientId),
-    linkedAccounts: spotifyAccounts.cnt,
-  };
-
   // Check Home Assistant
+  const haHost = process.env.HA_HOST || getConfigValue(db, 'haHost');
+  const haToken = process.env.HA_TOKEN || getConfigValue(db, 'haToken');
   health.integrations.homeAssistant = {
-    configured: !!process.env.HA_TOKEN,
-    host: process.env.HA_HOST || 'not set',
+    configured: !!haToken,
+    host: haHost || 'not set',
   };
 
-  if (process.env.HA_TOKEN) {
+  if (haToken) {
     try {
-      const haHost = (process.env.HA_HOST || 'http://homeassistant.local:8123').replace(/\/+$/, '');
-      const haRes = await fetch(haHost + '/api/', {
-        headers: { Authorization: 'Bearer ' + process.env.HA_TOKEN },
+      const normalizedHost = (haHost || 'http://homeassistant.local:8123').replace(/\/+$/, '');
+      const haRes = await fetch(normalizedHost + '/api/', {
+        headers: { Authorization: 'Bearer ' + haToken },
         signal: AbortSignal.timeout(5000),
       });
       health.integrations.homeAssistant.reachable = haRes.ok;

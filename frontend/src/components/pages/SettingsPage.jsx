@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import useSettings from '../../hooks/useSettings.js';
-import useAuth from '../../hooks/useAuth.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import WifiPopup from '../WifiPopup.jsx';
-import OAuthOverlay from '../OAuthOverlay.jsx';
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -112,7 +110,7 @@ function UploadIcon({ className = 'w-4 h-4' }) {
 function Section({ title, children }) {
   return (
     <div className="bg-surf border border-bd rounded-2xl p-6 mb-4">
-      <h2 className="text-lg font-semibold text-tp mb-4">{title}</h2>
+      <h2 className="text-xl font-semibold text-tp mb-4">{title}</h2>
       {children}
     </div>
   );
@@ -128,7 +126,7 @@ function InputRow({ label, type = 'text', placeholder = '', value, onChange, cla
         placeholder={placeholder}
         value={value}
         onChange={onChange}
-        className="bg-s2 border border-bd rounded-xl p-3 text-tp text-sm
+        className="bg-s2 border border-bd rounded-xl min-h-[56px] px-4 text-tp text-base
                    placeholder:text-tm focus:outline-none focus:border-acc
                    transition-colors duration-[var(--dur-fast)] w-full"
         dir="auto"
@@ -146,7 +144,7 @@ function SelectRow({ label, value, onChange, options, className = '' }) {
         <select
           value={value}
           onChange={onChange}
-          className="bg-s2 border border-bd rounded-xl p-3 text-tp text-sm
+          className="bg-s2 border border-bd rounded-xl min-h-[56px] px-4 text-tp text-base
                      focus:outline-none focus:border-acc appearance-none
                      transition-colors duration-[var(--dur-fast)] w-full pe-8"
         >
@@ -167,20 +165,21 @@ function SelectRow({ label, value, onChange, options, className = '' }) {
 /** Toggle switch row (label left, switch right) */
 function ToggleRow({ label, checked, onChange }) {
   return (
-    <div className="flex items-center justify-between py-2.5">
-      <span className="text-sm text-tp">{label}</span>
+    <div className="flex items-center justify-between min-h-[56px] py-1">
+      <span className="text-base text-tp">{label}</span>
       <button
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={`relative w-12 h-6 rounded-full shrink-0 transition-colors
-                    duration-[var(--dur-fast)] focus:outline-none
-                    ${checked ? 'bg-acc' : 'bg-bd'}`}
+        className="relative w-14 h-14 rounded-xl shrink-0 transition-colors
+                   duration-[var(--dur-fast)] focus:outline-none"
       >
+        <span className={`absolute inset-x-0 top-3 h-8 rounded-full transition-colors
+                          duration-[var(--dur-fast)] ${checked ? 'bg-acc' : 'bg-bd'}`} />
         <span
-          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-card
+          className={`absolute top-4 w-6 h-6 rounded-full bg-white shadow-card
                       transition-transform duration-[var(--dur-fast)]
-                      ${checked ? 'translate-x-[-26px]' : 'translate-x-[-2px]'}`}
+                      ${checked ? 'translate-x-[-28px]' : 'translate-x-[-4px]'}`}
           style={{ right: 0 }}
         />
       </button>
@@ -193,8 +192,8 @@ function SliderRow({ label, min, max, step = 1, value, onChange, unit = '' }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-ts">{label}</label>
-        <span className="text-sm text-tp font-semibold tabular-nums">
+        <label className="text-base font-medium text-ts">{label}</label>
+        <span className="text-base text-tp font-semibold tabular-nums">
           {value}{unit}
         </span>
       </div>
@@ -231,8 +230,8 @@ function Btn({ onClick, children, variant = 'default', icon, className = '', dis
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`ripple inline-flex items-center gap-2 px-4 min-h-[44px] rounded-xl
-                  font-medium text-sm active:scale-95 transition-all duration-[var(--dur-fast)]
+      className={`ripple inline-flex items-center gap-2 px-5 min-h-[56px] rounded-xl
+                  font-semibold text-lg active:scale-95 transition-all duration-[var(--dur-fast)]
                   disabled:opacity-50 disabled:active:scale-100
                   ${variants[variant]} ${className}`}
     >
@@ -366,7 +365,7 @@ function CitySearchBox({ onSelect }) {
 
   return (
     <div ref={boxRef} className="relative flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-ts">{t.settings.city}</label>
+      <label className="text-base font-medium text-ts">{t.settings.city}</label>
       <div className="relative">
         <input
           type="text"
@@ -377,7 +376,7 @@ function CitySearchBox({ onSelect }) {
           }}
           onFocus={() => setOpen(true)}
           placeholder={t.settings.citySearchPlaceholder}
-          className="bg-s2 border border-bd rounded-xl p-3 ps-10 text-tp text-sm
+          className="bg-s2 border border-bd rounded-xl min-h-[56px] px-4 ps-11 text-tp text-base
                      placeholder:text-tm focus:outline-none focus:border-acc
                      transition-colors duration-[var(--dur-fast)] w-full"
           dir="auto"
@@ -389,9 +388,9 @@ function CitySearchBox({ onSelect }) {
         <div className="absolute top-full inset-x-0 mt-1 z-10 bg-surf border border-bd rounded-xl
                         shadow-popover max-h-64 overflow-y-auto">
           {searching ? (
-            <div className="px-4 py-3 text-sm text-tm">{t.settings.citySearching}</div>
+            <div className="px-4 py-4 text-base text-tm">{t.settings.citySearching}</div>
           ) : results.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-tm">{t.settings.cityNoResults}</div>
+            <div className="px-4 py-4 text-base text-tm">{t.settings.cityNoResults}</div>
           ) : (
             results.map((r) => (
               <button
@@ -402,13 +401,13 @@ function CitySearchBox({ onSelect }) {
                   setResults([]);
                   setOpen(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-s2
+                className="w-full flex items-center gap-3 min-h-[56px] px-4 py-2.5 text-right hover:bg-s2
                            transition-colors active:scale-[0.98]"
               >
                 <PinIcon className="w-4 h-4 text-acc shrink-0" />
                 <div className="flex flex-col min-w-0">
-                  <span className="text-sm text-tp truncate">{r.name}</span>
-                  <span className="text-xs text-tm truncate">
+                  <span className="text-base text-tp truncate">{r.name}</span>
+                  <span className="text-sm text-ts truncate">
                     {[r.admin1, r.country].filter(Boolean).join(', ')}
                   </span>
                 </div>
@@ -426,7 +425,8 @@ function LocationSection() {
   const { setSettings, addToast } = useStore();
   const debouncedSave = useDebouncedSave(updateSettings);
 
-  const hasCoords = settings.latitude && settings.longitude;
+  const hasCoords = settings.latitude !== '' && settings.latitude != null
+    && settings.longitude !== '' && settings.longitude != null;
 
   const handleSelectCity = useCallback((r) => {
     const patch = {
@@ -453,8 +453,8 @@ function LocationSection() {
           <PinIcon className={`w-5 h-5 shrink-0 ${hasCoords ? 'text-[var(--mint-d)]' : 'text-tm'}`} />
           {hasCoords ? (
             <div className="flex flex-col min-w-0">
-              <span className="text-xs text-tm">{t.settings.cityCurrentlySet}</span>
-              <span className="text-sm font-semibold text-tp truncate">
+              <span className="text-sm text-ts">{t.settings.cityCurrentlySet}</span>
+              <span className="text-base font-semibold text-tp truncate">
                 {settings.location}
                 {(settings.locationAdmin || settings.locationCountry) && (
                   <span className="font-normal text-ts">
@@ -463,12 +463,12 @@ function LocationSection() {
                   </span>
                 )}
               </span>
-              <span className="text-xs text-tm tabular-nums" style={{ direction: 'ltr', textAlign: 'right' }}>
+              <span className="text-sm text-ts tabular-nums" style={{ direction: 'ltr', textAlign: 'right' }}>
                 {Number(settings.latitude).toFixed(4)}, {Number(settings.longitude).toFixed(4)}
               </span>
             </div>
           ) : (
-            <span className="text-sm text-tm">{t.settings.cityNotSet}</span>
+            <span className="text-base text-ts">{t.settings.cityNotSet}</span>
           )}
         </div>
 
@@ -494,7 +494,7 @@ function LocationSection() {
             className="flex-1"
           />
         </div>
-        <span className="text-xs text-tm -mt-2">{t.settings.cityCoordsHint}</span>
+        <span className="text-sm text-ts -mt-2">{t.settings.cityCoordsHint}</span>
       </div>
     </Section>
   );
@@ -555,7 +555,7 @@ function IcsCalendarSection() {
     <Section title={t.settings.calendarUrls}>
       <div className="flex flex-col gap-4">
         {/* Instructions */}
-        <p className="text-xs text-[var(--tm)] leading-relaxed">
+        <p className="text-sm text-ts leading-relaxed">
           {t.settings.calendarIcsInstructions}
         </p>
 
@@ -566,7 +566,7 @@ function IcsCalendarSection() {
             value={newUrl}
             onChange={(e) => setNewUrl(e.target.value)}
             placeholder={t.settings.calendarUrlPlaceholder}
-            className="w-full h-11 px-4 rounded-xl bg-[var(--bg)] border border-[var(--bd)] text-[var(--tp)] text-sm
+            className="w-full min-h-[56px] px-4 rounded-xl bg-[var(--bg)] border border-[var(--bd)] text-[var(--tp)] text-base
                        placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
             dir="ltr"
           />
@@ -576,7 +576,7 @@ function IcsCalendarSection() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder={t.settings.calendarNamePlaceholder}
-              className="flex-1 h-11 px-4 rounded-xl bg-[var(--bg)] border border-[var(--bd)] text-[var(--tp)] text-sm
+              className="flex-1 min-h-[56px] px-4 rounded-xl bg-[var(--bg)] border border-[var(--bd)] text-[var(--tp)] text-base
                          placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
               dir="rtl"
             />
@@ -587,7 +587,7 @@ function IcsCalendarSection() {
                   key={c.value}
                   onClick={() => setNewColor(c.value)}
                   title={c.label}
-                  className={`w-8 h-8 rounded-full border-2 transition-all duration-150
+                  className={`w-14 h-14 rounded-full border-2 transition-all duration-150
                               ${newColor === c.value
                                 ? 'border-[var(--tp)] scale-110'
                                 : 'border-transparent opacity-60 hover:opacity-100'}`}
@@ -604,7 +604,7 @@ function IcsCalendarSection() {
 
         {/* List of configured calendars */}
         {icsUrls.length === 0 ? (
-          <p className="text-sm text-[var(--tm)]">{t.settings.noCalendarsConfigured}</p>
+          <p className="text-base text-ts">{t.settings.noCalendarsConfigured}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {icsUrls.map((cal) => {
@@ -619,8 +619,8 @@ function IcsCalendarSection() {
                     style={{ backgroundColor: colorHex }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--tp)] truncate">{cal.name}</p>
-                    <p className="text-xs text-[var(--tm)] truncate" dir="ltr">{cal.url}</p>
+                    <p className="text-base font-medium text-[var(--tp)] truncate">{cal.name}</p>
+                    <p className="text-sm text-ts truncate" dir="ltr">{cal.url}</p>
                   </div>
                   <Btn variant="danger" icon={<TrashIcon />} onClick={() => handleRemove(cal.id)}>
                     {t.settings.removeCalendar}
@@ -647,6 +647,9 @@ function HomeAssistantSection() {
   const handleTest = useCallback(async () => {
     setTesting(true);
     try {
+      const patch = { haHost: settings.haHost || '' };
+      if (settings.haToken) patch.haToken = settings.haToken;
+      await updateSettings(patch);
       await fetchApi('/api/ha/states');
       addToast('success', t.settings.haConnectionOk);
     } catch {
@@ -654,7 +657,7 @@ function HomeAssistantSection() {
     } finally {
       setTesting(false);
     }
-  }, [addToast]);
+  }, [settings.haHost, settings.haToken, updateSettings, addToast]);
 
   return (
     <Section title={t.settings.smartHome}>
@@ -671,7 +674,7 @@ function HomeAssistantSection() {
         <InputRow
           label={t.settings.haToken}
           type="password"
-          placeholder="eyJ..."
+          placeholder={settings.haTokenSet ? '••••••••' : 'eyJ...'}
           value={settings.haToken || ''}
           onChange={(e) => {
             setSettings({ haToken: e.target.value });
@@ -681,29 +684,6 @@ function HomeAssistantSection() {
         <Btn icon={testing ? <Spinner /> : <LinkIcon />} onClick={handleTest} disabled={testing}>
           {t.settings.testConnection}
         </Btn>
-      </div>
-    </Section>
-  );
-}
-
-// ─── Section: Spotify ────────────────────────────────────────────────────────
-
-function SpotifySection() {
-  return (
-    <Section title={t.settings.spotify}>
-      <div className="flex items-start gap-3 bg-s2 border border-bd rounded-xl px-4 py-4">
-        <div
-          className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: 'var(--mint-bg)' }}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6" style={{ color: 'var(--mint-d)' }}>
-            <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-          </svg>
-        </div>
-        <div className="flex flex-col gap-1 min-w-0">
-          <p className="text-sm font-medium text-tp">{t.music.youtubeMusic}</p>
-          <p className="text-xs text-ts leading-relaxed">{t.settings.spotifySetupHint}</p>
-        </div>
       </div>
     </Section>
   );
@@ -757,7 +737,7 @@ function NewsSection() {
 
   return (
     <Section title={t.settings.news}>
-      <p className="text-xs text-tm mb-3">{t.settings.newsSourcesDesc}</p>
+      <p className="text-sm text-ts mb-3">{t.settings.newsSourcesDesc}</p>
       {catalog === null && (
         <div className="flex flex-col gap-2">
           {[0, 1, 2, 3].map((i) => (
@@ -766,7 +746,7 @@ function NewsSection() {
         </div>
       )}
       {catalog !== null && loadError && (
-        <p className="text-sm text-coral-d">{t.settings.newsSourcesLoadError}</p>
+        <p className="text-base text-coral-d">{t.settings.newsSourcesLoadError}</p>
       )}
       {catalog !== null && !loadError && (
         <div className="flex flex-col gap-2">
@@ -796,8 +776,8 @@ function NewsSection() {
                     </svg>
                   )}
                 </span>
-                <span className="flex-1 text-start text-sm font-medium text-tp">{src.name}</span>
-                <span className="text-xs text-tm">{categoryLabel(src.category)}</span>
+                <span className="flex-1 text-start text-base font-medium text-tp">{src.name}</span>
+                <span className="text-sm text-ts">{categoryLabel(src.category)}</span>
               </button>
             );
           })}
@@ -877,8 +857,8 @@ function FamilySection() {
   }, [people, persistLocal, addToast]);
 
   return (
-    <Section title="בני המשפחה (מטלות)">
-      <p className="text-xs text-[var(--tm)] mb-3">הוסף את בני המשפחה שיופיעו בלשונית מטלות</p>
+    <Section title={t.settings.familyMembers}>
+      <p className="text-sm text-ts mb-3">{t.settings.familyMembersDesc}</p>
 
       {/* Current people list */}
       <div className="flex flex-col gap-2 mb-4">
@@ -890,7 +870,7 @@ function FamilySection() {
             >
               {p.name.charAt(0)}
             </div>
-            <span className="flex-1 text-sm font-medium text-[var(--tp)]">{p.name}</span>
+            <span className="flex-1 text-base font-medium text-[var(--tp)]">{p.name}</span>
             <div
               className="w-4 h-4 rounded-full"
               style={{ backgroundColor: p.color }}
@@ -898,14 +878,15 @@ function FamilySection() {
             />
             <button
               onClick={() => removePerson(p.id)}
-              className="text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors p-1"
+              className="min-w-[56px] min-h-[56px] rounded-xl text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
+              aria-label={t.settings.removeFamilyMember}
             >
               <TrashIcon />
             </button>
           </div>
         ))}
         {people.length === 0 && (
-          <p className="text-sm text-[var(--tm)] text-center py-3">אין בני משפחה — הוסף אחד למטה</p>
+          <p className="text-base text-ts text-center py-3">{t.settings.noFamilyMembers}</p>
         )}
       </div>
 
@@ -916,13 +897,13 @@ function FamilySection() {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addPerson()}
-          placeholder="שם..."
-          className="flex-1 h-11 px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-sm placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
+          placeholder={t.settings.familyNamePlaceholder}
+          className="flex-1 min-h-[56px] px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-base placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
           dir="rtl"
         />
         <Btn variant="primary" onClick={addPerson} disabled={!newName.trim()}>
           <PlusIcon className="w-4 h-4" />
-          הוסף
+          {t.common.add}
         </Btn>
       </div>
     </Section>
@@ -943,7 +924,7 @@ function TasksSection() {
   return (
     <Section title={t.settings.tasks}>
       <div className="flex flex-col gap-4">
-        <p className="text-sm font-medium text-ts -mb-1">{t.settings.columnNames}</p>
+        <p className="text-base font-medium text-ts -mb-1">{t.settings.columnNames}</p>
         <div className="flex gap-3">
           <InputRow
             label="1"
@@ -980,14 +961,26 @@ function TasksSection() {
 
 // ─── Section: Display ────────────────────────────────────────────────────────
 
+// Discrete steps rather than a free slider — the phrase pool is finite, so
+// only a handful of intervals are meaningfully different.
+const PHRASE_INTERVAL_OPTIONS = [
+  { value: '1',    label: 'דקה' },
+  { value: '5',    label: '5 דקות' },
+  { value: '10',   label: '10 דקות' },
+  { value: '30',   label: 'חצי שעה' },
+  { value: '60',   label: 'שעה' },
+  { value: '180',  label: '3 שעות' },
+  { value: '720',  label: '12 שעות' },
+  { value: '1440', label: 'פעם ביום' },
+];
+
 function DisplaySection() {
   const { settings, updateSettings } = useSettings();
   const { setSettings, setThemeMode } = useStore();
 
   const idleMin = settings.idleTimeout || 5;
-  const brightness = settings.brightnessDefault || 80;
   const screensaver = settings.screensaverStyle || 'clock';
-  const hebrewCal = settings.hebrewCalendar === true;
+  const phraseIntervalMin = settings.phraseIntervalMin ?? 10;
 
   return (
     <Section title={t.settings.display}>
@@ -1003,17 +996,6 @@ function DisplaySection() {
           }}
           unit={` ${t.settings.idleTimeoutMin}`}
         />
-        <SliderRow
-          label={t.settings.brightness}
-          min={10} max={100} step={5}
-          value={brightness}
-          onChange={(e) => {
-            const val = Number(e.target.value);
-            setSettings({ brightnessDefault: val });
-            updateSettings({ brightnessDefault: val });
-          }}
-          unit="%"
-        />
         <SelectRow
           label={t.settings.screensaverStyle}
           value={screensaver}
@@ -1027,10 +1009,21 @@ function DisplaySection() {
           ]}
         />
 
+        <SelectRow
+          label={t.settings.phraseInterval}
+          value={String(phraseIntervalMin)}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            setSettings({ phraseIntervalMin: val });
+            updateSettings({ phraseIntervalMin: val });
+          }}
+          options={PHRASE_INTERVAL_OPTIONS}
+        />
+
         <div className="flex flex-col divide-y divide-bd">
           {/* Temperature unit toggle — segmented control */}
           <div className="flex items-center justify-between py-2.5">
-            <span className="text-sm text-tp">{t.settings.temperatureUnit}</span>
+            <span className="text-base text-tp">{t.settings.temperatureUnit}</span>
             <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
               {['celsius', 'fahrenheit'].map((unit) => (
                 <button
@@ -1039,7 +1032,7 @@ function DisplaySection() {
                     setSettings({ temperatureUnit: unit });
                     updateSettings({ temperatureUnit: unit });
                   }}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all
+                  className={`px-4 min-h-[56px] rounded-full text-lg font-semibold transition-all
                                duration-[var(--dur-fast)]
                                ${settings.temperatureUnit === unit
                                  ? 'bg-acc text-white shadow-card'
@@ -1053,7 +1046,7 @@ function DisplaySection() {
 
           {/* Weather source toggle — segmented control */}
           <div className="flex items-center justify-between py-2.5">
-            <span className="text-sm text-tp">{t.settings.weatherSource}</span>
+            <span className="text-base text-tp">{t.settings.weatherSource}</span>
             <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
               {[
                 { value: 'openmeteo', label: t.settings.weatherOpenMeteo },
@@ -1065,7 +1058,7 @@ function DisplaySection() {
                     setSettings({ weatherSource: src.value });
                     updateSettings({ weatherSource: src.value });
                   }}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all
+                  className={`px-4 min-h-[56px] rounded-full text-lg font-semibold transition-all
                                duration-[var(--dur-fast)]
                                ${(settings.weatherSource || 'openmeteo') === src.value
                                  ? 'bg-acc text-white shadow-card'
@@ -1085,18 +1078,10 @@ function DisplaySection() {
               updateSettings({ showWeekend: val });
             }}
           />
-          <ToggleRow
-            label={t.settings.hebrewCalendar}
-            checked={hebrewCal}
-            onChange={(val) => {
-              setSettings({ hebrewCalendar: val });
-              updateSettings({ hebrewCalendar: val });
-            }}
-          />
           <div className="flex items-center justify-between py-2.5">
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm text-tp">{t.settings.themeCycle}</span>
-              <span className="text-xs text-tm">{t.settings.themeAutoHint}</span>
+              <span className="text-base text-tp">{t.settings.themeCycle}</span>
+              <span className="text-sm text-ts">{t.settings.themeAutoHint}</span>
             </div>
             <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
               {[
@@ -1110,7 +1095,7 @@ function DisplaySection() {
                     setThemeMode(opt.value);
                     updateSettings({ themeMode: opt.value });
                   }}
-                  className={`px-3 min-h-[44px] rounded-xl text-sm font-medium transition-all
+                  className={`px-4 min-h-[56px] rounded-xl text-lg font-semibold transition-all
                                duration-[var(--dur-fast)] active:scale-95
                                ${(settings.themeMode || 'auto') === opt.value
                                  ? 'bg-acc text-white shadow-card'
@@ -1390,14 +1375,14 @@ function SystemSection() {
       <div className="flex flex-col gap-4">
         {/* Version display */}
         <div className="flex items-center justify-between bg-s2 border border-bd rounded-xl px-4 py-3">
-          <span className="text-sm text-ts">{t.settings.version}</span>
-          <span className="text-sm font-semibold text-tp font-mono">{version}</span>
+          <span className="text-base text-ts">{t.settings.version}</span>
+          <span className="text-base font-semibold text-tp font-mono">{version}</span>
         </div>
 
         {/* Update available notice + install action */}
         {(updateInfo?.updateAvailable || updating) && (
           <div className="flex items-center justify-between bg-acc/10 border border-acc/30 rounded-xl px-4 py-3">
-            <span className="text-sm font-medium text-tp">
+            <span className="text-base font-medium text-tp">
               {updating
                 ? t.settings.updatingSystem
                 : `${t.settings.updateAvailable}${updateInfo?.behindBy > 0 ? ` · ${updateInfo.behindBy} ${t.settings.commitsBehind}` : ''}`}
@@ -1465,7 +1450,7 @@ function SystemSection() {
         </div>
 
         {/* Last backup timestamp */}
-        <p className="text-xs text-tm">
+        <p className="text-sm text-ts">
           {t.settings.lastBackup}: {lastBackup ?? t.settings.never}
         </p>
       </div>
@@ -1542,7 +1527,7 @@ function LogViewerSection() {
         <textarea
           readOnly
           value={logs.length > 0 ? logs.map(formatEntry).join('\n') : t.logs.noLogs}
-          className="w-full h-[240px] bg-s2 border border-bd rounded-xl p-3 text-xs text-tp
+          className="w-full h-[240px] bg-s2 border border-bd rounded-xl p-3 text-sm text-tp
                      font-mono resize-none focus:outline-none"
           style={{ fontFamily: "'DM Mono', monospace", direction: 'ltr' }}
         />
@@ -1634,8 +1619,8 @@ function AboutSection() {
       <div className="flex flex-col divide-y divide-bd">
         {rows.map(({ label, value }) => (
           <div key={label} className="flex items-center justify-between py-2.5">
-            <span className="text-sm text-ts">{label}</span>
-            <span className="text-sm font-medium text-tp font-mono">{value}</span>
+            <span className="text-base text-ts">{label}</span>
+            <span className="text-base font-medium text-tp font-mono">{value}</span>
           </div>
         ))}
       </div>
@@ -1651,10 +1636,10 @@ export default function SettingsPage() {
       className="h-full overflow-y-auto px-8 py-6"
       style={{ scrollbarWidth: 'thin' }}
     >
-      <h1 className="text-2xl font-bold text-tp mb-6">{t.tabs.settings}</h1>
+      <h1 className="text-3xl font-bold text-tp mb-6">{t.tabs.settings}</h1>
 
       {/* Two-column masonry-style grid */}
-      <div className="grid grid-cols-2 gap-x-6 items-start">
+      <div className="grid grid-cols-2 gap-x-6 items-start max-w-[1600px] mx-auto">
         {/* Column A (right in RTL — rendered first) */}
         <div>
           <ProfileSection />
@@ -1663,12 +1648,11 @@ export default function SettingsPage() {
           <NewsSection />
           <DisplaySection />
           <WifiSection />
+          <IcsCalendarSection />
         </div>
 
         {/* Column B (left in RTL) */}
         <div>
-          <IcsCalendarSection />
-          <SpotifySection />
           <FamilySection />
           <TasksSection />
           <SystemSection />

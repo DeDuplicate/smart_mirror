@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { fetchApi } from './useApi.js';
+import useStore from '../store/index.js';
 
-const SLOT_MS = 10 * 60 * 1000;
+const DEFAULT_INTERVAL_MIN = 10;
 
 const FALLBACK = [
   { text: 'אם אין אני לי, מי לי? וכשאני לעצמי, מה אני? ואם לא עכשיו, אימתי?', source: 'הלל הזקן' },
@@ -14,18 +15,27 @@ const FALLBACK = [
   { text: 'יום אחד בכל פעם.', source: 'משפט יומי' },
 ];
 
-function fromSlot(list, now = Date.now()) {
-  const slot = Math.floor(now / SLOT_MS);
+function fromSlot(list, slotMs, now = Date.now()) {
+  const slot = Math.floor(now / slotMs);
   const item = list[slot % list.length];
   return {
     text: item.text,
     source: item.source || '',
-    nextChangeAt: (slot + 1) * SLOT_MS,
+    explanation: item.explanation || '',
+    nextChangeAt: (slot + 1) * slotMs,
   };
 }
 
+/**
+ * Current daily phrase. Rotation cadence is user-configurable in Settings; the
+ * interval is sent to the server so both agree on which slot is current, and
+ * the next fetch is scheduled for exactly when that slot expires.
+ */
 export default function useDailyPhrase() {
-  const [phrase, setPhrase] = useState(() => fromSlot(FALLBACK));
+  const intervalMin = useStore((s) => s.settings.phraseIntervalMin) ?? DEFAULT_INTERVAL_MIN;
+  const slotMs = Math.max(1, intervalMin) * 60 * 1000;
+
+  const [phrase, setPhrase] = useState(() => fromSlot(FALLBACK, slotMs));
 
   useEffect(() => {
     let cancelled = false;
@@ -33,14 +43,14 @@ export default function useDailyPhrase() {
 
     async function load() {
       try {
-        const data = await fetchApi('/api/quotes');
+        const data = await fetchApi(`/api/quotes?intervalMin=${intervalMin}`);
         if (cancelled || !data?.text) return;
         setPhrase(data);
-        const wait = Math.max(5_000, (data.nextChangeAt || Date.now() + SLOT_MS) - Date.now() + 250);
+        const wait = Math.max(5_000, (data.nextChangeAt || Date.now() + slotMs) - Date.now() + 250);
         timer = setTimeout(load, wait);
       } catch {
         if (cancelled) return;
-        const fallback = fromSlot(FALLBACK);
+        const fallback = fromSlot(FALLBACK, slotMs);
         setPhrase(fallback);
         timer = setTimeout(load, Math.max(5_000, fallback.nextChangeAt - Date.now() + 250));
       }
@@ -51,7 +61,8 @@ export default function useDailyPhrase() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, []);
+    // Re-subscribes when the user changes the cadence in Settings.
+  }, [intervalMin, slotMs]);
 
   return phrase;
 }
