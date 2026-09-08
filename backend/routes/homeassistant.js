@@ -74,6 +74,100 @@ router.get('/states', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/ha/media-players — states enriched with manufacturer + model
+//
+// `/api/states` alone cannot tell a Nest Mini from a Nest Hub: both are
+// `media_player` entities and Home Assistant often sets no `device_class`, so
+// a speaker named after its room ("Master Bedroom") looks identical to a TV.
+// Guessing from the friendly name is what previously filed a Nest Hub under
+// "TVs" and a Nest Mini under "other".
+//
+// The manufacturer/model live in HA's DEVICE registry, which the REST API does
+// not expose - but `device_attr()` in a template does, so one POST /api/template
+// call returns the lot without any WebSocket plumbing. Registry data barely
+// changes, so it is cached; live state still comes fresh from /api/states.
+// ---------------------------------------------------------------------------
+
+const DEVICE_META_TTL_MS = 60 * 60 * 1000;
+let deviceMetaCache = { at: 0, map: {} };
+
+const DEVICE_META_TEMPLATE = `
+{%- set out = namespace(rows=[]) -%}
+{%- for s in states.media_player -%}
+  {%- set out.rows = out.rows + [{
+    "entity_id": s.entity_id,
+    "model": device_attr(s.entity_id, "model"),
+    "manufacturer": device_attr(s.entity_id, "manufacturer")
+  }] -%}
+{%- endfor -%}
+{{ out.rows | tojson }}
+`.trim();
+
+async function fetchDeviceMeta(logger) {
+  if (Date.now() - deviceMetaCache.at < DEVICE_META_TTL_MS) return deviceMetaCache.map;
+
+  const { host } = getHAConfig();
+  const response = await fetch(`${host}/api/template`, {
+    method: 'POST',
+    headers: haHeaders(),
+    body: JSON.stringify({ template: DEVICE_META_TEMPLATE }),
+  });
+  if (!response.ok) {
+    throw new Error(`HA template ${response.status}: ${await response.text()}`);
+  }
+
+  const rows = JSON.parse(await response.text());
+  const map = {};
+  for (const row of rows) {
+    if (!row?.entity_id) continue;
+    map[row.entity_id] = {
+      model: row.model && row.model !== 'None' ? row.model : '',
+      manufacturer: row.manufacturer && row.manufacturer !== 'None' ? row.manufacturer : '',
+    };
+  }
+  deviceMetaCache = { at: Date.now(), map };
+  logger.info('HA device metadata cached for %d media players', Object.keys(map).length);
+  return map;
+}
+
+router.get('/media-players', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+
+  try {
+    const { host } = getHAConfig();
+    const response = await fetch(`${host}/api/states`, { headers: haHeaders() });
+    if (!response.ok) {
+      throw new Error(`HA API ${response.status}: ${await response.text()}`);
+    }
+    const states = (await response.json()).filter((e) =>
+      String(e.entity_id).startsWith('media_player.')
+    );
+
+    // Enrichment is a bonus: if the template call fails (old HA, permissions)
+    // fall back to bare states rather than losing the device list entirely.
+    let meta = {};
+    try {
+      meta = await fetchDeviceMeta(logger);
+    } catch (err) {
+      logger.warn('HA device metadata unavailable, falling back to states only: %s', err.message);
+    }
+
+    res.json({
+      players: states.map((e) => ({
+        ...e,
+        model: meta[e.entity_id]?.model || '',
+        manufacturer: meta[e.entity_id]?.manufacturer || '',
+      })),
+    });
+  } catch (err) {
+    logger.error('HA media-players error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
 // GET /api/ha/entities — discover entities (grouped by domain)
 // ---------------------------------------------------------------------------
 router.get('/entities', async (req, res) => {

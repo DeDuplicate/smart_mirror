@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApi } from './useApi.js';
+import { dedupeSpeakers, classifyKind, prefersAudioStream } from './speakerStatus.js';
 import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 import useYoutubePlayer from './useYoutubePlayer.js';
@@ -26,19 +27,29 @@ function classifyPlayer(entity) {
   const id = entity.entity_id || '';
   const name = entity.attributes?.friendly_name || id;
   const deviceClass = entity.attributes?.device_class || '';
-  const blob = `${id} ${name} ${deviceClass}`.toLowerCase();
-  const google = /googlehome|google_home|nestmini|nest_mini|nest_hub|nest_audio|chromecast|\bnest\b/.test(blob);
-  const speaker = deviceClass === 'speaker'
-    || /nestmini|nest_mini|googlehome|nest_audio|home mini|minispeaker/.test(blob);
-  const tv = deviceClass === 'tv' || /tv|shield|mibox|mi_box|android_tv|stb|xiaomi|nest_hub/.test(blob);
+  const model = entity.model || '';
+  const kind = classifyKind({ entityId: id, name, deviceClass, model });
   return {
     id,
     name,
     state: entity.state,
-    kind: speaker ? 'speaker' : tv ? 'tv' : 'other',
-    google,
-    audioOnly: speaker && !tv,
+    kind,
+    model,
+    manufacturer: entity.manufacturer || '',
+    google: /googlehome|google_home|nestmini|nest_mini|nest_hub|nest_audio|chromecast|\bnest\b/
+      .test(`${id} ${name}`.toLowerCase()),
+    // Anything not positively identified as a TV gets the plain audio
+    // stream. A Nest speaker named after its room (e.g. "Master Bedroom")
+    // carries no keyword and often no device_class, so it lands here as
+    // 'other' - and it cannot render the YouTube app, which the video path
+    // would otherwise attempt four times before falling back.
+    audioOnly: prefersAudioStream(kind),
     available: entity.state !== 'unavailable' && entity.state !== 'unknown',
+    // Surfaced in the output picker so it can show what a device is
+    // actually doing instead of a fixed "connected" label.
+    mediaTitle: entity.attributes?.media_title || '',
+    appName: entity.attributes?.app_name || '',
+    volumeLevel: entity.attributes?.volume_level ?? null,
   };
 }
 
@@ -86,7 +97,9 @@ async function stopCast(entityId) {
 }
 
 async function speakerState(entityId) {
-  const data = await fetchApi('/api/ha/states');
+      // Enriched with manufacturer/model from HA's device registry, which is
+      // the only reliable way to tell a Nest Mini from a Nest Hub.
+      const data = await fetchApi('/api/ha/media-players');
   return (data.states || []).find((item) => item.entity_id === entityId) || null;
 }
 
@@ -551,10 +564,14 @@ export default function useMusic() {
 
   const loadSpeakers = useCallback(async () => {
     try {
-      const data = await fetchApi('/api/ha/states');
-      const players = (data.states || [])
-        .filter((e) => e.entity_id?.startsWith('media_player.'))
-        .map(classifyPlayer)
+      // Enriched with manufacturer/model from HA's device registry — the only
+      // reliable way to tell a Nest Mini (audio only) from a Nest Hub (has a
+      // screen, renders the YouTube app). `/api/states` cannot distinguish them.
+      const data = await fetchApi('/api/ha/media-players');
+      const players = dedupeSpeakers(
+        (data.players || [])
+          .map(classifyPlayer)
+      )
         .sort((a, b) => {
           if (a.kind === 'speaker' && b.kind !== 'speaker') return -1;
           if (b.kind === 'speaker' && a.kind !== 'speaker') return 1;
