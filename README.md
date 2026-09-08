@@ -61,6 +61,10 @@ Both the clock and slideshow styles share one region grid, so every element keep
 - :inbox_tray: **Restore** from an uploaded `.db` backup (validated SQLite; API token preserved; a safety backup is taken first)
 - :arrows_counterclockwise: **Factory reset** — wipe and re-initialize the database (safety backup + token preserved)
 - :satellite_antenna: **OTA update** via `git pull` + rebuild, restart app / Raspberry Pi, log viewer, health monitoring
+  - :arrow_left: **Automatic rollback** — if the dependency install or the frontend build fails, the previous commit is restored and reinstalled, so a bad update can't brick a keyboard-less wall display
+  - :chart_with_upwards_trend: **Live progress** streamed over Socket.io (pull → install → build → restart), not a blind spinner
+  - :alarm_clock: **Nightly update check** (04:30) that only *notifies* — installs stay manual and deliberate
+  - :shield: Refuses to update on a dirty working tree, and verifies the restart actually happened by polling the running commit
 - :sun_behind_small_cloud: **Display schedule** (wake/sleep times), idle detection → screensaver, brightness control
 - :signal_strength: **Wi-Fi manager** (scan/connect/forget via `nmcli`)
 

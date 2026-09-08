@@ -1,9 +1,26 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { io } from 'socket.io-client';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import useSettings from '../../hooks/useSettings.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import WifiPopup from '../WifiPopup.jsx';
+
+// ─── Socket.io singleton (same pattern as useTasks / useHomeAssistant) ──────
+
+let socket = null;
+
+function getSocket() {
+  if (!socket) {
+    socket = io('/', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+    });
+  }
+  return socket;
+}
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -1140,6 +1157,88 @@ function waitForBackend() {
   });
 }
 
+/**
+ * Wait for the backend to come back as a *different* process after an update.
+ *
+ * Polling health alone races the restart: the backend answers the update
+ * request ~500ms before it actually execs `pm2 restart`, so an immediate health
+ * poll succeeds against the old process and makes a pending restart look like a
+ * failed one. The commit the backend booted from is the unambiguous signal, so
+ * poll that until it changes.
+ *
+ * Resolves 'restarted' | 'timeout'.
+ */
+function waitForRestart(previousCommit) {
+  return new Promise((resolve) => {
+    let attempts = 0;
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const ver = await fetchApi('/api/system/version');
+        // No commit reported (git unavailable) — can't verify, don't cry wolf.
+        if (!ver?.commit) return resolve('restarted');
+        if (ver.commit !== previousCommit) return resolve('restarted');
+      } catch {
+        // Down mid-restart — expected, keep waiting.
+      }
+      if (attempts >= HEALTH_POLL_MAX_ATTEMPTS) return resolve('timeout');
+      setTimeout(poll, HEALTH_POLL_INTERVAL);
+    };
+    // Give the backend's 500ms restart timer a chance to fire first.
+    setTimeout(poll, 1500);
+  });
+}
+
+// Ordered install stages. A determinate "step N of 4" with a named stage beats
+// an indefinite spinner for a multi-minute operation — the user can see it is
+// progressing and roughly how much is left.
+const UPDATE_STAGE_ORDER = ['pull', 'backend-deps', 'frontend-deps', 'build', 'restart'];
+
+const UPDATE_STAGE_LABEL = {
+  'pull': t.settings.updateStagePull,
+  'backend-deps': t.settings.updateStageBackendDeps,
+  'frontend-deps': t.settings.updateStageFrontendDeps,
+  'build': t.settings.updateStageBuild,
+  'restart': t.settings.updateStageRestart,
+  'rollback': t.settings.updateStageRollback,
+};
+
+/**
+ * Live install progress. Rollback is deliberately styled as a warning rather
+ * than an error: the update failed, but the mirror is recovering itself.
+ */
+function UpdateProgress({ stage }) {
+  if (!stage) return null;
+
+  const isRollback = stage.stage === 'rollback';
+  const label = UPDATE_STAGE_LABEL[stage.stage] || t.settings.updatingSystem;
+  const index = UPDATE_STAGE_ORDER.indexOf(stage.stage);
+  const step = index >= 0 ? index + 1 : null;
+  const pct = isRollback || step == null ? 100 : (step / UPDATE_STAGE_ORDER.length) * 100;
+
+  return (
+    <div className="flex flex-col gap-2 mt-3" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`text-sm font-medium ${isRollback ? 'text-gold-d' : 'text-tp'}`}>
+          {label}
+        </span>
+        {step != null && !isRollback && (
+          <span className="text-xs text-tm font-mono shrink-0">
+            {step}/{UPDATE_STAGE_ORDER.length}
+          </span>
+        )}
+      </div>
+      <div className="h-1.5 rounded-full bg-bd overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-[width] duration-500 ease-[var(--ease)]
+                      ${isRollback ? 'bg-gold-d' : 'bg-acc'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function SystemSection() {
   const addToast = useStore((s) => s.addToast);
   const showConfirm = useStore((s) => s.showConfirm);
@@ -1153,18 +1252,31 @@ function SystemSection() {
   const restoreInputRef = useRef(null);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updating, setUpdating] = useState(false);
+  // Live stage reported by the backend over Socket.io during an install, so a
+  // multi-minute update isn't a blank spinner.
+  const [updateStage, setUpdateStage] = useState(null);
   // Ref guard so double-clicks can't start a second install while a confirm
   // dialog or an in-flight update is active
   const updatingRef = useRef(false);
 
-  // Fetch version on mount
+  // Fetch version + last known update status on mount. The status is read from
+  // the server's cache rather than re-running a git fetch, so a nightly check
+  // that fired while Settings was closed still surfaces here.
   useEffect(() => {
     let cancelled = false;
+
     fetchApi('/api/system/version')
       .then((data) => {
         if (!cancelled && data?.version) setVersion(data.version);
       })
       .catch(() => {});
+
+    fetchApi('/api/system/update-status')
+      .then((data) => {
+        if (!cancelled && data?.updateAvailable) setUpdateInfo(data);
+      })
+      .catch(() => {});
+
     return () => { cancelled = true; };
   }, []);
 
@@ -1172,6 +1284,22 @@ function SystemSection() {
     const data = await fetchApi('/api/system/check-update');
     setUpdateInfo(data?.updateAvailable ? data : null);
     return data;
+  }, []);
+
+  // Backend events: nightly check results and live install progress. The
+  // nightly check only notifies — installing stays a deliberate user action.
+  useEffect(() => {
+    const sock = getSocket();
+
+    const onAvailable = (data) => setUpdateInfo(data);
+    const onProgress = (payload) => setUpdateStage(payload);
+
+    sock.on('system:update-available', onAvailable);
+    sock.on('system:update-progress', onProgress);
+    return () => {
+      sock.off('system:update-available', onAvailable);
+      sock.off('system:update-progress', onProgress);
+    };
   }, []);
 
   const handleCheckUpdates = useCallback(async () => {
@@ -1202,24 +1330,56 @@ function SystemSection() {
         if (updatingRef.current) return;
         updatingRef.current = true;
         setUpdating(true);
+        setUpdateStage({ stage: 'pull', status: 'running' });
         try {
           let installFailed = false;
+          let failure = null;
+          let result = null;
           try {
             const res = await fetchApi('/api/system/update', { method: 'POST' });
-            if (!res?.success) installFailed = true;
+            result = res;
+            if (!res?.success) {
+              installFailed = true;
+              failure = res;
+            }
           } catch {
             // Connection dropped — expected when PM2 restarts the backend
             // mid-response. Fall through and wait for it to come back.
           }
 
           if (installFailed) {
-            addToast('error', t.settings.updateFailed);
+            // A rolled-back failure is materially different from a broken one:
+            // the mirror is still running the previous version and is safe.
+            let msg = t.settings.updateFailed;
+            let level = 'error';
+            if (failure?.dirtyTree) {
+              msg = t.settings.updateDirtyTree;
+            } else if (failure?.rolledBack) {
+              msg = t.settings.updateRolledBack;
+              level = 'warning';
+            }
+            addToast(level, msg);
             return;
           }
 
-          const backOnline = await waitForBackend();
-          if (!backOnline) {
-            addToast('error', t.settings.updateFailed);
+          // PM2 isn't managing the process, so the new code is on disk but the
+          // running backend is still the old one. Nothing will restart — say so
+          // without waiting.
+          if (result?.restartRequired) {
+            await waitForBackend();
+            addToast('warning', t.settings.updateRestartRequired);
+            return;
+          }
+
+          // Wait for the *new* process, not merely for something to answer.
+          const outcome = result?.previousCommit
+            ? await waitForRestart(result.previousCommit)
+            : ((await waitForBackend()) ? 'restarted' : 'timeout');
+
+          if (outcome === 'timeout') {
+            // Either the backend never came back, or it came back still running
+            // the old commit. Both mean the update did not take effect.
+            addToast('warning', t.settings.updateRestartRequired);
             return;
           }
 
@@ -1236,6 +1396,7 @@ function SystemSection() {
         } finally {
           updatingRef.current = false;
           setUpdating(false);
+          setUpdateStage(null);
         }
       },
     });
@@ -1381,20 +1542,23 @@ function SystemSection() {
 
         {/* Update available notice + install action */}
         {(updateInfo?.updateAvailable || updating) && (
-          <div className="flex items-center justify-between bg-acc/10 border border-acc/30 rounded-xl px-4 py-3">
-            <span className="text-base font-medium text-tp">
-              {updating
-                ? t.settings.updatingSystem
-                : `${t.settings.updateAvailable}${updateInfo?.behindBy > 0 ? ` · ${updateInfo.behindBy} ${t.settings.commitsBehind}` : ''}`}
-            </span>
-            <Btn
-              variant="primary"
-              icon={updating ? <Spinner /> : <RefreshIcon />}
-              onClick={handleInstallUpdate}
-              disabled={updating || checking}
-            >
-              {updating ? t.settings.updatingSystem : t.settings.installUpdate}
-            </Btn>
+          <div className="bg-acc/10 border border-acc/30 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-base font-medium text-tp">
+                {updating
+                  ? t.settings.updatingSystem
+                  : `${t.settings.updateAvailable}${updateInfo?.behindBy > 0 ? ` · ${updateInfo.behindBy} ${t.settings.commitsBehind}` : ''}`}
+              </span>
+              <Btn
+                variant="primary"
+                icon={updating ? <Spinner /> : <RefreshIcon />}
+                onClick={handleInstallUpdate}
+                disabled={updating || checking}
+              >
+                {updating ? t.settings.updatingSystem : t.settings.installUpdate}
+              </Btn>
+            </div>
+            {updating && <UpdateProgress stage={updateStage} />}
           </div>
         )}
 
