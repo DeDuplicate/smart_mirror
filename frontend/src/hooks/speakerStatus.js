@@ -139,3 +139,18 @@ export function classifyKind({ entityId = '', name = '', deviceClass = '', model
 export function prefersAudioStream(kind) {
   return kind !== 'tv';
 }
+
+/**
+ * True for Google Cast receivers (Nest, Chromecast, Google TV).
+ *
+ * Matters for stopping playback: `media_stop` halts the audio but leaves the
+ * Cast receiver app resident, so HA keeps reporting `playing`/`buffering` for
+ * a silent device. `turn_off` quits the app and returns the entity to `off` -
+ * harmless on a Cast device, but it would genuinely power down an ordinary
+ * TV, so the escalation has to be gated on this.
+ */
+export function isCastDevice({ manufacturer = '', model = '' } = {}) {
+  const blob = `${manufacturer} ${model}`.toLowerCase();
+  if (/google|nest|chromecast/.test(blob)) return true;
+  return false;
+}
