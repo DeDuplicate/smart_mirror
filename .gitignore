@@ -19,3 +19,6 @@ image/pi-gen/
 *.png
 !docs/screenshots/*.png
 smart-mirror-*.png
+
+# build.sh creds-free Docker config (Docker Desktop on WSL2 workaround)
+image/.docker-nocreds/
