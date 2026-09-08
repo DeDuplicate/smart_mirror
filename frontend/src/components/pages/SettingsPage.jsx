@@ -3,6 +3,13 @@ import { io } from 'socket.io-client';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import useSettings from '../../hooks/useSettings.js';
+import { DEFAULT_LEAD_MIN } from '../../hooks/reminderSchedule.js';
+import {
+  playReminderTone,
+  stopReminderTone,
+  normalizeTone,
+  DEFAULT_TONE,
+} from '../../hooks/reminderTones.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import WifiPopup from '../WifiPopup.jsx';
 
@@ -520,6 +527,22 @@ function LocationSection() {
 
 // ─── Section: ICS Calendar URLs ─────────────────────────────────────────────
 
+const REMINDER_TONE_OPTIONS = [
+  { value: 'beep',  labelKey: 'toneBeep' },
+  { value: 'alarm', labelKey: 'toneAlarm' },
+  { value: 'chime', labelKey: 'toneChime' },
+  { value: 'bell',  labelKey: 'toneBell' },
+];
+
+const REMINDER_LEAD_OPTIONS = [
+  { value: '2',  label: '2 דקות' },
+  { value: '5',  label: '5 דקות' },
+  { value: '10', label: '10 דקות' },
+  { value: '15', label: '15 דקות' },
+  { value: '30', label: '30 דקות' },
+  { value: '60', label: 'שעה' },
+];
+
 const ICS_COLOR_OPTIONS = [
   { value: 'mint',  label: t.calendarColors.mint,     hex: '#2a9d7f' },
   { value: 'lav',   label: t.calendarColors.lavender,  hex: '#5b52cc' },
@@ -535,8 +558,46 @@ function IcsCalendarSection() {
   const [newUrl, setNewUrl] = useState('');
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('mint');
+  // Ringtone files the user dropped into backend/data/sounds/reminders/
+  const [fileTones, setFileTones] = useState([]);
+  const [previewing, setPreviewing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+
+  // Never leave a preview ringing after leaving Settings.
+  useEffect(() => () => stopReminderTone(), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchApi('/api/settings/reminder-tones')
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.tones)) setFileTones(d.tones);
+      })
+      .catch(() => {}); // built-in tones are enough if this fails
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const icsUrls = Array.isArray(settings.calendarIcsUrls) ? settings.calendarIcsUrls : [];
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const data = await fetchApi('/api/calendar/ics/refresh', { method: 'POST' });
+      setLastRefresh(new Date());
+      addToast(
+        'success',
+        t.settings.calendarRefreshed
+          .replace('{events}', String(data?.events ?? 0))
+          .replace('{cals}', String(data?.calendars ?? 0))
+      );
+    } catch (err) {
+      addToast('error', err?.message || t.settings.calendarRefreshFailed);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [addToast]);
 
   const handleAdd = useCallback(() => {
     if (!newUrl.trim()) {
@@ -647,6 +708,90 @@ function IcsCalendarSection() {
             })}
           </ul>
         )}
+
+        {/* Manual pull. Automatic polling already happens every 5 minutes;
+            this is for "I just added an event and want it now". */}
+        <div className="flex flex-col gap-1.5 border-t border-bd pt-3">
+          <Btn onClick={handleRefresh} disabled={refreshing}>
+            <RefreshIcon className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? t.settings.calendarRefreshing : t.settings.calendarRefresh}
+          </Btn>
+          <p className="text-sm text-tm">
+            {t.settings.calendarAutoRefreshHint}
+            {lastRefresh
+              ? ` · ${t.settings.calendarLastRefresh} ${lastRefresh.toLocaleTimeString('he-IL', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}`
+              : ''}
+          </p>
+        </div>
+
+        {/* Audible reminder before a timed event starts */}
+        <div className="flex flex-col border-t border-bd pt-1">
+          <ToggleRow
+            label={t.settings.eventReminders}
+            checked={settings.eventRemindersEnabled !== false}
+            onChange={(val) => {
+              setSettings({ eventRemindersEnabled: val });
+              updateSettings({ eventRemindersEnabled: val });
+            }}
+          />
+          <p className="text-sm text-ts -mt-1 mb-2">{t.settings.eventRemindersHint}</p>
+          <p className="text-sm text-tm mb-2">{t.settings.reminderToneCustomHint}</p>
+          {settings.eventRemindersEnabled !== false && (
+            <div className="flex flex-col gap-3">
+              <SelectRow
+                label={t.settings.eventReminderLead}
+                value={String(settings.eventReminderLeadMin ?? DEFAULT_LEAD_MIN)}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setSettings({ eventReminderLeadMin: val });
+                  updateSettings({ eventReminderLeadMin: val });
+                }}
+                options={REMINDER_LEAD_OPTIONS}
+              />
+              <SelectRow
+                label={t.settings.reminderTone}
+                value={normalizeTone(settings.reminderTone)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSettings({ reminderTone: val });
+                  updateSettings({ reminderTone: val });
+                  // Preview the choice immediately (this also cuts off any
+                  // tone still playing from the previous selection).
+                  setPreviewing(true);
+                  playReminderTone(val, 0.5, () => setPreviewing(false));
+                }}
+                options={[
+                  ...REMINDER_TONE_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: t.settings[o.labelKey],
+                  })),
+                  ...fileTones.map((f) => ({ value: f.id, label: f.label })),
+                ]}
+              />
+              <Btn
+                variant={previewing ? 'danger' : 'default'}
+                onClick={() => {
+                  if (previewing) {
+                    stopReminderTone();
+                    setPreviewing(false);
+                    return;
+                  }
+                  const tone = normalizeTone(settings.reminderTone || DEFAULT_TONE);
+                  setPreviewing(true);
+                  if (!playReminderTone(tone, 0.5, () => setPreviewing(false))) {
+                    setPreviewing(false);
+                    addToast('warning', t.settings.eventReminderNoAudio);
+                  }
+                }}
+              >
+                {previewing ? t.settings.eventReminderStop : t.settings.eventReminderTest}
+              </Btn>
+            </div>
+          )}
+        </div>
       </div>
     </Section>
   );
@@ -1025,6 +1170,18 @@ function DisplaySection() {
             { value: 'slideshow', label: t.settings.screensaverSlideshow },
           ]}
         />
+
+        <div className="flex flex-col">
+          <ToggleRow
+            label={t.settings.screensaverShowNews}
+            checked={settings.screensaverShowNews !== false}
+            onChange={(val) => {
+              setSettings({ screensaverShowNews: val });
+              updateSettings({ screensaverShowNews: val });
+            }}
+          />
+          <p className="text-sm text-tm -mt-1">{t.settings.screensaverShowNewsHint}</p>
+        </div>
 
         <SelectRow
           label={t.settings.phraseInterval}

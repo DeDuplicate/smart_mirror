@@ -27,6 +27,25 @@ const tabSlice = (set) => ({
     })),
 });
 
+// ─── Reminder Slice ───────────────────────────────────────────
+//
+// Event reminders are a QUEUE, not a toast: an alarm rings until it is
+// acknowledged, so it must not auto-dismiss, and a second event firing while
+// the first is still on screen must not be lost.
+const reminderSlice = (set, get) => ({
+  reminders: [],
+  pushReminder: (reminder) =>
+    set((state) =>
+      // The same event re-firing (interval re-check, remount) must not stack.
+      state.reminders.some((r) => r.id === reminder.id)
+        ? state
+        : { reminders: [...state.reminders, reminder] }
+    ),
+  dismissReminder: (id) =>
+    set((state) => ({ reminders: state.reminders.filter((r) => r.id !== id) })),
+  dismissAllReminders: () => set({ reminders: [] }),
+});
+
 // ─── Toast Slice ─────────────────────────────────────────────────────────────
 
 let toastId = 0;
@@ -106,8 +125,12 @@ const settingsSlice = (set, get) => ({
     location: '',
     temperatureUnit: 'celsius',
     showWeekend: true,
+    eventRemindersEnabled: true,
+    eventReminderLeadMin: 10,
+    reminderTone: 'beep',
     idleTimeout: 5,
     screensaverStyle: 'clock',
+    screensaverShowNews: true,
     phraseIntervalMin: 10,
     weatherSource: 'openmeteo',
     displaySchedule: { wake: '06:00', sleep: '23:00' },
@@ -241,6 +264,7 @@ const connectionSlice = (set) => ({
 const useStore = create((...args) => ({
   ...tabSlice(...args),
   ...toastSlice(...args),
+  ...reminderSlice(...args),
   ...confirmSlice(...args),
   ...settingsSlice(...args),
   ...weatherSlice(...args),

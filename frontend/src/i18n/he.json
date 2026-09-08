@@ -61,7 +61,8 @@
     "yes": "כן",
     "no": "לא",
     "close": "סגור",
-    "add": "הוסף"
+    "add": "הוסף",
+    "ok": "אישור"
   },
   "toast": {
     "success": "הצלחה",
@@ -175,7 +176,13 @@
     "eventSaveFailed": "שמירת האירוע נכשלה",
     "eventDeleteFailed": "מחיקת האירוע נכשלה",
     "hour": "שעה",
-    "minute": "דקה"
+    "minute": "דקה",
+    "reminderToast": "בעוד {min} דקות:",
+    "reminderTitle": "תזכורת לאירוע",
+    "reminderRingCount": "צלצול {n} מתוך {max}",
+    "reminderStopped": "הצלצול הופסק",
+    "reminderApprove": "אישור",
+    "reminderSnooze": "נודניק {min} דק׳"
   },
   "tasks": {
     "todo": "לביצוע",
@@ -553,11 +560,32 @@
     "calendarName": "שם היומן",
     "calendarNamePlaceholder": "למשל: עבודה, אישי",
     "calendarColor": "צבע",
-    "calendarIcsInstructions": "עבור להגדרות של Google Calendar \u2190 בחר יומן \u2190 כתובת סודית בפורמט iCal \u2190 הדבק כאן",
+    "calendarIcsInstructions": "עבור להגדרות של Google Calendar ← בחר יומן ← כתובת סודית בפורמט iCal ← הדבק כאן",
     "calendarAdded": "היומן נוסף בהצלחה",
     "calendarRemoved": "היומן הוסר",
     "calendarUrlRequired": "יש להזין כתובת URL",
-    "noCalendarsConfigured": "לא הוגדרו יומנים"
+    "noCalendarsConfigured": "לא הוגדרו יומנים",
+    "eventReminders": "תזכורת קולית לאירועים",
+    "eventRemindersHint": "צפצוף לפני אירוע שמתחיל",
+    "eventReminderLead": "זמן התזכורת",
+    "eventReminderTest": "נגן צפצוף",
+    "eventReminderLeadMin": "דקות לפני",
+    "eventReminderNoAudio": "אין תמיכה בשמע בדפדפן הזה",
+    "reminderTone": "צליל התזכורת",
+    "toneBeep": "צפצוף",
+    "toneAlarm": "אזעקה",
+    "toneChime": "פעמונים",
+    "toneBell": "גונג",
+    "reminderToneCustomHint": "להוספת צלילים משלכם: backend/data/sounds/reminders/",
+    "eventReminderStop": "עצור",
+    "calendarRefresh": "רענן יומנים עכשיו",
+    "calendarRefreshing": "מרענן…",
+    "calendarRefreshed": "רועננו {events} אירועים מ-{cals} יומנים",
+    "calendarRefreshFailed": "רענון היומנים נכשל",
+    "calendarAutoRefreshHint": "היומנים מתעדכנים אוטומטית כל 5 דקות",
+    "calendarLastRefresh": "עודכן לאחרונה",
+    "screensaverShowNews": "חדשות בתחתית שומר המסך",
+    "screensaverShowNewsHint": "כשמכובה מבזקי החדשות לא יוצגו ולא ייטענו כלל"
   },
   "setup": {
     "welcome": "ברוך הבא",

@@ -838,7 +838,20 @@ function relativeTimeHe(iso, now) {
   return days === 1 ? t.screensaver.dayAgo : t.screensaver.daysAgo.replace('{n}', String(days));
 }
 
+/**
+ * Gate for the bottom news ticker.
+ *
+ * Split from the ticker itself so that when it is switched off `useNews()`
+ * is never called - no RSS fetching at all, rather than fetching headlines
+ * and hiding them. Hooks cannot be called conditionally, hence the wrapper.
+ */
 function ScreensaverNews({ now, compact = false }) {
+  const showNews = useStore((st) => st.settings.screensaverShowNews) !== false;
+  if (!showNews) return null;
+  return <ScreensaverNewsTicker now={now} compact={compact} />;
+}
+
+function ScreensaverNewsTicker({ now, compact = false }) {
   const { articles } = useNews();
   const [index, setIndex] = useState(0);
   const [shown, setShown] = useState(true);

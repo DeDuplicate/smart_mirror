@@ -179,6 +179,18 @@ app.use('/api/ha', homeAssistantRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api/news', require('./routes/news'));
 app.use('/api/wifi', require('./routes/wifi'));
+// User-supplied reminder ringtones. Served from the backend (not
+// frontend/public) so sounds can be dropped onto a running Pi without
+// rebuilding the frontend bundle. Licensed audio stays out of git - see
+// backend/data/sounds/reminders/README.md.
+app.use(
+  '/api/sounds/reminders',
+  express.static(path.join(__dirname, 'data', 'sounds', 'reminders'), {
+    fallthrough: false,
+    maxAge: '1h',
+  })
+);
+
 app.use('/api/settings', require('./routes/settings'));
 const systemRoutes = require('./routes/system');
 app.use('/api/system', systemRoutes);

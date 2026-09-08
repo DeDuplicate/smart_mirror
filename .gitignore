@@ -22,3 +22,14 @@ smart-mirror-*.png
 
 # build.sh creds-free Docker config (Docker Desktop on WSL2 workaround)
 image/.docker-nocreds/
+
+# Reminder ringtones. User-supplied audio is often licensed (Epidemic Sound,
+# Artlist, ...) and must stay on the device, out of git - so ignore the folder
+# by default and un-ignore only the CC0 tones we ship. See CREDITS.md there.
+backend/data/sounds/reminders/*
+!backend/data/sounds/reminders/README.md
+!backend/data/sounds/reminders/CREDITS.md
+!backend/data/sounds/reminders/Alarm Clock.mp3
+!backend/data/sounds/reminders/Buzzer.mp3
+!backend/data/sounds/reminders/Chime.mp3
+!backend/data/sounds/reminders/Pager.mp3

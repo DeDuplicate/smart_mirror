@@ -40,6 +40,7 @@ while true; do
   echo "[kiosk] Launching Chromium..."
   chromium-browser \
     --kiosk \
+    --autoplay-policy=no-user-gesture-required \
     --noerrdialogs \
     --disable-infobars \
     --no-first-run \

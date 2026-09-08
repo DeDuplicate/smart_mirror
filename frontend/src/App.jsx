@@ -16,6 +16,8 @@ import useDisplaySchedule from './hooks/useDisplaySchedule.js';
 import useRippleEffect from './hooks/useRippleEffect.js';
 import useAutoTheme from './hooks/useAutoTheme.js';
 import useWeather from './hooks/useWeather.js';
+import useEventReminders from './hooks/useEventReminders.js';
+import ReminderOverlay from './components/ReminderOverlay.jsx';
 import Screensaver from './components/Screensaver.jsx';
 import { applyTheme, normalizeThemeMode, resolveIsDark } from './theme.js';
 
@@ -540,6 +542,7 @@ export default function App() {
   useRippleEffect();
   useAutoTheme();
   useWeather();
+  useEventReminders();
 
   // ── Offline / online detection ──
   useEffect(() => {
@@ -802,6 +805,10 @@ export default function App() {
             onDismiss={handleScreensaverDismiss}
           />
         )}
+
+        {/* Event alarm — after <Screensaver /> so it paints above it,
+            inside MusicProvider so it can duck the player. */}
+        <ReminderOverlay />
       </MusicProvider>
 
       {/* Overlays */}
