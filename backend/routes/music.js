@@ -23,24 +23,52 @@ const CACHE_MAX_FILES = 40;
 const MIN_CACHED_BYTES = 16 * 1024;
 const warmJobs = new Map(); // videoId -> Promise (in-flight conversions)
 
-function cachePath(id) { return path.join(CACHE_DIR, `${id}.mp3`); }
-function partPath(id) { return path.join(CACHE_DIR, `${id}.mp3.part`); }
+// MP3 only, deliberately.
+//
+// A stream copy of YouTube's own m4a/AAC into ADTS is ~3.6x faster to produce
+// (27s vs 97s for a 3:04 track on a Pi 2), but it was tested against a real
+// Nest Mini and the device REFUSES it: play_media lands, the receiver loads,
+// then drops straight to `idle` with position 0 and no duration. Google Cast
+// does not accept bare ADTS. MP3 is verified working on the same speaker.
+//
+// So the encode stays, and the cost is hidden by the on-disk cache instead:
+// a fully converted file is served by res.sendFile with Content-Length and
+// Range support, which starts instantly. See the prewarm route.
+//
+// Encoder settings are tuned for a 900MHz ARMv7: 160k with LAME quality 7
+// (faster, still fine for a kitchen speaker) rather than 192k at the default
+// quality. The ext-aware plumbing is kept so a second container can be added
+// later without touching the cache, stream route and auth bypass again.
+const CACHE_FORMATS = [
+  { ext: 'mp3', mime: 'audio/mpeg' },
+];
+const CACHE_EXT_RE = /\.(aac|mp3)$/i;
+
+function cachePath(id, ext = 'mp3') { return path.join(CACHE_DIR, `${id}.${ext}`); }
+function partPath(id, ext = 'mp3') { return path.join(CACHE_DIR, `${id}.${ext}.part`); }
 
 function ensureCacheDir() {
   try { fs.mkdirSync(CACHE_DIR, { recursive: true }); } catch { /* ignore */ }
 }
 
-function isCached(id) {
-  try {
-    const st = fs.statSync(cachePath(id));
-    return st.isFile() && st.size >= MIN_CACHED_BYTES;
-  } catch { return false; }
+/** The cached file for `id` in the most preferred available format, or null. */
+function cachedFile(id) {
+  for (const { ext, mime } of CACHE_FORMATS) {
+    try {
+      const p = cachePath(id, ext);
+      const st = fs.statSync(p);
+      if (st.isFile() && st.size >= MIN_CACHED_BYTES) return { path: p, ext, mime };
+    } catch { /* try the next format */ }
+  }
+  return null;
 }
+
+function isCached(id) { return cachedFile(id) !== null; }
 
 // Keep the newest CACHE_MAX_FILES tracks; delete the rest (simple disk LRU).
 function pruneCache() {
   try {
-    const files = fs.readdirSync(CACHE_DIR).filter((f) => f.endsWith('.mp3'));
+    const files = fs.readdirSync(CACHE_DIR).filter((f) => CACHE_EXT_RE.test(f));
     if (files.length <= CACHE_MAX_FILES) return;
     const stats = files
       .map((f) => ({ f, t: fs.statSync(path.join(CACHE_DIR, f)).mtimeMs }))
@@ -54,25 +82,27 @@ function pruneCache() {
 // Fully download + transcode a track to the on-disk cache. De-duplicates
 // concurrent requests for the same id via warmJobs. Resolves with the cached
 // file path.
-function transcodeToFile(id, logger) {
-  if (isCached(id)) return Promise.resolve(cachePath(id));
-  if (warmJobs.has(id)) return warmJobs.get(id);
+// yt-dlp source selection + ffmpeg args per container.
+function conversionArgs(format, src, out) {
+  return {
+    ytdlp: ['-q', '--no-warnings', '--no-playlist', '-f', 'bestaudio/best', '-o', '-', src],
+    // -compression_level 7 is LAME quality 7: markedly faster than the default
+    // on an ARMv7 core and inaudible on a smart speaker. 160k over 192k for
+    // the same reason.
+    ffmpeg: ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn',
+             '-acodec', 'libmp3lame', '-b:a', '160k', '-compression_level', '7',
+             '-f', 'mp3', '-y', out],
+  };
+}
 
-  ensureCacheDir();
+function convertOnce(id, format, logger) {
   const src = `https://www.youtube.com/watch?v=${id}`;
-  const out = partPath(id);
+  const out = partPath(id, format.ext);
+  const args = conversionArgs(format, src, out);
 
-  const job = new Promise((resolve, reject) => {
-    const ytdlp = spawn(
-      YTDLP_BIN,
-      ['-q', '--no-warnings', '--no-playlist', '-f', 'bestaudio/best', '-o', '-', src],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-    const ffmpeg = spawn(
-      FFMPEG_BIN,
-      ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-acodec', 'libmp3lame', '-b:a', '192k', '-f', 'mp3', '-y', out],
-      { stdio: ['pipe', 'pipe', 'ignore'] }
-    );
+  return new Promise((resolve, reject) => {
+    const ytdlp = spawn(YTDLP_BIN, args.ytdlp, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const ffmpeg = spawn(FFMPEG_BIN, args.ffmpeg, { stdio: ['pipe', 'pipe', 'ignore'] });
     let errMsg = '';
     ytdlp.on('error', (e) => { errMsg = e.message; try { ffmpeg.kill('SIGKILL'); } catch { /* */ } });
     ffmpeg.on('error', (e) => { errMsg = e.message; try { ytdlp.kill('SIGKILL'); } catch { /* */ } });
@@ -84,16 +114,41 @@ function transcodeToFile(id, logger) {
       try { ok = ok && fs.statSync(out).size >= MIN_CACHED_BYTES; } catch { ok = false; }
       if (ok) {
         try {
-          fs.renameSync(out, cachePath(id));
+          fs.renameSync(out, cachePath(id, format.ext));
           pruneCache();
-          resolve(cachePath(id));
+          resolve(cachePath(id, format.ext));
           return;
         } catch (e) { reject(e); return; }
       }
       try { fs.unlinkSync(out); } catch { /* ignore */ }
       reject(new Error(errMsg || `conversion failed (code ${code})`));
     });
-  }).finally(() => warmJobs.delete(id));
+  });
+}
+
+// Fully download + transcode a track to the on-disk cache. De-duplicates
+// concurrent requests for the same id via warmJobs. Resolves with the cached
+// file path. Walks CACHE_FORMATS in order, so adding a container later needs
+// no change here; today that list is mp3 alone (see the note above it).
+function transcodeToFile(id, logger) {
+  const hit = cachedFile(id);
+  if (hit) return Promise.resolve(hit.path);
+  if (warmJobs.has(id)) return warmJobs.get(id);
+
+  ensureCacheDir();
+
+  const job = (async () => {
+    let lastErr;
+    for (const format of CACHE_FORMATS) {
+      try {
+        return await convertOnce(id, format, logger);
+      } catch (err) {
+        lastErr = err;
+        logger?.warn('[music] %s conversion failed for %s: %s', format.ext, id, err.message);
+      }
+    }
+    throw lastErr || new Error('conversion failed');
+  })().finally(() => warmJobs.delete(id));
 
   warmJobs.set(id, job);
   return job;
@@ -842,6 +897,8 @@ router.get('/cast-url/:id', (req, res) => {
   }
   const port = parseInt(process.env.PORT, 10) || 3001;
   const token = signStreamToken(getApiSecret(req), id);
+  // .mp3 — verified playable on a real Nest Mini. ADTS/AAC was tried and the
+  // device rejects it, so do not "optimise" this back to .aac.
   const url = `http://${host}:${port}/api/music/stream/${id}.mp3?token=${token}`;
   res.json({ url });
 });
@@ -864,13 +921,14 @@ router.post('/prewarm/:id', (req, res) => {
   res.json({ status: 'warming' });
 });
 
-// GET /api/music/stream/:file — public (signed) MP3 stream fetched by the cast
-// device. :file is "<videoId>.mp3". If the track is already in the on-disk
-// cache it's served as a static (seekable, Range-capable) file for instant
-// start; otherwise it's transcoded live via yt-dlp | ffmpeg.
+// GET /api/music/stream/:file — public (signed) audio stream fetched by the
+// cast device. :file is "<videoId>.aac" (or ".mp3" for older links). If the
+// track is already in the on-disk cache it's served as a static (seekable,
+// Range-capable) file for instant start; otherwise it's produced live via
+// yt-dlp | ffmpeg.
 router.get('/stream/:file', (req, res) => {
   const file = String(req.params.file || '');
-  const id = file.replace(/\.mp3$/i, '');
+  const id = file.replace(CACHE_EXT_RE, '');
   if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) {
     return res.status(400).end();
   }
@@ -882,14 +940,23 @@ router.get('/stream/:file', (req, res) => {
 
   // Fast path: pre-converted file. res.sendFile handles Content-Type,
   // Content-Length, and HTTP Range (seeking) automatically.
-  if (isCached(id)) {
-    return res.sendFile(cachePath(id), { headers: { 'Cache-Control': 'no-store' } }, (err) => {
+  const hit = cachedFile(id);
+  if (hit) {
+    return res.sendFile(hit.path, { headers: { 'Cache-Control': 'no-store' } }, (err) => {
       if (err && !res.headersSent) res.status(500).end();
     });
   }
 
   const sourceUrl = `https://www.youtube.com/watch?v=${id}`;
 
+  // Live path — a last resort. Encoding MP3 on a Pi 2 only reaches ~1.9x
+  // realtime, and a Cast receiver may abandon the stream waiting for data.
+  // Prewarm the track (POST /api/music/prewarm/:id) so casts are served from
+  // the on-disk cache by res.sendFile above, which starts instantly.
+  //
+  // Do NOT be tempted to stream-copy YouTube's AAC into ADTS here: it is 3.6x
+  // faster to produce, but a real Nest Mini refuses it — play_media lands, the
+  // receiver loads, then drops to `idle` at position 0 with no duration.
   res.setHeader('Content-Type', 'audio/mpeg');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Accept-Ranges', 'none');
@@ -904,7 +971,9 @@ router.get('/stream/:file', (req, res) => {
   // ffmpeg: transcode whatever container yt-dlp produced into a raw MP3 stream.
   const ffmpeg = spawn(
     FFMPEG_BIN,
-    ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-acodec', 'libmp3lame', '-b:a', '192k', '-f', 'mp3', 'pipe:1'],
+    ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn',
+     '-acodec', 'libmp3lame', '-b:a', '160k', '-compression_level', '7',
+     '-f', 'mp3', 'pipe:1'],
     { stdio: ['pipe', 'pipe', 'pipe'] }
   );
 

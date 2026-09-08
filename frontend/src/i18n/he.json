@@ -382,7 +382,8 @@
       "unknown": "מצב לא ידוע"
     },
     "unavailableCount": "לא זמינים ({n})",
-    "unknownDevices": "מכשירים נוספים"
+    "unknownDevices": "מכשירים נוספים",
+    "preparingTrack": "מכין את השיר להשמעה ברמקול…"
   },
   "news": {
     "featured": "כתבה ראשית",
