@@ -180,7 +180,8 @@ app.use('/api/music', musicRoutes);
 app.use('/api/news', require('./routes/news'));
 app.use('/api/wifi', require('./routes/wifi'));
 app.use('/api/settings', require('./routes/settings'));
-app.use('/api/system', require('./routes/system'));
+const systemRoutes = require('./routes/system');
+app.use('/api/system', systemRoutes);
 app.use('/api/quotes', require('./routes/quotes'));
 
 // ---------------------------------------------------------------------------
@@ -202,6 +203,10 @@ app.locals.io = io;
 // HA state_changed events to connected Socket.io clients as 'ha:state_changed'.
 // Uses the same HA_HOST/HA_TOKEN/settings config as the /api/ha routes.
 homeAssistantRoutes.setupHAWebSocketRelay(io, logger, db);
+
+// Nightly update check — the mirror is wall-mounted, so without this nobody
+// would ever discover a new version. Notify-only; installing stays manual.
+systemRoutes.scheduleUpdateChecks(io, logger, require('node-cron'));
 
 io.on('connection', (socket) => {
   logger.info('Socket.io client connected: %s', socket.id);

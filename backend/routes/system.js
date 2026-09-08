@@ -10,6 +10,7 @@ const os = require('os');
 const router = Router();
 
 const IS_LINUX = os.platform() === 'linux';
+const IS_WINDOWS = os.platform() === 'win32';
 const PACKAGE_JSON = path.join(__dirname, '..', 'package.json');
 const LOGS_DIR = path.join(__dirname, '..', 'logs');
 const BACKUP_DIR = path.join(__dirname, '..', 'backups');
@@ -103,12 +104,28 @@ router.get('/health', async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/system/version - current version from package.json
 // ---------------------------------------------------------------------------
+
+// Commit this process booted from, captured once at load. Compared by the
+// client after an update: if it still matches the pre-update commit, the new
+// code is on disk but this process never restarted to load it.
+const BOOT_COMMIT = (() => {
+  try {
+    return require('child_process')
+      .execFileSync('git', ['rev-parse', 'HEAD'], { cwd: PROJECT_ROOT, timeout: 10000 })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+})();
+
 router.get('/version', (req, res) => {
   try {
     const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf-8'));
     res.json({
       version: pkg.version,
       name: pkg.name,
+      commit: BOOT_COMMIT,
       node: process.version,
       platform: os.platform(),
       arch: os.arch(),
@@ -365,15 +382,23 @@ router.post('/log', (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/system/check-update - compare local HEAD with remote
 // ---------------------------------------------------------------------------
-router.get('/check-update', async (req, res) => {
-  const logger = req.app.locals.logger;
+
+// Last check result, so a nightly notification survives having no client
+// connected at the time it fired.
+let lastCheckResult = null;
+
+/**
+ * Compare local HEAD against origin/main. Shared by the route and the nightly
+ * scheduled check so both report identically. Never throws — a mirror with no
+ * network should report "no update", not crash a cron tick.
+ */
+async function checkForUpdate() {
   const gitOpts = { cwd: PROJECT_ROOT };
 
   try {
-    // Fetch latest from origin
     const fetchResult = await run('git', ['fetch', 'origin', 'main'], 15000, gitOpts);
     if (!fetchResult.ok) {
-      return res.json({ updateAvailable: false, error: fetchResult.stderr });
+      return { updateAvailable: false, error: fetchResult.stderr };
     }
 
     const [localResult, remoteResult] = await Promise.all([
@@ -382,50 +407,248 @@ router.get('/check-update', async (req, res) => {
     ]);
 
     if (!localResult.ok || !remoteResult.ok) {
-      return res.json({ updateAvailable: false, error: 'Failed to get commit hashes' });
+      return { updateAvailable: false, error: 'Failed to get commit hashes' };
     }
 
     const currentHash = localResult.stdout.trim();
     const remoteHash = remoteResult.stdout.trim();
 
-    // Count commits behind
     const behindResult = await run('git', ['rev-list', '--count', 'HEAD..origin/main'], 10000, gitOpts);
     const behindBy = behindResult.ok ? parseInt(behindResult.stdout.trim(), 10) || 0 : 0;
 
-    res.json({
+    const result = {
       updateAvailable: currentHash !== remoteHash,
       currentHash,
       remoteHash,
       behindBy,
-    });
+    };
+    lastCheckResult = { ...result, checkedAt: Date.now() };
+    return result;
   } catch (err) {
-    logger.error('Check-update error: %s', err.message);
-    res.json({ updateAvailable: false, error: err.message });
+    return { updateAvailable: false, error: err.message };
   }
+}
+
+/**
+ * Nightly check. The mirror is wall-mounted and nobody opens Settings, so
+ * without this an install would sit un-updated indefinitely. Notify-only by
+ * design: it emits an event for the UI badge and never installs on its own.
+ */
+function scheduleUpdateChecks(io, logger, cron) {
+  cron.schedule('30 4 * * *', async () => {
+    const result = await checkForUpdate();
+    if (result.error) {
+      logger.warn('Scheduled update check failed: %s', result.error);
+      return;
+    }
+    logger.info(
+      'Scheduled update check: %s',
+      result.updateAvailable ? `${result.behindBy} commit(s) behind` : 'up to date'
+    );
+    if (result.updateAvailable && io) {
+      io.emit('system:update-available', result);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/system/update-status - last known result, no git work
+//
+// The nightly check fires whether or not anyone is looking at Settings, and a
+// Socket.io event emitted then is lost forever if no client is listening. The
+// result is therefore cached here so the UI can recover it whenever it mounts.
+// ---------------------------------------------------------------------------
+router.get('/update-status', (_req, res) => {
+  res.json(lastCheckResult || { updateAvailable: false, checkedAt: null });
+});
+
+router.get('/check-update', async (req, res) => {
+  const result = await checkForUpdate();
+  if (result.error) {
+    req.app.locals.logger.error('Check-update error: %s', result.error);
+  }
+  res.json(result);
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/system/update - pull latest and rebuild
+//
+// Runs as discrete stages so progress can be reported over Socket.io and, more
+// importantly, so a failure can be undone: a half-applied update (new source on
+// disk, stale or broken build) leaves the mirror unusable with no on-screen way
+// back. Every stage past the pull is therefore recoverable by resetting to the
+// commit we started from and rebuilding it.
 // ---------------------------------------------------------------------------
-router.post('/update', (req, res) => {
+
+// npm install on a Pi 4 over a slow link is the long pole here.
+const STAGE_TIMEOUT_MS = 300000;
+
+let updateInProgress = false;
+
+function emitUpdateProgress(io, payload) {
+  if (io) io.emit('system:update-progress', payload);
+}
+
+/**
+ * Restore the working tree to `commit` and rebuild it, so a failed update
+ * leaves a *running* mirror rather than a broken one. Best-effort: if the
+ * rollback itself fails there is nothing further we can do from here, so it is
+ * logged loudly for the log viewer.
+ */
+async function rollbackTo(commit, logger, io) {
+  logger.warn('Rolling back to %s', commit);
+  emitUpdateProgress(io, { stage: 'rollback', status: 'running' });
+
+  const reset = await run('git', ['reset', '--hard', commit], 60000, { cwd: PROJECT_ROOT });
+  if (!reset.ok) {
+    logger.error('Rollback git reset failed: %s', reset.stderr);
+    emitUpdateProgress(io, { stage: 'rollback', status: 'failed', error: reset.stderr });
+    return false;
+  }
+
+  // Dependencies and the built bundle must all match the restored source. The
+  // forward run may have already mutated *both* dependency trees, so both are
+  // reinstalled — rebuilding the old commit against new frontend deps was the
+  // failure mode this is guarding against.
+  let depsOk = true;
+  for (const pkgDir of ['backend', 'frontend']) {
+    const deps = await run('npm', ['install'], STAGE_TIMEOUT_MS, {
+      cwd: path.join(PROJECT_ROOT, pkgDir),
+      shell: IS_WINDOWS,
+    });
+    if (!deps.ok) {
+      depsOk = false;
+      logger.error('Rollback %s npm install failed: %s', pkgDir, deps.stderr);
+    }
+  }
+
+  // A rollback that restored the source but not its dependencies is not a
+  // safe state, and must not be reported as one — node_modules may still
+  // match the commit we were trying to escape.
+  if (!depsOk) {
+    emitUpdateProgress(io, { stage: 'rollback', status: 'failed', error: 'dependency restore failed' });
+    return false;
+  }
+
+  const build = await run('npx', ['vite', 'build'], STAGE_TIMEOUT_MS, {
+    cwd: path.join(PROJECT_ROOT, 'frontend'),
+    shell: IS_WINDOWS,
+  });
+  if (!build.ok) {
+    logger.error('Rollback rebuild failed: %s', build.stderr);
+    emitUpdateProgress(io, { stage: 'rollback', status: 'failed', error: build.stderr });
+    return false;
+  }
+
+  logger.warn('Rollback to %s complete', commit);
+  emitUpdateProgress(io, { stage: 'rollback', status: 'done' });
+  return true;
+}
+
+router.post('/update', async (req, res) => {
   const logger = req.app.locals.logger;
-  const { exec } = require('child_process');
+  const io = req.app.locals.io;
 
-  // Hardcoded command string — no user input, safe to use exec for shell chaining.
-  // Backend deps are installed too: a pulled commit may add a backend dependency
-  // (the frontend-only install here previously left those missing).
-  const cmd =
-    'git pull origin main && cd backend && npm install && cd ../frontend && npm install && npx vite build';
+  if (updateInProgress) {
+    return res.status(409).json({ success: false, message: 'An update is already running' });
+  }
 
-  logger.info('Starting update: %s', cmd);
+  // Claim the guard synchronously, before any `await`. Checking it and then
+  // awaiting the preflight probes would let a second request slip through the
+  // check while the first is suspended, and two interleaved updates would
+  // fight over the same working tree.
+  updateInProgress = true;
 
-  exec(cmd, { cwd: PROJECT_ROOT, timeout: 300000 }, (err, stdout) => {
-    if (err) {
-      logger.error('Update failed: %s', err.message);
-      return res.json({ success: false, message: err.message });
+  // Remember where we started so any later failure can be undone.
+  const headResult = await run('git', ['rev-parse', 'HEAD'], 10000, { cwd: PROJECT_ROOT });
+  if (!headResult.ok) {
+    updateInProgress = false;
+    return res.json({ success: false, message: 'Could not determine current commit' });
+  }
+  const previousCommit = headResult.stdout.trim();
+
+  // Refuse to update a dirty tree. `git pull` happily succeeds with unrelated
+  // tracked modifications present, and the rollback path would then discard
+  // them with `git reset --hard`. A mirror should never silently eat local
+  // edits, so this is checked up front rather than assumed.
+  const statusResult = await run('git', ['status', '--porcelain'], 10000, { cwd: PROJECT_ROOT });
+  if (!statusResult.ok) {
+    updateInProgress = false;
+    return res.json({ success: false, message: 'Could not determine working tree state' });
+  }
+  if (statusResult.stdout.trim()) {
+    updateInProgress = false;
+    logger.warn('Update refused — working tree has local changes');
+    return res.json({
+      success: false,
+      dirtyTree: true,
+      message: 'Working tree has local changes; refusing to update',
+    });
+  }
+
+  logger.info('Starting update from %s', previousCommit);
+
+  const stages = [
+    { name: 'pull',          cmd: 'git', args: ['pull', 'origin', 'main'], cwd: PROJECT_ROOT },
+    { name: 'backend-deps',  cmd: 'npm', args: ['install'], cwd: path.join(PROJECT_ROOT, 'backend') },
+    { name: 'frontend-deps', cmd: 'npm', args: ['install'], cwd: path.join(PROJECT_ROOT, 'frontend') },
+    { name: 'build',         cmd: 'npx', args: ['vite', 'build'], cwd: path.join(PROJECT_ROOT, 'frontend') },
+  ];
+
+  try {
+    let output = '';
+
+    for (const stage of stages) {
+      emitUpdateProgress(io, { stage: stage.name, status: 'running' });
+      logger.info('Update stage "%s" starting', stage.name);
+
+      // npm/npx are .cmd shims on Windows and are not directly executable.
+      const result = await run(stage.cmd, stage.args, STAGE_TIMEOUT_MS, {
+        cwd: stage.cwd,
+        shell: IS_WINDOWS,
+      });
+
+      if (!result.ok) {
+        logger.error('Update stage "%s" failed: %s', stage.name, result.stderr);
+        emitUpdateProgress(io, { stage: stage.name, status: 'failed', error: result.stderr });
+
+        // The pull is the only stage that changes nothing on failure.
+        const rolledBack =
+          stage.name === 'pull' ? true : await rollbackTo(previousCommit, logger, io);
+
+        emitUpdateProgress(io, { stage: 'done', status: 'failed', rolledBack });
+        updateInProgress = false;
+        return res.json({
+          success: false,
+          failedStage: stage.name,
+          rolledBack,
+          message: result.stderr.slice(-500),
+        });
+      }
+
+      output = result.stdout;
+      emitUpdateProgress(io, { stage: stage.name, status: 'done' });
     }
 
     logger.info('Update completed successfully — restarting to load the new code');
+    emitUpdateProgress(io, { stage: 'restart', status: 'running' });
+
+    // Only claim a restart will happen if PM2 actually manages this process.
+    // Otherwise the old code keeps serving the newly built frontend and the
+    // update silently appears to have done nothing.
+    const managed = await run('pm2', ['describe', PM2_APP_NAME], 15000, { shell: IS_WINDOWS });
+    if (!managed.ok) {
+      logger.warn('PM2 is not managing "%s" — a manual restart is required', PM2_APP_NAME);
+      emitUpdateProgress(io, { stage: 'done', status: 'done', restarted: false });
+      updateInProgress = false;
+      return res.json({
+        success: true,
+        restarting: false,
+        restartRequired: true,
+        previousCommit,
+        message: output.toString().slice(-500),
+      });
+    }
 
     // Respond BEFORE restarting: the restart kills this very process, so the
     // client has to receive its response first. Without this restart the pulled
@@ -434,17 +657,30 @@ router.post('/update', (req, res) => {
     res.json({
       success: true,
       restarting: true,
-      message: stdout.toString().slice(-500),
+      previousCommit,
+      message: output.toString().slice(-500),
     });
 
+    // Deliberately NOT clearing updateInProgress here: the pending restart is
+    // about to kill this process, and clearing the flag would open a window for
+    // a second update to start and then be killed mid-install. If the restart
+    // somehow fails the flag is released so the mirror isn't wedged.
     setTimeout(() => {
       run('pm2', ['restart', PM2_APP_NAME], 15000).then((result) => {
         if (!result.ok) {
           logger.error('Post-update restart failed: %s', result.stderr);
+          updateInProgress = false;
         }
       });
     }, 500);
-  });
+    return;
+  } catch (err) {
+    logger.error('Update error: %s', err.message);
+    const rolledBack = await rollbackTo(previousCommit, logger, io);
+    emitUpdateProgress(io, { stage: 'done', status: 'failed', rolledBack });
+    updateInProgress = false;
+    res.json({ success: false, rolledBack, message: err.message });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -680,3 +916,4 @@ router.post('/restore', express.raw({ type: '*/*', limit: '64mb' }), async (req,
 });
 
 module.exports = router;
+module.exports.scheduleUpdateChecks = scheduleUpdateChecks;
