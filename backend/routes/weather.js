@@ -4,7 +4,41 @@ const { Router } = require('express');
 const router = Router();
 
 const OPEN_METEO_API = 'https://api.open-meteo.com/v1/forecast';
+const IMS_BASE = 'https://ims.gov.il/he';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const IMS_LOCATIONS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+let imsLocationsCache = { fetchedAt: 0, locations: [] };
+
+function getConfigValue(db, key) {
+  try {
+    const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
+    if (!row || row.value == null) return '';
+    try {
+      const parsed = JSON.parse(row.value);
+      return typeof parsed === 'string' ? parsed : String(row.value);
+    } catch {
+      return String(row.value);
+    }
+  } catch {
+    return '';
+  }
+}
+
+function parseCoord(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function convertTemp(value, fromUnit, toUnit) {
+  if (value == null) return null;
+  const temp = Number(value);
+  if (!Number.isFinite(temp)) return null;
+  if (fromUnit === toUnit) return temp;
+  return toUnit === 'fahrenheit'
+    ? (temp * 9 / 5) + 32
+    : (temp - 32) * 5 / 9;
+}
 
 // ---------------------------------------------------------------------------
 // WMO Weather Code → description + icon
@@ -44,6 +78,29 @@ const WMO_CODES = {
 // IMS condition → WMO code mapping
 // ---------------------------------------------------------------------------
 const IMS_TO_WMO = {
+  1010: 3,   // sandstorms
+  1020: 95,  // thunderstorms
+  1060: 73,  // snow
+  1070: 71,  // light snow
+  1080: 67,  // sleet
+  1140: 61,  // rainy
+  1160: 45,  // fog
+  1220: 2,   // partly cloudy
+  1230: 3,   // cloudy
+  1250: 0,   // clear
+  1260: 1,   // windy
+  1270: 2,   // muggy
+  1300: 45,  // frost
+  1310: 0,   // hot
+  1320: 1,   // cold
+  1510: 65,  // stormy
+  1520: 75,  // heavy snow
+  1530: 51,  // partly cloudy, possible rain
+  1540: 51,  // cloudy, possible rain
+  1560: 51,  // cloudy, light rain
+  1570: 3,   // dust
+  1580: 0,   // extremely hot
+  1590: 1,   // extremely cold
   'clear-night':    0,
   'sunny':          0,
   'clear':          0,
@@ -66,7 +123,9 @@ const IMS_TO_WMO = {
 
 function imsConditionToWmo(condition) {
   if (!condition) return null;
-  return IMS_TO_WMO[condition.toLowerCase()] ?? 2;
+  const numeric = Number(condition);
+  if (Number.isFinite(numeric)) return IMS_TO_WMO[numeric] ?? 2;
+  return IMS_TO_WMO[String(condition).toLowerCase()] ?? 2;
 }
 
 function wmoDescription(code) {
@@ -75,6 +134,14 @@ function wmoDescription(code) {
 
 function wmoIcon(code) {
   return WMO_CODES[code]?.icon ?? '🌤️';
+}
+
+function hebrewDayName(date) {
+  if (!date) return '';
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString('he-IL', {
+    weekday: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +170,107 @@ function setCache(db, key, data) {
   ).run(key, JSON.stringify(data), Date.now());
 }
 
+async function fetchJson(url) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`${url} ${response.status}: ${text || response.statusText}`);
+  }
+  return response.json();
+}
+
+function num(value) {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getImsLocations() {
+  if (
+    imsLocationsCache.locations.length > 0
+    && Date.now() - imsLocationsCache.fetchedAt < IMS_LOCATIONS_CACHE_TTL_MS
+  ) {
+    return imsLocationsCache.locations;
+  }
+
+  const data = await fetchJson(`${IMS_BASE}/locations_info`);
+  const locations = Object.values(data?.data || {})
+    .map((location) => ({
+      id: String(location.lid),
+      name: location.name,
+      lat: num(location.lat),
+      lon: num(location.lon),
+    }))
+    .filter((location) => location.id && Number.isFinite(location.lat) && Number.isFinite(location.lon));
+
+  imsLocationsCache = { fetchedAt: Date.now(), locations };
+  return locations;
+}
+
+async function nearestImsLocation(lat, lon) {
+  const locations = await getImsLocations();
+  if (locations.length === 0) throw new Error('IMS locations list is empty');
+
+  let best = locations[0];
+  let bestDistance = Infinity;
+  for (const location of locations) {
+    const dLat = location.lat - lat;
+    const dLon = location.lon - lon;
+    const distance = dLat * dLat + dLon * dLon;
+    if (distance < bestDistance) {
+      best = location;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function shapeImsCurrent(current, location, units) {
+  const code = imsConditionToWmo(current.weather_code);
+  const celsius = 'celsius';
+  const temp = convertTemp(current.precise_temperature ?? current.temperature, celsius, units);
+  const feelsLike = convertTemp(current.feels_like ?? current.wind_chill ?? current.temperature, celsius, units);
+  const hour = Number(current.forecast_hour ?? String(current.forecast_time || '').slice(11, 13));
+
+  return {
+    temp,
+    feelsLike,
+    humidity: num(current.relative_humidity),
+    wind: num(current.wind_speed),
+    code,
+    description: wmoDescription(code),
+    icon: wmoIcon(code),
+    windDirection: null,
+    pressure: null,
+    cloudCover: null,
+    isDay: Number.isFinite(hour) ? hour >= 6 && hour < 19 : null,
+    updatedAt: current.modified || current.forecast_time || null,
+    locationName: location.name,
+  };
+}
+
+function shapeImsForecast(forecastData, units) {
+  return Object.entries(forecastData || {}).slice(0, 5).map(([date, day]) => {
+    const daily = day?.daily || {};
+    const code = imsConditionToWmo(daily.weather_code);
+    const hours = Object.values(day?.hourly || {});
+
+    return {
+      date,
+      dayName: hebrewDayName(date),
+      code,
+      high: convertTemp(daily.maximum_temperature, 'celsius', units),
+      low: convertTemp(daily.minimum_temperature, 'celsius', units),
+      description: wmoDescription(code),
+      icon: wmoIcon(code),
+      precipitation: hours.reduce((sum, hour) => sum + (num(hour.rain) || 0), 0),
+      precipitationProbability: Math.max(...hours.map((hour) => num(hour.rain_chance) || 0), 0),
+      windSpeedMax: Math.max(...hours.map((hour) => num(hour.wind_speed) || 0), 0),
+      uviMax: num(daily.maximum_uvi),
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Shape raw Open-Meteo response into the canonical response object
 // ---------------------------------------------------------------------------
@@ -126,17 +294,13 @@ function shapeResponse(raw, lat, lon, units) {
       windDirection: cur.wind_direction_10m ?? null,
       pressure:      cur.pressure_msl       ?? null,
       cloudCover:    cur.cloud_cover        ?? null,
-      isDay:         cur.is_day === 1,
+      isDay:         typeof cur.is_day === 'number' ? cur.is_day === 1 : null,
     },
     daily: (daily.time ?? []).map((date, i) => {
       const code = daily.weather_code?.[i] ?? null;
-      // Day-of-week name (short English) derived from the date string
-      const dayName = date
-        ? new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
-        : '';
       return {
         date,
-        dayName,
+        dayName: hebrewDayName(date),
         // Names aligned with WeatherPopup expectations (day.code, day.high, day.low)
         code,
         high:        daily.temperature_2m_max?.[i] ?? null,
@@ -245,11 +409,11 @@ router.get('/', async (req, res) => {
   const logger = req.app.locals.logger;
 
   // Defaults: Netanya, Israel
-  const lat   = parseFloat(req.query.lat) || 32.33;
-  const lon   = parseFloat(req.query.lon) || 34.86;
+  const lat   = parseCoord(req.query.lat, 32.33);
+  const lon   = parseCoord(req.query.lon, 34.86);
   const units = (req.query.units || 'C').toUpperCase() === 'F' ? 'fahrenheit' : 'celsius';
 
-  const cacheKey = `weather:${lat}:${lon}:${units}`;
+  const cacheKey = `weather:v2:${lat}:${lon}:${units}`;
 
   // Build the Open-Meteo query params (reused for background refresh too)
   const params = new URLSearchParams({
@@ -338,17 +502,25 @@ router.get('/', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/weather/ims — fetch weather from HA IMS entity
+// GET /api/weather/ims?lat=&lon=&units=C|F — direct IMS public forecast API
 // ---------------------------------------------------------------------------
 router.get('/ims', async (req, res) => {
   const db     = req.app.locals.db;
   const logger = req.app.locals.logger;
 
   const units = (req.query.units || 'C').toUpperCase() === 'F' ? 'fahrenheit' : 'celsius';
-  const cacheKey = `weather:ims:${units}`;
+  const lat = parseCoord(req.query.lat, parseCoord(getConfigValue(db, 'latitude'), 32.33));
+  const lon = parseCoord(req.query.lon, parseCoord(getConfigValue(db, 'longitude'), 34.86));
 
-  // Check cache — see the note in GET / above: a throw here would reject out
-  // of this async handler and take down the process.
+  let imsLocation;
+  try {
+    imsLocation = await nearestImsLocation(lat, lon);
+  } catch (err) {
+    logger.error('IMS location lookup error: %s', err.message);
+    return res.status(502).json({ error: 'Failed to resolve IMS location' });
+  }
+
+  const cacheKey = `weather:ims:v2:${imsLocation.id}:${units}`;
   let cached = null;
   let isStale = false;
   try {
@@ -362,120 +534,31 @@ router.get('/ims', async (req, res) => {
   }
 
   try {
-    // Fetch from HA entity weather.ims_weather
-    const haHost = process.env.HA_HOST || 'http://homeassistant.local:8123';
-    const haToken = process.env.HA_TOKEN;
+    const [currentRaw, forecastRaw] = await Promise.all([
+      fetchJson(`${IMS_BASE}/now_analysis/${imsLocation.id}`),
+      fetchJson(`${IMS_BASE}/full_forecast_data/${imsLocation.id}`),
+    ]);
 
-    if (!haToken) {
-      throw new Error('HA_TOKEN not configured');
-    }
-
-    const entityId = 'weather.ims_weather';
-    const response = await fetch(
-      `${haHost.replace(/\/+$/, '')}/api/states/${entityId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${haToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HA API ${response.status}`);
-    }
-
-    const state = await response.json();
-    const attrs = state.attributes || {};
-    const condition = state.state; // e.g. "sunny", "partlycloudy", "rainy"
-    const wmoCode = imsConditionToWmo(condition);
-
-    let temp = attrs.temperature ?? null;
-    let feelsLike = attrs.apparent_temperature ?? attrs.temperature ?? null;
-
-    // Convert C → F if needed
-    if (units === 'fahrenheit' && temp != null) {
-      temp = Math.round(temp * 9 / 5 + 32);
-      if (feelsLike != null) feelsLike = Math.round(feelsLike * 9 / 5 + 32);
-    }
-
-    // Modern HA (2024.6+) no longer exposes a `forecast` attribute on the
-    // weather entity's state — it must be fetched via the weather.get_forecasts
-    // service call (with return_response). Fetch it separately; if it fails,
-    // fall back to an empty forecast rather than failing the whole request,
-    // since current conditions are still valid and useful on their own.
-    let rawForecast = [];
-    try {
-      const forecastResponse = await fetch(
-        `${haHost.replace(/\/+$/, '')}/api/services/weather/get_forecasts?return_response`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${haToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ entity_id: entityId, type: 'daily' }),
-        }
-      );
-      if (forecastResponse.ok) {
-        const forecastData = await forecastResponse.json();
-        rawForecast = forecastData?.service_response?.[entityId]?.forecast || [];
-      } else {
-        logger.warn('IMS forecast service call failed: HA API %s', forecastResponse.status);
-      }
-    } catch (forecastErr) {
-      logger.warn('IMS forecast service call error: %s', forecastErr.message);
-    }
-
-    // Build forecast from the weather.get_forecasts service response
-    const forecast = rawForecast.slice(0, 7).map((day, i) => {
-      const dayCode = imsConditionToWmo(day.condition);
-      let high = day.temperature ?? null;
-      let low = day.templow ?? null;
-      if (units === 'fahrenheit') {
-        if (high != null) high = Math.round(high * 9 / 5 + 32);
-        if (low != null) low = Math.round(low * 9 / 5 + 32);
-      }
-      const dateStr = day.datetime ? day.datetime.split('T')[0] : '';
-      const dayName = dateStr
-        ? new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })
-        : '';
-      return {
-        date: dateStr,
-        dayName,
-        code: dayCode,
-        high,
-        low,
-        description: wmoDescription(dayCode),
-        icon: wmoIcon(dayCode),
-        precipitation: day.precipitation ?? null,
-        precipitationProbability: day.precipitation_probability ?? null,
-        windSpeedMax: day.wind_speed ?? null,
-      };
-    });
+    const current = currentRaw?.data?.[imsLocation.id];
+    if (!current) throw new Error(`IMS current data missing for location ${imsLocation.id}`);
 
     const shaped = {
-      location: { lat: attrs.latitude ?? null, lon: attrs.longitude ?? null, timezone: 'Asia/Jerusalem' },
-      units: units === 'fahrenheit' ? 'F' : 'C',
-      current: {
-        temp,
-        feelsLike,
-        humidity: attrs.humidity ?? null,
-        wind: attrs.wind_speed ?? null,
-        code: wmoCode,
-        description: wmoDescription(wmoCode),
-        icon: wmoIcon(wmoCode),
-        windDirection: attrs.wind_bearing ?? null,
-        pressure: attrs.pressure ?? null,
-        cloudCover: null,
-        isDay: true,
+      location: {
+        lat: imsLocation.lat,
+        lon: imsLocation.lon,
+        timezone: 'Asia/Jerusalem',
+        id: imsLocation.id,
+        name: imsLocation.name,
+        requested: { lat, lon },
       },
-      daily: forecast,
+      units: units === 'fahrenheit' ? 'F' : 'C',
+      current: shapeImsCurrent(current, imsLocation, units),
+      daily: shapeImsForecast(forecastRaw?.data, units),
       lastUpdated: Date.now(),
     };
 
     setCache(db, cacheKey, shaped);
-    return res.json({ ...shaped, source: 'ims' });
+    return res.json({ ...shaped, source: 'ims-direct' });
 
   } catch (err) {
     logger.error('IMS weather fetch error: %s', err.message);

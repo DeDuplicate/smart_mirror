@@ -44,10 +44,6 @@ export default function useHealth() {
 
         const statuses = {};
 
-        if (health.integrations?.spotify) {
-          statuses.spotify = deriveStatus(health.integrations.spotify);
-        }
-
         if (health.integrations?.homeAssistant) {
           statuses.ha = deriveStatus(health.integrations.homeAssistant);
         }

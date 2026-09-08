@@ -15,6 +15,23 @@ const ACTIVITY_EVENTS = [
   'wheel',
 ];
 
+/**
+ * Elements marked with this attribute are interactive parts of the
+ * screensaver itself (e.g. the now-playing transport controls). Touching
+ * them is intentional use of the screensaver, not a signal that the user
+ * wants to wake the display, so they neither reset the idle timer nor
+ * dismiss the screensaver.
+ */
+export const SCREENSAVER_INTERACTIVE_ATTR = 'data-screensaver-interactive';
+
+export function isScreensaverInteractive(target) {
+  return Boolean(
+    target &&
+    typeof target.closest === 'function' &&
+    target.closest(`[${SCREENSAVER_INTERACTIVE_ATTR}]`)
+  );
+}
+
 export default function useIdleDetection() {
   const idleMinutes = useStore((s) => s.settings.idleTimeout) || 5;
   const [isIdle, setIsIdle] = useState(false);
@@ -45,7 +62,8 @@ export default function useIdleDetection() {
     resetIdle();
 
     // Attach activity listeners
-    const handleActivity = () => {
+    const handleActivity = (e) => {
+      if (isScreensaverInteractive(e?.target)) return;
       resetIdle();
     };
 

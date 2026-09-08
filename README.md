@@ -16,7 +16,7 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 | Tab | Description |
 |-----|-------------|
-| :calendar: **Calendar** | Weekly grid (Israeli Sun–Thu week) with Google Calendar sync, local event editor, color-coded events, week navigation, month grid, pull-to-refresh |
+| :calendar: **Calendar** | Day / week / month views (Israeli Sun–Thu week) with Google Calendar sync, local event editor, color-coded events, upcoming-events sidebar with explicit day labels, pull-to-refresh |
 | :white_check_mark: **Tasks** | Kanban board with drag-and-drop, subtasks, priorities, due dates, Google Tasks sync |
 | :star: **Chores** | Per-person columns with progress rings, celebration animations & sounds, family photos |
 | :house: **Smart Home** | Home Assistant tiles, AC control (IR scripts), IR remote, curtain/cover control, power monitor, shopping list |
@@ -24,7 +24,30 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 | :newspaper: **News** | Hebrew RSS feeds (Ynet, Channel 14) with full article extraction |
 | :gear: **Settings** | Full configuration UI, family management, dark mode, backup/restore, factory reset, setup wizard |
 
-### Music & Casting (YouTube → Google Nest / Home)
+### :framed_picture: Ambient Screensaver
+
+Inspired by [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror)'s region layout, the
+screensaver turns the idle display into a glanceable information board rather than a blank screen.
+Both the clock and slideshow styles share one region grid, so every element keeps its position.
+
+- :clock3: **Clock & date** — live time, Gregorian date, and the Hebrew date with gematria year
+- :calendar: **Agenda** — the next events and today's tasks as time-marked rows, with the imminent
+  item switching to a live countdown so a close appointment can't be missed
+- :sun_behind_small_cloud: **Weather** — large current temperature plus a 5-day forecast with
+  daily high/low
+- :newspaper: **News ticker** — rotating headline with source and relative-time byline
+- :musical_note: **Now playing** — album art, track info, and transport controls while music
+  plays; auto-hides 30 seconds after playback stops
+- :speech_balloon: **Daily phrase** — with attribution and a short explanation
+
+### :speech_balloon: Daily Phrase
+
+- **133 curated Hebrew phrases**, each with a source and a one-line explanation
+- **Day-seeded shuffle** — a deterministic per-day ordering, so every client agrees on the current
+  phrase without server state, and the order differs each day instead of repeating on a fixed cycle
+- **Configurable rotation interval** (1 minute → once a day) in Settings → Display
+
+
 
 - :mag: **YouTube search** and IFrame playback with queue, shuffle, and repeat
 - :satellite: **Cast to Google Nest Mini / Home** — since Cast-audio speakers can't render YouTube, the backend transcodes the stream to MP3 on the fly (`yt-dlp` → `ffmpeg`) and serves a self-hosted, HMAC-signed LAN URL the speaker can play
@@ -45,8 +68,8 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 - :crescent_moon: **Dark mode** toggle with system-wide theme, plus optional **auto day/night theme**
 - :clock1: **Hebrew date** (gematria) + Jewish holidays + Shabbat times (Hebcal)
-- :sun_behind_small_cloud: **Animated weather icons** (Open-Meteo + IMS via Home Assistant)
-- :speech_balloon: **Daily phrase / quote** of the day
+- :sun_behind_small_cloud: **Animated weather icons** (Open-Meteo + direct IMS)
+- :speech_balloon: **Daily phrase / quote** of the day — 133 phrases with sources and explanations, configurable rotation
 - :family_man_woman_girl_boy: **Family member photos** on chore avatars
 - :fireworks: **Fireworks celebration** when kids complete all chores
 - :clap: **Clap animation + sound** on each chore completion
@@ -56,7 +79,7 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 - :electric_plug: **IR remote control** for TVs per room
 - :snowflake: **AC control** via IR scripts
 - :keyboard: **On-screen keyboard** (Hebrew / English / emoji) for touch input
-- :framed_picture: **Screensaver** (clock / photo slideshow) on idle
+- :framed_picture: **Screensaver** (clock / photo slideshow) on idle — see [Ambient Screensaver](#framed_picture-ambient-screensaver)
 - :arrow_down: **Pull-to-refresh** on Calendar, Tasks and News
 - :iphone: **PWA installable** on mobile
 - :desktop_computer: **Multi-resolution scaling** (auto-adapts to any screen)
@@ -182,6 +205,9 @@ smart_mirror/
 
 ### :calendar: Calendar — weekly grid with Google Calendar sync
 ![Calendar](docs/screenshots/calendar.png)
+
+### :framed_picture: Screensaver — ambient info board on idle
+![Screensaver](docs/screenshots/screensaver.png)
 
 ### :white_check_mark: Tasks — kanban board with drag-and-drop
 ![Tasks](docs/screenshots/tasks.png)

@@ -53,7 +53,7 @@ export default function WeatherPopup({ anchorRef, onClose }) {
       {/* Popup */}
       <div
         ref={popupRef}
-        className="absolute top-full mt-3 z-50 min-w-[340px]"
+        className="absolute top-full mt-3 z-50 w-[520px]"
         style={{
           animation: `popupIn var(--dur-normal) var(--ease-out) forwards`,
         }}
@@ -119,21 +119,37 @@ export default function WeatherPopup({ anchorRef, onClose }) {
           {/* 5-day forecast */}
           {daily.length > 0 && (
             <div>
-              <p className="text-xs text-ts font-medium mb-3">{t.weather.forecast}</p>
-              <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-ts font-semibold mb-3">{t.weather.forecast}</p>
+              <div className="grid grid-cols-5 gap-2">
                 {daily.slice(0, 5).map((day, i) => {
-                  // day should have: { dayName, code, high }
                   const dayLabel = day.dayName || t.topBar.days[i] || '';
+                  const high = day.high != null ? `${Math.round(day.high)}°` : '—';
+                  const low = day.low != null ? `${Math.round(day.low)}°` : '—';
                   return (
                     <div
                       key={i}
-                      className="flex flex-col items-center gap-1 flex-1 min-w-0"
+                      className="min-h-[132px] rounded-2xl bg-s2 border border-bd px-2.5 py-2
+                                 flex flex-col items-center justify-between min-w-0"
                     >
-                      <span className="text-xs text-ts truncate">{dayLabel}</span>
-                      <WeatherIcon code={day.code} size={32} />
-                      <span className="font-mono text-sm text-tp">
-                        {day.high != null ? `${Math.round(day.high)}°` : '—'}
-                      </span>
+                      <span className="text-sm font-semibold text-tp truncate">{dayLabel}</span>
+                      <WeatherIcon code={day.code} size={34} />
+                      <div
+                        className="w-full flex flex-col gap-1"
+                        aria-label={`גבוה ${high}, נמוך ${low}`}
+                      >
+                        <div className="flex items-center justify-between rounded-lg bg-surf px-2 py-1">
+                          <span className="text-xs font-medium text-ts">{t.weather.high}</span>
+                          <span className="font-mono text-base leading-none text-tp">
+                            {high}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-surf px-2 py-1">
+                          <span className="text-xs font-medium text-ts">{t.weather.low}</span>
+                          <span className="font-mono text-base leading-none text-ts">
+                            {low}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}

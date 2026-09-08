@@ -9,6 +9,7 @@ import ShoppingListPopup, { useShoppingListCount } from './ShoppingListPopup.jsx
 import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
 import useHomeAssistant from '../hooks/useHomeAssistant.js';
 import { useMusicContext } from '../context/MusicContext.jsx';
+import { getHebrewDateParts } from '../utils/hebrewDate.js';
 
 // Index of the Music tab in TABS/PAGES — kept in one place so the mini-player
 // can hide itself while that tab is already showing the full player.
@@ -34,82 +35,13 @@ function getGreeting() {
   return t.topBar.greetings.night;
 }
 
-/** Hebrew numerals (gematria) conversion */
-const HEBREW_ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
-const HEBREW_TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
-const HEBREW_HUNDREDS = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
-const HEBREW_MONTHS = [
-  'ניסן', 'אייר', 'סיוון', 'תמוז', 'אב', 'אלול',
-  'תשרי', 'חשוון', 'כסלו', 'טבת', 'שבט', 'אדר', 'אדר ב׳'
-];
-
-function toHebrewNumeral(n) {
-  if (n === 15) return 'ט״ו';
-  if (n === 16) return 'ט״ז';
-  if (n <= 0) return '';
-
-  let result = '';
-  if (n >= 100) {
-    result += HEBREW_HUNDREDS[Math.floor(n / 100)];
-    n %= 100;
-  }
-  if (n >= 10) {
-    result += HEBREW_TENS[Math.floor(n / 10)];
-    n %= 10;
-  }
-  if (n > 0) {
-    result += HEBREW_ONES[n];
-  }
-
-  // Add geresh (׳) for single letter, gershayim (״) before last letter for multi
-  if (result.length === 1) {
-    result += '׳';
-  } else if (result.length > 1) {
-    result = result.slice(0, -1) + '״' + result.slice(-1);
-  }
-  return result;
-}
-
-function toHebrewYear(year) {
-  // Hebrew year e.g. 5786 → ה׳תשפ״ו
-  const thousands = Math.floor(year / 1000);
-  const remainder = year % 1000;
-  const hundredsVal = Math.floor(remainder / 100);
-  const tensVal = Math.floor((remainder % 100) / 10);
-  const onesVal = remainder % 10;
-
-  let yearStr = HEBREW_HUNDREDS[hundredsVal] + HEBREW_TENS[tensVal] + HEBREW_ONES[onesVal];
-  // Add gershayim before last char
-  if (yearStr.length > 1) {
-    yearStr = yearStr.slice(0, -1) + '״' + yearStr.slice(-1);
-  }
-  return HEBREW_ONES[thousands] + '׳' + yearStr;
-}
-
-/** Full Hebrew calendar date using only Hebrew letters */
+/** Hebrew calendar date + weekday name. Gematria lives in utils/hebrewDate.js */
 function getHebrewDate() {
   const now = new Date();
-
-  // Extract Hebrew calendar parts using Intl
-  const parts = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).formatToParts(now);
-
-  const dayNum = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
-  const hebrewMonth = parts.find(p => p.type === 'month')?.value || '';
-  const yearNum = parseInt(parts.find(p => p.type === 'year')?.value || '5786', 10);
-
-  const hebrewDay = toHebrewNumeral(dayNum);
-  const hebrewYear = toHebrewYear(yearNum);
-
-  const hebrewDate = `${hebrewDay} ${hebrewMonth} ${hebrewYear}`;
-
-  // Regular day name from i18n
-  const dayName = t.topBar.daysLong[now.getDay()];
-
-  return { hebrewDate, dayName };
+  return {
+    hebrewDate: getHebrewDateParts(now).full,
+    dayName: t.topBar.daysLong[now.getDay()],
+  };
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────

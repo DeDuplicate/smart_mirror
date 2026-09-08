@@ -667,7 +667,8 @@
 @media (prefers-reduced-motion: reduce) {
   .task-checkbox-animate,
   .avatar-pulse-glow,
-  .celebration-ring-pulse {
+  .celebration-ring-pulse,
+  .screensaver-eq-bar {
     animation: none;
   }
 
@@ -767,6 +768,22 @@
 .screensaver-clock-breathing {
   animation: screensaverBreathe 4s ease-in-out infinite;
   will-change: opacity;
+}
+
+/* Now-playing equalizer bars — GPU-composited scaleY only */
+@keyframes screensaverEqBar {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.screensaver-eq-bar {
+  transform-origin: bottom;
+  animation: screensaverEqBar 900ms ease-in-out infinite;
+  will-change: transform;
 }
 
 /* Ken Burns variations — slow zoom + pan, GPU-composited */

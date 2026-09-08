@@ -3,14 +3,25 @@
 const { Router } = require('express');
 const router = Router();
 
-function applySpotifyEnv(updates) {
+function applyHomeAssistantEnv(updates) {
   if (!updates || typeof updates !== 'object') return;
-  if (typeof updates.spotifyClientId === 'string' && updates.spotifyClientId.trim()) {
-    process.env.SPOTIFY_CLIENT_ID = updates.spotifyClientId.trim();
+  if (typeof updates.haHost === 'string' && updates.haHost.trim()) {
+    process.env.HA_HOST = updates.haHost.trim();
   }
-  if (typeof updates.spotifyClientSecret === 'string' && updates.spotifyClientSecret.trim()) {
-    process.env.SPOTIFY_CLIENT_SECRET = updates.spotifyClientSecret.trim();
+  if (typeof updates.haToken === 'string' && updates.haToken.trim()) {
+    process.env.HA_TOKEN = updates.haToken.trim();
   }
+}
+
+function sanitizeSettingsPatch(updates) {
+  const safe = { ...updates };
+  if ('haToken' in safe) {
+    delete safe.haToken;
+    if (typeof updates.haToken === 'string' && updates.haToken.trim()) {
+      safe.haTokenSet = true;
+    }
+  }
+  return safe;
 }
 
 // ---------------------------------------------------------------------------
@@ -25,10 +36,11 @@ router.get('/', (req, res) => {
     for (const row of rows) {
       // Skip internal/secret keys — never send secrets to the client
       if (row.key === 'api_token' || row.key === 'token_secret') continue;
-      if (row.key === 'spotifyClientSecret') {
-        settings.spotifyClientSecretSet = Boolean(row.value);
+      if (row.key === 'haToken') {
+        settings.haTokenSet = Boolean(row.value);
         continue;
       }
+
       // Try to parse JSON values, fall back to raw string
       try {
         settings[row.key] = JSON.parse(row.value);
@@ -65,19 +77,19 @@ router.put('/', (req, res) => {
         // Prevent overwriting internal/secret keys via settings endpoint
         if (key === 'api_token' || key === 'token_secret') continue;
         // Empty secret means "leave the existing one" — the UI never re-sends it.
-        if (key === 'spotifyClientSecret' && (value === '' || value == null)) continue;
+        if (key === 'haToken' && (value === '' || value == null)) continue;
         const serialized = typeof value === 'string' ? value : JSON.stringify(value);
         upsert.run(key, serialized);
       }
     });
 
     runBatch(Object.entries(updates));
-    applySpotifyEnv(updates);
+    applyHomeAssistantEnv(updates);
     logger.info('Settings bulk updated (%d keys)', Object.keys(updates).length);
 
     // Notify clients
     const io = req.app.locals.io;
-    if (io) io.emit('settings:updated', updates);
+    if (io) io.emit('settings:updated', sanitizeSettingsPatch(updates));
 
     res.json({ ok: true, updated: Object.keys(updates).length });
   } catch (err) {
@@ -102,7 +114,7 @@ router.put('/:key', (req, res) => {
   if (value === undefined) {
     return res.status(400).json({ error: 'Request body must contain a "value" field' });
   }
-  if (key === 'spotifyClientSecret' && (value === '' || value == null)) {
+  if (key === 'haToken' && (value === '' || value == null)) {
     return res.json({ ok: true, key, unchanged: true });
   }
 
@@ -114,11 +126,14 @@ router.put('/:key', (req, res) => {
     );
 
     logger.info('Setting updated: %s', key);
-    applySpotifyEnv({ [key]: value });
+    applyHomeAssistantEnv({ [key]: value });
 
     const io = req.app.locals.io;
-    if (io) io.emit('settings:updated', { [key]: value });
+    if (io) io.emit('settings:updated', sanitizeSettingsPatch({ [key]: value }));
 
+    if (key === 'haToken') {
+      return res.json({ ok: true, key, haTokenSet: true });
+    }
     res.json({ ok: true, key, value });
   } catch (err) {
     logger.error('Setting update error: %s', err.message);

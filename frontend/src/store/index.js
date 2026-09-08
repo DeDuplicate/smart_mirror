@@ -108,6 +108,7 @@ const settingsSlice = (set, get) => ({
     showWeekend: true,
     idleTimeout: 5,
     screensaverStyle: 'clock',
+    phraseIntervalMin: 10,
     weatherSource: 'openmeteo',
     displaySchedule: { wake: '06:00', sleep: '23:00' },
     themeMode: 'auto',
@@ -217,7 +218,6 @@ const weatherSlice = (set) => ({
 const connectionSlice = (set) => ({
   connections: {
     ha: 'not_configured',
-    spotify: 'not_configured',
     wifi: 'not_configured',
   },
   setConnectionStatus: (service, status) =>

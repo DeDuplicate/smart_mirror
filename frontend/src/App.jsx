@@ -793,15 +793,16 @@ export default function App() {
         <TopBar />
         <TabBar />
         <TabContent />
-      </MusicProvider>
 
-      {/* Screensaver */}
-      {showScreensaver && (
-        <Screensaver
-          style={screensaverStyle}
-          onDismiss={handleScreensaverDismiss}
-        />
-      )}
+        {/* Screensaver — inside MusicProvider so it can show/control the
+            player that keeps running behind it. */}
+        {showScreensaver && (
+          <Screensaver
+            style={screensaverStyle}
+            onDismiss={handleScreensaverDismiss}
+          />
+        )}
+      </MusicProvider>
 
       {/* Overlays */}
       <ToastContainer />

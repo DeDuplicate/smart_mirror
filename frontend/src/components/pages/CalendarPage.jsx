@@ -24,6 +24,12 @@ const TOTAL_HOURS = HOUR_END - HOUR_START;
 const HOUR_HEIGHT = 56; // px per hour slot (min event height)
 const GRID_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 
+// Day view gets taller rows: more vertical room, easier tap-to-create targets
+// on the 27" IR touch frame.
+const DAY_HOUR_HEIGHT = 72;
+const DAY_GRID_HEIGHT = TOTAL_HOURS * DAY_HOUR_HEIGHT;
+const DAY_GUTTER = 72; // px — wider than the week gutter so labels breathe
+
 const ALL_DAYS = t.topBar.days;         // 7 items: ראשון..שבת
 const WORK_DAYS = ALL_DAYS.slice(0, 5); // ראשון..חמישי
 
@@ -111,8 +117,27 @@ function formatTime(isoString) {
   return `${hh}:${mm}`;
 }
 
+/**
+ * Day label for an event listed outside its own column (the upcoming sidebar),
+ * where a bare time is ambiguous. "היום"/"מחר" read faster than a date, so they
+ * win when they apply; the date follows either way so the label is never
+ * relative-only.
+ */
+function formatEventDay(isoString) {
+  const d = new Date(isoString);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const date = `${d.getDate()} ${t.topBar.months[d.getMonth()]}`;
+
+  if (isSameDay(d, today)) return { text: `${t.calendar.today} · ${date}`, isNear: true };
+  if (isSameDay(d, tomorrow)) return { text: `${t.calendar.tomorrow} · ${date}`, isNear: true };
+  return { text: `${t.topBar.daysLong[d.getDay()]}, ${date}`, isNear: false };
+}
+
 /** Calculate top offset and height for a timed event within the grid. */
-function getEventPosition(event) {
+function getEventPosition(event, hourHeight = HOUR_HEIGHT) {
   const start = new Date(event.start);
   const end = new Date(event.end);
 
@@ -126,8 +151,8 @@ function getEventPosition(event) {
   const clampedStart = Math.min(Math.max(startHour, HOUR_START), HOUR_END - 0.25);
   const clampedEnd = Math.max(Math.min(endHour, HOUR_END), clampedStart + 0.25);
 
-  const top = (clampedStart - HOUR_START) * HOUR_HEIGHT;
-  const height = Math.max((clampedEnd - clampedStart) * HOUR_HEIGHT, HOUR_HEIGHT / 2);
+  const top = (clampedStart - HOUR_START) * hourHeight;
+  const height = Math.max((clampedEnd - clampedStart) * hourHeight, hourHeight / 2);
 
   return { top, height };
 }
@@ -155,9 +180,13 @@ function getWeekDays(weekStart, showWeekend) {
 // ─── Overlap Layout ─────────────────────────────────────────────────────────
 
 /**
- * Given an array of timed events for a single day, compute overlap groups.
- * Returns a Map: eventId -> { index, total } where index is 0-based column,
- * and total is the number of columns in the overlap group.
+ * Given an array of timed events for a single day, compute overlap columns.
+ * Returns a Map: eventId -> { index, total } where index is the 0-based
+ * column and total is the widest simultaneous overlap in the event's group.
+ *
+ * Lanes are reused once the previous event in them has ended, so a chain of
+ * events that merely touch (09:00-10:00, 09:30-10:30, 10:00-11:00, ...) stays
+ * two columns wide instead of growing one column per event.
  */
 function computeOverlapLayout(events) {
   if (events.length === 0) return new Map();
@@ -193,12 +222,28 @@ function computeOverlapLayout(events) {
     }
   }
 
-  // Assign columns within each group
+  // Assign columns within each group, reusing lanes that have freed up.
   for (const group of groups) {
-    const total = group.events.length;
-    group.events.forEach((ev, idx) => {
-      layout.set(ev.id, { index: idx, total });
-    });
+    const laneEnds = [];       // laneEnds[i] = end time of the last event in lane i
+    const assigned = [];       // [event, laneIndex]
+
+    for (const ev of group.events) {
+      const evStart = new Date(ev.start);
+      const evEnd = new Date(ev.end);
+      let lane = laneEnds.findIndex((end) => end <= evStart);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(evEnd);
+      } else {
+        laneEnds[lane] = evEnd;
+      }
+      assigned.push([ev, lane]);
+    }
+
+    const total = laneEnds.length;
+    for (const [ev, lane] of assigned) {
+      layout.set(ev.id, { index: lane, total });
+    }
   }
 
   return layout;
@@ -370,13 +415,13 @@ function EventBlock({ event, style, onTap }) {
       }}
     >
       <span
-        className="text-xs font-semibold leading-tight line-clamp-2"
+        className="shrink-0 text-xs font-semibold leading-tight line-clamp-2"
         style={{ color: color.text }}
       >
         {event.title}
       </span>
       <span
-        className="text-[11px] opacity-80"
+        className="shrink-0 text-[11px] opacity-80"
         style={{ color: color.text, fontFamily: "'DM Mono', monospace" }}
       >
         {formatTime(event.start)}
@@ -420,8 +465,9 @@ function AllDayPill({ event, span = 1, startCol, onTap }) {
 
 // ─── Upcoming Sidebar Card ──────────────────────────────────────────────────
 
-function UpcomingCard({ event, onTap }) {
+function UpcomingCard({ event, onTap, showDay = false }) {
   const color = getColorStyle(event.color);
+  const day = showDay ? formatEventDay(event.start) : null;
 
   return (
     <button
@@ -435,6 +481,13 @@ function UpcomingCard({ event, onTap }) {
       />
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium text-tp block truncate">{event.title}</span>
+        {day && (
+          <span
+            className={`text-xs font-medium block mt-1 truncate ${day.isNear ? 'text-acc2' : 'text-ts'}`}
+          >
+            {day.text}
+          </span>
+        )}
         <span
           className="text-xs text-ts block mt-0.5"
           style={{ fontFamily: "'DM Mono', monospace" }}
@@ -443,6 +496,140 @@ function UpcomingCard({ event, onTap }) {
         </span>
         <span className="text-[11px] text-tm block mt-0.5">{event.calendar}</span>
       </div>
+    </button>
+  );
+}
+
+// ─── Current Time Indicator (day view) ──────────────────────────────────────
+
+/**
+ * Live "now" line for the day view. Teal (`--acc2`) so it never reads as the
+ * purple selection accent, and it carries a textual time label so the status
+ * isn't communicated by color alone.
+ */
+function CurrentTimeLine({ hourHeight, gutter }) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const hourFloat = now.getHours() + now.getMinutes() / 60;
+  if (hourFloat < HOUR_START || hourFloat > HOUR_END) return null;
+
+  const top = (hourFloat - HOUR_START) * hourHeight;
+  const label = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  return (
+    <div
+      className="absolute z-40 pointer-events-none"
+      style={{ top: `${top}px`, insetInlineStart: `${gutter}px`, insetInlineEnd: 0 }}
+      aria-hidden="true"
+    >
+      <div className="w-full" style={{ borderTop: '2px solid var(--acc2, #2ab58a)' }} />
+      <div
+        className="absolute w-3 h-3 rounded-full -translate-y-1/2"
+        style={{
+          insetInlineStart: '-6px',
+          backgroundColor: 'var(--acc2, #2ab58a)',
+          boxShadow: '0 0 0 2px var(--surf, #fff)',
+        }}
+      />
+      <div
+        className="absolute -translate-y-1/2 rounded-full px-2.5 py-1 bg-surf border border-bd
+                   shadow-card text-xs font-semibold text-tp whitespace-nowrap"
+        style={{ insetInlineStart: '14px', fontFamily: "'DM Mono', monospace" }}
+      >
+        {label} · {t.calendar.now}
+      </div>
+    </div>
+  );
+}
+
+// ─── Day View Event Block ───────────────────────────────────────────────────
+
+/**
+ * Full-width event block for the day view. The wider lane earns its space by
+ * progressively revealing metadata as the block grows taller, instead of
+ * stretching the same cramped week-view card across 1100px.
+ */
+function DayEventBlock({ event, style, height, onTap }) {
+  const color = getColorStyle(event.color);
+  const hasLocation = event.location && event.location.trim().length > 0;
+  const attendeeCount = event.attendees?.length || 0;
+
+  const showMeta = height >= 96;
+  const showDetail = height >= 132;
+  const titleLines = height >= 96 ? 2 : 1;
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onTap(event, e.currentTarget.getBoundingClientRect());
+      }}
+      className="absolute rounded-2xl overflow-hidden text-start cursor-pointer shadow-card
+                 hover:brightness-95 active:scale-[0.98] transition-transform duration-[var(--dur-fast)]
+                 flex flex-col justify-start gap-1 p-3"
+      style={{
+        ...style,
+        direction: 'rtl',
+        backgroundColor: color.bg,
+        borderInlineStart: `6px solid ${color.border}`,
+        minHeight: '56px',
+      }}
+    >
+      {/* shrink-0: without it the flex column squashes the title into a
+          sliver whenever the block is shorter than its content. */}
+      <span
+        className="shrink-0 text-base font-semibold leading-snug"
+        style={{
+          color: color.text,
+          display: '-webkit-box',
+          WebkitBoxOrient: 'vertical',
+          WebkitLineClamp: titleLines,
+          overflow: 'hidden',
+        }}
+      >
+        {event.title}
+      </span>
+
+      <span
+        className="shrink-0 text-sm font-medium opacity-90 whitespace-nowrap"
+        style={{ color: color.text, fontFamily: "'DM Mono', monospace" }}
+      >
+        {formatTime(event.start)} — {formatTime(event.end)}
+      </span>
+
+      {showMeta && (
+        <div className="shrink-0 flex flex-wrap items-center gap-2 text-xs" style={{ color: color.text }}>
+          {hasLocation && (
+            <span className="flex items-center gap-1 rounded-full bg-surf/60 px-2 py-0.5 max-w-[240px]">
+              <LocationIcon className="w-3 h-3 shrink-0" />
+              <span className="truncate">{event.location}</span>
+            </span>
+          )}
+          {attendeeCount > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-surf/60 px-2 py-0.5">
+              <UsersIcon className="w-3 h-3 shrink-0" />
+              {attendeeCount}
+            </span>
+          )}
+          <span className="rounded-full bg-surf/60 px-2 py-0.5 truncate max-w-[200px]">
+            {event.calendar}
+          </span>
+        </div>
+      )}
+
+      {showDetail && event.description && (
+        <span
+          className="shrink text-xs leading-relaxed line-clamp-2 opacity-80"
+          style={{ color: color.text }}
+        >
+          {event.description}
+        </span>
+      )}
     </button>
   );
 }
@@ -468,24 +655,29 @@ export default function CalendarPage() {
   });
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
-  // ── View toggle (week / month), persisted like other UI prefs ──
+  // ── View toggle (day / week / month), persisted like other UI prefs ──
   const [view, setView] = useState(() => {
     try {
-      return localStorage.getItem(VIEW_STORAGE_KEY) === 'month' ? 'month' : 'week';
+      const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+      return saved === 'month' || saved === 'day' ? saved : 'week';
     } catch {
       return 'week';
     }
   });
   const switchView = useCallback((next) => {
     setView(next);
-    if (next === 'month') {
-      // Select today if it's in the displayed month, else the 1st.
+    if (next === 'month' || next === 'day') {
+      // Keep the selected day if it's already in context, else fall back to
+      // today (or the displayed month's 1st for month view).
       setSelectedDate((prev) => {
+        const now = new Date();
+        if (next === 'day') {
+          return prev || now;
+        }
         const inMonth =
           prev.getFullYear() === currentMonth.getFullYear() &&
           prev.getMonth() === currentMonth.getMonth();
         if (inMonth) return prev;
-        const now = new Date();
         return now.getFullYear() === currentMonth.getFullYear() &&
           now.getMonth() === currentMonth.getMonth()
           ? now
@@ -501,13 +693,21 @@ export default function CalendarPage() {
 
   // ── Data: fetch range covers the visible view (month range includes
   //    adjacent-month spillover days) ──
-  const fetchRange = useMemo(
-    () =>
-      view === 'month'
-        ? getMonthGridRange(currentMonth)
-        : { start: currentWeekStart, end: getWeekEnd(currentWeekStart) },
-    [view, currentMonth, currentWeekStart]
-  );
+  const fetchRange = useMemo(() => {
+    if (view === 'month') return getMonthGridRange(currentMonth);
+    if (view === 'day') {
+      const start = new Date(selectedDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      // Reach back a day so events that started the previous night and run
+      // into this day are fetched too; they're filtered by overlap below.
+      const start2 = new Date(start);
+      start2.setDate(start2.getDate() - 1);
+      return { start: start2, end };
+    }
+    return { start: currentWeekStart, end: getWeekEnd(currentWeekStart) };
+  }, [view, currentMonth, currentWeekStart, selectedDate]);
   const { events: rawEvents, loading, refetch, createEvent, updateEvent, deleteEvent } =
     useCalendar(fetchRange.start, fetchRange.end);
 
@@ -549,6 +749,12 @@ export default function CalendarPage() {
         const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
         setCurrentMonth(next);
         setSelectedDate(new Date(next));
+      } else if (view === 'day') {
+        setSelectedDate((prev) => {
+          const next = new Date(prev);
+          next.setDate(next.getDate() + 1);
+          return next;
+        });
       } else {
         setCurrentWeekStart((prev) => {
           const next = new Date(prev);
@@ -570,6 +776,12 @@ export default function CalendarPage() {
         const prev = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
         setCurrentMonth(prev);
         setSelectedDate(new Date(prev));
+      } else if (view === 'day') {
+        setSelectedDate((prev) => {
+          const next = new Date(prev);
+          next.setDate(next.getDate() - 1);
+          return next;
+        });
       } else {
         setCurrentWeekStart((prev) => {
           const next = new Date(prev);
@@ -583,6 +795,18 @@ export default function CalendarPage() {
   }, [animating, view, currentMonth]);
 
   const goToday = useCallback(() => {
+    if (view === 'day') {
+      const now = new Date();
+      if (isSameDay(now, selectedDate)) return;
+      setSlideDir(now > selectedDate ? 'left' : 'right');
+      setAnimating(true);
+      setTimeout(() => {
+        setSelectedDate(now);
+        setSlideDir(null);
+        setAnimating(false);
+      }, 250);
+      return;
+    }
     if (view === 'month') {
       const now = new Date();
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -606,7 +830,7 @@ export default function CalendarPage() {
       setSlideDir(null);
       setAnimating(false);
     }, 250);
-  }, [currentWeekStart, currentMonth, view]);
+  }, [currentWeekStart, currentMonth, view, selectedDate]);
 
   // ── Swipe detection for week navigation ──
   const calTouchRef = useRef({ startX: 0, startY: 0 });
@@ -754,13 +978,51 @@ export default function CalendarPage() {
     return eventsByDay?.get(toLocalDateKey(selectedDate)) || [];
   }, [view, eventsByDay, selectedDate]);
 
+  // ── Day view: split the selected day into all-day pills + timed blocks ──
+  const dayView = useMemo(() => {
+    if (view !== 'day' || !selectedDate) {
+      return { timed: [], allDay: [], layout: new Map() };
+    }
+    // Timed events are matched by interval overlap, not start-date equality,
+    // so an event running past midnight still shows on the day it spills into.
+    const dayStart = new Date(selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+
+    const timed = [];
+    const allDay = [];
+    for (const ev of events) {
+      const isAllDay = ev.allDay || /^\d{4}-\d{2}-\d{2}$/.test(String(ev.start || ''));
+      if (isAllDay) {
+        if (eventFallsOnDay(ev, selectedDate)) allDay.push(ev);
+        continue;
+      }
+      const start = new Date(ev.start);
+      const end = new Date(ev.end || ev.start);
+      if (start < dayEnd && (end > dayStart || +end === +start)) timed.push(ev);
+    }
+    timed.sort((a, b) => new Date(a.start) - new Date(b.start));
+    return { timed, allDay, layout: computeOverlapLayout(timed) };
+  }, [view, events, selectedDate]);
+
   const selectedDayLabel = useMemo(() => {
     if (!selectedDate) return '';
     return `${t.topBar.daysLong[selectedDate.getDay()]}, ${selectedDate.getDate()} ${t.topBar.months[selectedDate.getMonth()]}`;
   }, [selectedDate]);
 
+  // Events shown in the sidebar for whichever "single day" view is active.
+  const sidebarDayEvents = view === 'day'
+    ? [...dayView.allDay, ...dayView.timed]
+    : selectedDayEvents;
+  const isSingleDayView = view === 'day' || view === 'month';
+
   // ── Month/year label ──
   const monthYearLabel = useMemo(() => {
+    if (view === 'day') {
+      const base = `${t.topBar.daysLong[selectedDate.getDay()]}, ${selectedDate.getDate()} ${t.topBar.months[selectedDate.getMonth()]}`;
+      return isToday(selectedDate) ? `${t.calendar.today} · ${base}` : base;
+    }
     if (view === 'month') {
       return `${t.topBar.months[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
     }
@@ -775,7 +1037,7 @@ export default function CalendarPage() {
       return `${t.topBar.months[m1]} ${y}`;
     }
     return `${t.topBar.months[m1]} — ${t.topBar.months[m2]} ${y}`;
-  }, [dayColumns, view, currentMonth]);
+  }, [dayColumns, view, currentMonth, selectedDate]);
 
   // ── Hour labels ──
   const hourLabels = useMemo(() => {
@@ -816,12 +1078,12 @@ export default function CalendarPage() {
           onClick={goNext}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
                      text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
-          aria-label={view === 'month' ? t.calendar.nextMonth : t.calendar.nextWeek}
+          aria-label={view === 'month' ? t.calendar.nextMonth : view === 'day' ? t.calendar.nextDay : t.calendar.nextWeek}
         >
           <ChevronRight />
         </button>
 
-        <span className="text-base font-semibold text-tp min-w-[180px] text-center select-none">
+        <span className="text-base font-semibold text-tp min-w-[260px] text-center select-none">
           {monthYearLabel}
         </span>
 
@@ -829,7 +1091,7 @@ export default function CalendarPage() {
           onClick={goPrev}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
                      text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
-          aria-label={view === 'month' ? t.calendar.prevMonth : t.calendar.prevWeek}
+          aria-label={view === 'month' ? t.calendar.prevMonth : view === 'day' ? t.calendar.prevDay : t.calendar.prevWeek}
         >
           <ChevronLeft />
         </button>
@@ -839,17 +1101,19 @@ export default function CalendarPage() {
         {/* ── View toggle (segmented control) ── */}
         <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
           {[
+            { value: 'day', label: t.calendar.dayView },
             { value: 'week', label: t.calendar.weekView },
             { value: 'month', label: t.calendar.monthView },
           ].map((opt) => (
             <button
               key={opt.value}
               onClick={() => switchView(opt.value)}
-              className={`px-5 min-h-[56px] rounded-xl text-sm font-medium transition-all
+              aria-pressed={view === opt.value}
+              className={`px-5 min-w-[96px] min-h-[56px] rounded-xl text-sm transition-all
                           duration-[var(--dur-fast)] active:scale-95
                           ${view === opt.value
-                            ? 'bg-acc text-white shadow-card'
-                            : 'text-ts hover:text-tp'}`}
+                            ? 'bg-acc text-white font-semibold shadow-card'
+                            : 'text-ts font-medium hover:text-tp'}`}
             >
               {opt.label}
             </button>
@@ -866,7 +1130,7 @@ export default function CalendarPage() {
 
         <button
           onClick={() => {
-            const base = view === 'month' ? selectedDate : new Date();
+            const base = view === 'week' ? new Date() : selectedDate;
             const hour = Math.max(HOUR_START, new Date().getHours());
             openNewEditor({
               date: base,
@@ -886,6 +1150,184 @@ export default function CalendarPage() {
 
       {/* ── Main Content ── */}
       <div className="flex flex-1 overflow-hidden">
+        {/* ── Single Day Timeline (day view) ── */}
+        {view === 'day' && (
+          <div
+            className="flex-1 flex flex-col overflow-hidden px-6 py-4 bg-bg"
+            onTouchStart={handleCalTouchStart}
+            onTouchEnd={handleCalTouchEnd}
+            style={{
+              opacity: slideDir ? 0.4 : 1,
+              transform: slideDir === 'left' ? 'translateX(-20px)' : slideDir === 'right' ? 'translateX(20px)' : 'translateX(0)',
+              transition: 'opacity var(--dur-normal) var(--ease), transform var(--dur-normal) var(--ease)',
+            }}
+          >
+            {/* Readable timeline rail — the day column would otherwise stretch
+                across ~1600px and become hard to scan. */}
+            <div className="mx-auto w-full max-w-[1180px] h-full flex flex-col rounded-2xl
+                            bg-surf border border-bd shadow-card overflow-hidden">
+              {/* ── All-day row ── */}
+              <div
+                className="shrink-0 grid items-start gap-2 px-3 py-2.5 border-b border-bd
+                           max-h-[132px] overflow-y-auto"
+                style={{ gridTemplateColumns: `${DAY_GUTTER}px 1fr` }}
+              >
+                <span className="text-xs font-semibold text-ts pt-3">{t.calendar.allDay}</span>
+                {dayView.allDay.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {dayView.allDay.map((ev) => {
+                      const color = getColorStyle(ev.color);
+                      return (
+                        <button
+                          key={ev.id}
+                          onClick={() => handleEventTap(ev)}
+                          className="min-h-[56px] rounded-2xl px-4 text-sm font-medium text-start
+                                     flex flex-col justify-center gap-0.5 max-w-[320px]
+                                     hover:brightness-95 active:scale-[0.98]
+                                     transition-transform duration-[var(--dur-fast)]"
+                          style={{
+                            backgroundColor: color.bg,
+                            color: color.text,
+                            borderInlineStart: `6px solid ${color.border}`,
+                          }}
+                        >
+                          <span className="truncate">{ev.title}</span>
+                          <span className="text-[11px] opacity-75 truncate">{ev.calendar}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openNewEditor({ date: selectedDate, hour: 9, minute: 0, allDay: true })}
+                    className="min-h-[56px] w-full rounded-2xl border-2 border-dashed border-bd
+                               text-xs text-ts hover:bg-s2 active:scale-[0.99]
+                               transition-all duration-[var(--dur-fast)]"
+                    aria-label={t.calendar.addEvent}
+                  >
+                    {t.calendar.noAllDayEvents}
+                  </button>
+                )}
+              </div>
+
+              {/* Pull-to-refresh indicator */}
+              {isPulling && (
+                <div
+                  className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)]"
+                  style={{ height: `${pullDistance}px` }}
+                >
+                  <div
+                    className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+                      ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+                  />
+                </div>
+              )}
+
+              {/* ── Scrollable hour timeline ── */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden" {...pullBind}>
+                <div className="relative" style={{ height: `${DAY_GRID_HEIGHT}px` }}>
+                  {/* Hour rows: full line + subtle half-hour line + label */}
+                  {hourLabels.map((label, i) => (
+                    <div
+                      key={i}
+                      className="absolute w-full"
+                      style={{ top: `${i * DAY_HOUR_HEIGHT}px`, height: `${DAY_HOUR_HEIGHT}px` }}
+                    >
+                      <div className="absolute w-full" style={{ top: 0, borderTop: '2px solid var(--cal-line)' }} />
+                      <div
+                        className="absolute w-full opacity-40"
+                        style={{ top: `${DAY_HOUR_HEIGHT / 2}px`, borderTop: '1px dashed var(--cal-line)' }}
+                      />
+                      <span
+                        className="absolute text-xs font-medium text-ts select-none -translate-y-1/2 text-center"
+                        style={{
+                          top: 0,
+                          insetInlineStart: 0,
+                          width: `${DAY_GUTTER}px`,
+                          fontFamily: "'DM Mono', monospace",
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Tap-to-create lane */}
+                  <div
+                    className="absolute inset-y-0"
+                    style={{ insetInlineStart: `${DAY_GUTTER}px`, insetInlineEnd: 0 }}
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const y = (e.clientY ?? rect.top) - rect.top;
+                      const hourFloat = HOUR_START + y / DAY_HOUR_HEIGHT;
+                      const hour = Math.min(HOUR_END - 1, Math.max(HOUR_START, Math.floor(hourFloat)));
+                      openNewEditor({
+                        date: selectedDate,
+                        hour,
+                        minute: hourFloat - hour >= 0.5 ? 30 : 0,
+                        allDay: false,
+                      });
+                    }}
+                  >
+                    {dayView.timed.map((ev) => {
+                      const pos = getEventPosition(ev, DAY_HOUR_HEIGHT);
+                      const overlap = dayView.layout.get(ev.id) || { index: 0, total: 1 };
+                      const lanes = Math.min(overlap.total, 3);
+                      if (overlap.index >= 3) return null;
+                      const widthPercent = 100 / lanes;
+
+                      return (
+                        <DayEventBlock
+                          key={ev.id}
+                          event={ev}
+                          height={pos.height}
+                          style={{
+                            top: `${pos.top}px`,
+                            height: `${pos.height}px`,
+                            insetInlineStart: `calc(${overlap.index * widthPercent}% + 8px)`,
+                            width: `calc(${widthPercent}% - 16px)`,
+                            zIndex: 10 + overlap.index,
+                          }}
+                          onTap={handleEventTap}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Live "now" line, only when viewing today */}
+                  {isToday(selectedDate) && (
+                    <CurrentTimeLine hourHeight={DAY_HOUR_HEIGHT} gutter={DAY_GUTTER} />
+                  )}
+
+                  {/* Empty state — one calm card, not repeated per hour row */}
+                  {dayView.timed.length === 0 && dayView.allDay.length === 0 && (
+                    <div
+                      className="absolute flex justify-center pointer-events-none"
+                      style={{ top: '180px', insetInlineStart: `${DAY_GUTTER}px`, insetInlineEnd: 0 }}
+                    >
+                      <div className="w-[520px] rounded-2xl border-2 border-dashed border-bd bg-surf/70
+                                      p-8 flex flex-col items-center gap-3 text-center">
+                        <span className="text-sm text-ts">{t.calendar.noEventsThisDay}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openNewEditor({ date: selectedDate, hour: 9, minute: 0, allDay: false });
+                          }}
+                          className="ripple pointer-events-auto min-h-[56px] px-6 rounded-xl bg-acc
+                                     text-white text-sm font-medium hover:bg-acc/90 active:scale-95
+                                     transition-all duration-[var(--dur-fast)]"
+                        >
+                          {t.calendar.addEvent}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Day Column Grid (week view) ── */}
         {view === 'week' && (
         <div
@@ -913,9 +1355,15 @@ export default function CalendarPage() {
             {dayColumns.map((date, i) => {
               const today = isToday(date);
               return (
-                <div
+                <button
                   key={i}
-                  className={`flex flex-col items-center justify-center py-2.5 px-2
+                  onClick={() => {
+                    setSelectedDate(new Date(date));
+                    switchView('day');
+                  }}
+                  aria-label={`${t.calendar.dayViewLabel} — ${t.topBar.daysLong[date.getDay()]} ${date.getDate()}`}
+                  className={`flex flex-col items-center justify-center py-2.5 px-2 min-h-[56px]
+                    hover:bg-acc/[0.08] active:scale-[0.98] transition-all duration-[var(--dur-fast)]
                     ${today ? 'bg-acc/10' : 'bg-surf'}`}
                 >
                   <span className={`text-xs font-semibold ${today ? 'text-acc' : 'text-ts'}`}>
@@ -929,7 +1377,7 @@ export default function CalendarPage() {
                   >
                     {date.getDate()}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -1127,7 +1575,11 @@ export default function CalendarPage() {
               monthDate={currentMonth}
               events={events}
               selectedDate={selectedDate}
-              onSelectDay={setSelectedDate}
+              onSelectDay={(d) => {
+                // Tapping the already-selected day drills into the day view.
+                if (isSameDay(d, selectedDate)) switchView('day');
+                else setSelectedDate(d);
+              }}
               onEventTap={handleEventTap}
             />
           </div>
@@ -1137,9 +1589,9 @@ export default function CalendarPage() {
         <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden">
           <div className="px-5 py-4 border-b border-bd shrink-0 flex items-center gap-2">
             <h2 className="text-sm font-semibold text-tp flex-1">
-              {view === 'month' ? selectedDayLabel : t.calendar.upcoming}
+              {isSingleDayView ? selectedDayLabel : t.calendar.upcoming}
             </h2>
-            {view === 'month' && (
+            {isSingleDayView && (
               <button
                 onClick={() => openNewEditor({ date: selectedDate, hour: 9, minute: 0, allDay: false })}
                 className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
@@ -1153,9 +1605,9 @@ export default function CalendarPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
-            {view === 'month' ? (
-              selectedDayEvents.length > 0 ? (
-                selectedDayEvents.map((ev) => (
+            {isSingleDayView ? (
+              sidebarDayEvents.length > 0 ? (
+                sidebarDayEvents.map((ev) => (
                   <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} />
                 ))
               ) : (
@@ -1168,7 +1620,7 @@ export default function CalendarPage() {
               )
             ) : upcoming.length > 0 ? (
               upcoming.map((ev) => (
-                <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} />
+                <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} showDay />
               ))
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center px-4">

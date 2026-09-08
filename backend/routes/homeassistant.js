@@ -6,9 +6,27 @@ const router = Router();
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+let configDb = null;
+
+function getConfigValue(key) {
+  if (!configDb) return '';
+  try {
+    const row = configDb.prepare('SELECT value FROM config WHERE key = ?').get(key);
+    if (!row || row.value == null) return '';
+    try {
+      const parsed = JSON.parse(row.value);
+      return typeof parsed === 'string' ? parsed : String(row.value);
+    } catch {
+      return String(row.value);
+    }
+  } catch {
+    return '';
+  }
+}
+
 function getHAConfig() {
-  const host = process.env.HA_HOST || 'http://homeassistant.local:8123';
-  const token = process.env.HA_TOKEN;
+  const host = process.env.HA_HOST || getConfigValue('haHost') || 'http://homeassistant.local:8123';
+  const token = process.env.HA_TOKEN || getConfigValue('haToken');
   return { host: host.replace(/\/+$/, ''), token };
 }
 
@@ -419,7 +437,8 @@ router.post('/remote/:entity_id/command', async (req, res) => {
 let haWebSocket = null;
 let haWsReconnectTimer = null;
 
-function setupHAWebSocketRelay(io, logger) {
+function setupHAWebSocketRelay(io, logger, db) {
+  configDb = db || configDb;
   const { host, token } = getHAConfig();
   if (!token) {
     logger.warn('HA WebSocket relay not started — HA_TOKEN not set');
