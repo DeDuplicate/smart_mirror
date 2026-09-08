@@ -11,6 +11,11 @@ mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d"
 sed "s/FIRST_USER_NAME/${FIRST_USER_NAME}/g" files/autologin.conf \
   > "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 
+# Physical keyboard: US + Hebrew with an Alt+Shift toggle. The on-screen
+# keyboard already offers Hebrew, but a USB keyboard plugged in for setup was
+# stuck on US only. Written after stage2 so it overrides pi-gen's KEYBOARD_*.
+install -m 644 files/keyboard "${ROOTFS_DIR}/etc/default/keyboard"
+
 # Kiosk X session for the user
 install -m 755 -o 1000 -g 1000 files/xinitrc \
   "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.xinitrc"

@@ -1,0 +1,24 @@
+# /etc/default/keyboard — physical keyboard layout for console + X.
+#
+# Two layouts, US first so the boot console and any password prompt stay
+# predictable, with Hebrew available on a toggle. Alt+Shift is the switch
+# Israeli users expect from Windows.
+#
+# NOTE: the XKB code for Hebrew is "il" (Israel), not "he". "he" is the locale
+# code; `setxkbmap he` fails with "Cannot open display"-style confusion or
+# silently leaves you on US.
+#
+# XKBVARIANT and XKBOPTIONS are set explicitly rather than left empty: empty
+# values make Xorg log
+#   (WW) Option "xkb_variant" requires a string value
+#   (WW) Option "xkb_options" requires a string value
+# once per input device on every start.
+XKBMODEL="pc105"
+XKBLAYOUT="us,il"
+XKBVARIANT=","
+# Two toggles on purpose. Compact/wireless keyboards (e.g. the Riitek mini
+# with touchpad used here) often cannot produce a clean Alt+Shift, so Caps
+# Lock is offered as a single-key alternative that always registers.
+XKBOPTIONS="grp:alt_shift_toggle,grp:caps_toggle,grp_led:scroll"
+
+BACKSPACE="guess"

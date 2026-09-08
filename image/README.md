@@ -14,6 +14,37 @@ manual setup.
 - **SSH enabled** for remote administration
 - Hostname `smartmirror`, timezone `Asia/Jerusalem`
 
+## Which Pi will this boot on?
+
+**Check this before flashing.** The default build is **64-bit**, and a 64-bit
+image contains only `kernel8.img`. On a 32-bit-only Pi the GPU firmware paints
+the rainbow splash, finds no kernel it can execute, and stops — no error, no
+console, just the rainbow forever.
+
+| Board | Arch | Build with |
+|---|---|---|
+| Pi 5 / 500, Pi 4 / 400, CM4, CM5 | 64-bit | `./build.sh` (default) |
+| Pi 3, 3A+, 3B+, Zero 2 W, CM3 | 64-bit | `./build.sh` (default) |
+| **Pi 2 v1.2** (BCM2837) | 64-bit | `./build.sh` (default) |
+| **Pi 2 v1.1** (BCM2836) | 32-bit only | `SMART_MIRROR_ARCH=armhf ./build.sh` |
+| Pi 1 A/B/A+/B+, Zero, Zero W | 32-bit only | `SMART_MIRROR_ARCH=armhf ./build.sh` |
+
+The two Pi 2 revisions are the trap: they look identical and both say
+"Raspberry Pi 2 Model B", but only **V1.2** has the 64-bit BCM2837. The
+revision is printed on the board next to the model name, or:
+
+```bash
+grep Revision /proc/cpuinfo    # a02082/a22082 = v1.2 (64-bit ok)
+                               # a01041/a21041 = v1.1 (32-bit only)
+```
+
+A quick way to tell after the fact: mount the card's `bootfs` partition. If it
+has only `kernel8.img` and no `kernel7.img`, it is a 64-bit image.
+
+> **Performance note for older boards:** a Pi 2 (900 MHz ARMv7, 1 GB RAM) will
+> run this, but Chromium rendering a 1080p dashboard on that hardware is slow.
+> A Pi 4 with 2 GB or more is the comfortable target.
+
 ## Building
 
 Requires a **Linux host or WSL2** with **Docker** (pi-gen builds inside Docker).
@@ -23,8 +54,11 @@ cd image
 ./build.sh
 ```
 
-- First build takes 30–90 minutes (downloads + emulated arm64 chroot).
+- First build takes 30–90 minutes (downloads + an emulated chroot).
 - Resume a failed build with `CONTINUE=1 ./build.sh`.
+- Build 32-bit with `SMART_MIRROR_ARCH=armhf ./build.sh` (see the table above).
+  Use a separate `PIGEN_WORK_DIR` per architecture — the two need different
+  pi-gen branches (`bookworm-arm64` vs `bookworm`) and cannot share a checkout.
 - Output: `<build dir>/deploy/image_<date>-smart-mirror.img.xz` (~835 MB).
 
 **If the repo path contains a space** (e.g. `G:\Projects\smart screen` on

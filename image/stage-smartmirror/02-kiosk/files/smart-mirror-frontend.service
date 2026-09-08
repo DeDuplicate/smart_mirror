@@ -7,7 +7,11 @@ Wants=smart-mirror-backend.service
 Type=simple
 User=FIRST_USER_NAME
 WorkingDirectory=/opt/smart-mirror/frontend
-ExecStart=/usr/bin/npx vite preview --port 3000 --host
+# node/npx are resolved via PATH, not hardcoded: the official
+# nodejs.org tarball installs to /usr/local/bin while the apt package
+# uses /usr/bin, and pinning the wrong one makes the unit fail with
+# "no such file or directory" - which looks like an X/kiosk fault.
+ExecStart=/usr/bin/env npx vite preview --port 3000 --host
 Restart=always
 RestartSec=3
 

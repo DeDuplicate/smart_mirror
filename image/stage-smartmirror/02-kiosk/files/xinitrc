@@ -6,8 +6,29 @@ xset s off
 xset s noblank
 xset -dpms
 
-# Hide the mouse cursor when idle
-unclutter -idle 1 -root &
+# Physical keyboard: US + Hebrew, Alt+Shift to switch.
+#
+# /etc/default/keyboard covers this on a cold boot, but applying it here as
+# well means the layout is right even if X was restarted by hand, and it is the
+# only thing that fixes a session already running. The XKB code for Hebrew is
+# "il" (Israel) — "he" is the locale code and does not exist as a layout.
+setxkbmap -layout "us,il" -option "grp:alt_shift_toggle,grp:caps_toggle" 2>/dev/null || true
+
+# Pointer visibility.
+#
+# An IR touch frame leaves a cursor parked at the last touch point, which looks
+# like dirt on the mirror — so hiding it is right once the frame is fitted. But
+# a USB mouse plugged in for setup or testing needs a visible pointer, and
+# hiding it makes the mouse appear broken (it moves; you just cannot see it).
+#
+# Default is visible. To hide it once the touch frame is connected:
+#   echo 'KIOSK_HIDE_CURSOR=1' | sudo tee -a /etc/default/smart-mirror
+#   sudo systemctl restart getty@tty1
+[ -r /etc/default/smart-mirror ] && . /etc/default/smart-mirror
+
+if [ "${KIOSK_HIDE_CURSOR:-0}" = "1" ]; then
+  unclutter -idle 1 -root &
+fi
 
 # Launch Chromium kiosk (waits for the frontend, watchdog relaunch loop)
 exec bash /opt/smart-mirror/scripts/start-kiosk.sh
