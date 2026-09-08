@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApi } from './useApi.js';
-import { dedupeSpeakers, classifyKind, prefersAudioStream } from './speakerStatus.js';
+import { dedupeSpeakers, classifyKind, prefersAudioStream, isCastDevice } from './speakerStatus.js';
 import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 import useYoutubePlayer from './useYoutubePlayer.js';
@@ -85,7 +85,19 @@ async function haService(domain, service, body) {
   });
 }
 
-async function stopCast(entityId) {
+/**
+ * Stop playback on a cast target.
+ *
+ * `media_stop` alone is not enough on a Cast device: it silences the audio
+ * but leaves the receiver app (e.g. YouTube) loaded, so Home Assistant goes
+ * on reporting `playing`/`buffering` for a device that is quiet - which then
+ * shows up in the output picker as a device still playing. `turn_off` quits
+ * the app and settles the entity at `off`.
+ *
+ * Only for Cast devices: on an ordinary TV `turn_off` would switch the set
+ * off, which is far more than the user asked for.
+ */
+async function stopCast(entityId, speaker = null) {
   if (!entityId || entityId === 'local') return;
   try {
     await haService('media_player', 'media_stop', { entity_id: entityId });
@@ -94,13 +106,19 @@ async function stopCast(entityId) {
       await haService('media_player', 'media_pause', { entity_id: entityId });
     } catch { /* ignore */ }
   }
+
+  if (speaker && isCastDevice(speaker)) {
+    try {
+      await haService('media_player', 'turn_off', { entity_id: entityId });
+    } catch { /* the app may already have exited */ }
+  }
 }
 
 async function speakerState(entityId) {
-      // Enriched with manufacturer/model from HA's device registry, which is
-      // the only reliable way to tell a Nest Mini from a Nest Hub.
-      const data = await fetchApi('/api/ha/media-players');
-  return (data.states || []).find((item) => item.entity_id === entityId) || null;
+  // Reads `players`, not `states`: /api/ha/media-players returns the
+  // media_player subset enriched with manufacturer/model.
+  const data = await fetchApi('/api/ha/media-players');
+  return (data.players || []).find((item) => item.entity_id === entityId) || null;
 }
 
 async function waitUntilPlaying(entityId) {
@@ -686,7 +704,10 @@ export default function useMusic() {
     try { localStorage.setItem(OUTPUT_KEY, next); } catch { /* ignore */ }
 
     if (prev && prev !== 'local' && prev !== next) {
-      stopCast(prev);
+      // Pass the speaker so a Cast receiver app is quit, not merely stopped -
+      // otherwise the device we just switched away from goes on reporting
+      // "playing" to Home Assistant while sitting silent.
+      stopCast(prev, speakersRef.current.find((item) => item.id === prev));
     }
 
     if (next !== 'local') {
@@ -699,7 +720,7 @@ export default function useMusic() {
           .then(() => setCastPlaying(true))
           .catch(() => {
             addToast('error', t.music.castYoutubeBlocked);
-            stopCast(next);
+            stopCast(next, speaker);
             setOutputIdState('local');
             outputRef.current = 'local';
             setCastPlaying(false);

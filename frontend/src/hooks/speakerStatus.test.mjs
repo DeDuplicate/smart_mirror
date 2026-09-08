@@ -6,6 +6,7 @@ import {
   dedupeSpeakers,
   classifyKind,
   prefersAudioStream,
+  isCastDevice,
 } from './speakerStatus.js';
 
 // ─── The actual regression ─────────────────────────────────────────────────
@@ -170,6 +171,30 @@ assert.equal(
 // Models the registry does not recognise fall through to the old signals.
 assert.equal(classifyKind({ model: 'G1', deviceClass: 'tv' }), 'tv');
 assert.equal(classifyKind({ model: 'KP1', name: 'Salon' }), 'other', 'unknown model stays honest');
+
+
+
+// ─── Cast detection (gates the turn_off escalation) ────────────────────────
+// media_stop leaves the Cast receiver app resident, so HA keeps reporting
+// playing/buffering for a silent device; turn_off quits the app. But turn_off
+// on a real TV powers the set off, so this gate has to be right.
+
+assert.equal(isCastDevice({ manufacturer: 'Google Inc.', model: 'Google Nest Hub' }), true);
+assert.equal(isCastDevice({ manufacturer: 'Google Inc.', model: 'Google Nest Mini' }), true);
+assert.equal(isCastDevice({ manufacturer: 'Google Inc.', model: 'Chromecast' }), true);
+
+// Real TVs and boxes from this install must NOT be powered off.
+assert.equal(isCastDevice({ manufacturer: 'Samsung Electronics', model: 'UA46ES6200' }), false,
+  'never send turn_off to a Samsung TV');
+assert.equal(isCastDevice({ manufacturer: 'NVIDIA', model: 'SHIELD Android TV' }), false);
+assert.equal(isCastDevice({ manufacturer: 'SEI Robotics', model: 'KP1' }), false);
+assert.equal(isCastDevice({ manufacturer: 'SDMC', model: 'G1' }), false);
+
+// Unknown metadata is treated as "not a cast device": doing less is the safe
+// failure mode when the alternative is switching off someone's television.
+assert.equal(isCastDevice({}), false);
+assert.equal(isCastDevice(), false);
+assert.equal(isCastDevice({ manufacturer: 'Unknown manufacturer', model: 'MIBOX4' }), false);
 
 
 console.log('speakerStatus: all assertions passed');
