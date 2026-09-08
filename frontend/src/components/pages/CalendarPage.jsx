@@ -393,9 +393,17 @@ function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
 
 // ─── Event Block (timed) ────────────────────────────────────────────────────
 
-function EventBlock({ event, style, onTap }) {
+function EventBlock({ event, style, height, onTap }) {
   const color = getColorStyle(event.color);
   const hasLocation = event.location && event.location.trim().length > 0;
+
+  // A 56px block (the 1-hour / minimum size) leaves 36px inside p-2.5, but
+  // title + time + location needs ~46px, so the location line used to be cut
+  // off along the bottom edge. Gate the extra rows on available height, the
+  // same way DayEventBlock does - full details are in the tap popup anyway.
+  const blockHeight = Math.max(height || 0, HOUR_HEIGHT);
+  const showLocation = hasLocation && blockHeight >= 80;
+  const titleLines = blockHeight >= 72 ? 2 : 1;
 
   return (
     <button
@@ -415,8 +423,14 @@ function EventBlock({ event, style, onTap }) {
       }}
     >
       <span
-        className="shrink-0 text-xs font-semibold leading-tight line-clamp-2"
-        style={{ color: color.text }}
+        className="shrink-0 text-xs font-semibold leading-tight"
+        style={{
+          color: color.text,
+          display: '-webkit-box',
+          WebkitBoxOrient: 'vertical',
+          WebkitLineClamp: titleLines,
+          overflow: 'hidden',
+        }}
       >
         {event.title}
       </span>
@@ -426,10 +440,10 @@ function EventBlock({ event, style, onTap }) {
       >
         {formatTime(event.start)}
       </span>
-      {hasLocation && (
-        <span className="flex items-center gap-1 text-[10px] opacity-70 mt-auto"
+      {showLocation && (
+        <span className="flex items-center gap-1 text-[10px] opacity-70 min-w-0"
           style={{ color: color.text }}>
-          <LocationIcon className="w-3 h-3" />
+          <LocationIcon className="w-3 h-3 shrink-0" />
           <span className="truncate">{event.location}</span>
         </span>
       )}
@@ -922,6 +936,9 @@ export default function CalendarPage() {
   }, []);
 
   const handleSlotTap = useCallback((date, e) => {
+    // An alarm is on screen (z-60, covering the grid). Ignore taps so
+    // acknowledging or snoozing it cannot also open the new-event editor.
+    if (useStore.getState().reminders.length > 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const y = (e.clientY ?? e.changedTouches?.[0]?.clientY ?? rect.top) - rect.top;
     const hourFloat = HOUR_START + y / HOUR_HEIGHT;
@@ -1489,6 +1506,7 @@ export default function CalendarPage() {
                         <EventBlock
                           key={ev.id}
                           event={ev}
+                          height={pos.height}
                           style={{
                             top: `${pos.top}px`,
                             height: `${pos.height}px`,

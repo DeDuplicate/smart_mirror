@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { io } from 'socket.io-client';
 
 // ─── Color Palettes ─────────────────────────────────────────────────────────
 
@@ -126,6 +127,21 @@ export function toLocalDateKey(date) {
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
+// Shared socket, same pattern as useTasks/useChores.
+let socket = null;
+
+function getSocket() {
+  if (!socket) {
+    socket = io('/', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+    });
+  }
+  return socket;
+}
+
 export default function useCalendar(rangeStart, rangeEnd) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -204,10 +220,24 @@ export default function useCalendar(rangeStart, rangeEnd) {
     fetchEvents();
   }, [fetchEvents]);
 
-  // Auto-refresh every 5 minutes
+  // Auto-refresh every 5 minutes, plus refetch on demand.
+  //
+  // The backend already emitted `calendar:updated` on local event CRUD and
+  // now on a manual ICS refresh, but nothing subscribed to it - so a change
+  // only showed up on the next poll. Listening here means the Settings
+  // refresh button updates the grid AND the reminder scheduler at once
+  // (useEventReminders shares this hook).
   useEffect(() => {
     intervalRef.current = setInterval(fetchEvents, REFRESH_INTERVAL);
-    return () => clearInterval(intervalRef.current);
+
+    const s = getSocket();
+    const onUpdated = () => fetchEvents();
+    s.on('calendar:updated', onUpdated);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      s.off('calendar:updated', onUpdated);
+    };
   }, [fetchEvents]);
 
   // Abort any outstanding request on unmount to avoid a dangling fetch

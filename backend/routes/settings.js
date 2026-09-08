@@ -1,6 +1,8 @@
 'use strict';
 
 const { Router } = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = Router();
 
 function applyHomeAssistantEnv(updates) {
@@ -138,6 +140,40 @@ router.put('/:key', (req, res) => {
   } catch (err) {
     logger.error('Setting update error: %s', err.message);
     res.status(500).json({ error: 'Failed to update setting' });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// GET /api/settings/reminder-tones
+// Lists user-supplied ringtone files so Settings can offer them alongside the
+// built-in synthesised tones. Drop files into backend/data/sounds/reminders/.
+// ---------------------------------------------------------------------------
+const TONE_DIR = path.join(__dirname, '..', 'data', 'sounds', 'reminders');
+const TONE_EXTS = new Set(['.mp3', '.ogg', '.wav', '.m4a']);
+
+router.get('/reminder-tones', (req, res) => {
+  const logger = req.app.locals.logger;
+  try {
+    const files = fs
+      .readdirSync(TONE_DIR, { withFileTypes: true })
+      .filter((d) => d.isFile() && TONE_EXTS.has(path.extname(d.name).toLowerCase()))
+      .map((d) => d.name)
+      .sort();
+    res.json({
+      tones: files.map((name) => ({
+        // `file:` prefix is what the frontend switches on to pick the audio
+        // path over a synthesised pattern.
+        id: `file:${name}`,
+        label: path.basename(name, path.extname(name)),
+        url: `/api/sounds/reminders/${encodeURIComponent(name)}`,
+      })),
+    });
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      logger.warn('Reminder tone listing failed: %s', err.message);
+    }
+    res.json({ tones: [] }); // no directory / unreadable -> built-ins only
   }
 });
 

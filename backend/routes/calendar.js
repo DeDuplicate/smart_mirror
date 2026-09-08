@@ -369,6 +369,62 @@ async function fetchAllIcsEvents(logger, icsUrls, start, end) {
 }
 
 // ---------------------------------------------------------------------------
+// POST /api/calendar/ics/refresh
+// Force a fresh pull of every configured ICS feed, bypassing the 5 minute
+// cache, then tell every connected client to refetch. Used by the manual
+// "refresh calendars" button in Settings; the periodic refresh happens on its
+// own (frontend polls every 5 min, and this route's cache expires in 5 min).
+// ---------------------------------------------------------------------------
+router.post('/ics/refresh', async (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  let icsUrls = [];
+  try {
+    const row = db.prepare("SELECT value FROM config WHERE key = 'calendarIcsUrls'").get();
+    if (row) icsUrls = JSON.parse(row.value);
+  } catch (err) {
+    logger.warn('Failed to read calendarIcsUrls setting: %s', err.message);
+  }
+
+  if (!Array.isArray(icsUrls) || icsUrls.length === 0) {
+    return res.json({ ok: true, calendars: 0, events: 0, message: 'No ICS calendars configured' });
+  }
+
+  // Drop every cached ICS range so the next read cannot be served stale.
+  try {
+    db.prepare("DELETE FROM cache WHERE key LIKE 'ics:%'").run();
+  } catch (err) {
+    logger.warn('Failed to clear ICS cache: %s', err.message);
+  }
+
+  // Re-warm the range the UI actually asks for (today +/- a month covers the
+  // week, month and day views without guessing).
+  const now = new Date();
+  const start = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000).toISOString();
+  const end = new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000).toISOString();
+
+  try {
+    const events = await fetchAllIcsEvents(logger, icsUrls, start, end);
+    setCache(db, `ics:${start}:${end}`, events);
+    logger.info('ICS manual refresh: %d events from %d calendar(s)', events.length, icsUrls.length);
+
+    const io = req.app.locals.io;
+    if (io) io.emit('calendar:updated');
+
+    res.json({
+      ok: true,
+      calendars: icsUrls.length,
+      events: events.length,
+      refreshedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error('ICS manual refresh failed: %s', err.message);
+    res.status(502).json({ error: 'Failed to refresh calendars' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Local editable events (SQLite)
 // ---------------------------------------------------------------------------
 
