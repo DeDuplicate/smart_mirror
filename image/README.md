@@ -25,7 +25,27 @@ cd image
 
 - First build takes 30–90 minutes (downloads + emulated arm64 chroot).
 - Resume a failed build with `CONTINUE=1 ./build.sh`.
-- Output: `image/pi-gen/deploy/<date>-smart-mirror.img.xz`
+- Output: `<build dir>/deploy/image_<date>-smart-mirror.img.xz` (~835 MB).
+
+**If the repo path contains a space** (e.g. `G:\Projects\smart screen` on
+Windows), debootstrap cannot build there. `build.sh` refuses to start and tells
+you to pick another directory:
+
+```bash
+PIGEN_WORK_DIR="${HOME}/pi-gen-smart-mirror" ./build.sh
+# -> ~/pi-gen-smart-mirror/deploy/image_<date>-smart-mirror.img.xz
+```
+
+From Windows that path is reachable as
+`\\wsl$\<distro>\home\<user>\pi-gen-smart-mirror\deploy\`, which
+Raspberry Pi Imager's "Use custom" picker opens directly — no need to copy it
+to a Windows drive first.
+
+`build.sh` also works around three Docker-Desktop-on-WSL2 traps automatically:
+a `credsStore` pointing at a Windows `.exe` helper, pi-gen's host-side
+`qemu-aarch64-static` requirement, and `kernel.core_pattern` piping to
+`/wsl-capture-crash` (absent inside containers — it turns any crash in the
+emulated chroot into an unkillable D-state hang with no timeout).
 
 Bake a different branch/fork:
 
@@ -38,7 +58,7 @@ SMART_MIRROR_REPO=https://github.com/you/fork.git SMART_MIRROR_REF=my-branch ./b
 Use **Raspberry Pi Imager** (choose "Use custom") or:
 
 ```bash
-xzcat deploy/<file>.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+xzcat deploy/image_<date>-smart-mirror.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
 ```
 
 > Note: OS customization in Raspberry Pi Imager (hostname/user/WiFi) is

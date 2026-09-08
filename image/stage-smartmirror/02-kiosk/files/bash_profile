@@ -1,4 +1,13 @@
 # Auto-start the X kiosk session on the physical console (tty1) only.
+#
+# Looped rather than exec'd: start-kiosk.sh aborts if the frontend is not up
+# within its timeout (slow first boot: filesystem expansion + cold `vite
+# preview`), and X itself can die. Without the loop either one leaves a dead
+# console until someone SSHes in.
 if [ -z "${DISPLAY}" ] && [ "$(tty)" = "/dev/tty1" ]; then
-  exec startx -- -nocursor
+  while :; do
+    startx -- -nocursor
+    echo "[kiosk] X session exited; restarting in 5s..."
+    sleep 5
+  done
 fi
