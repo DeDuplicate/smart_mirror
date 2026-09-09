@@ -19,6 +19,7 @@ import useWeather from './hooks/useWeather.js';
 import useEventReminders from './hooks/useEventReminders.js';
 import ReminderOverlay from './components/ReminderOverlay.jsx';
 import AlarmOverlay from './components/AlarmOverlay.jsx';
+import { stopCast } from './hooks/useMusic.js';
 import Screensaver from './components/Screensaver.jsx';
 import { applyTheme, normalizeThemeMode, resolveIsDark } from './theme.js';
 
@@ -720,10 +721,19 @@ export default function App() {
       addToast(type, message);
     });
 
-    // Alarm clock: the backend scheduler fires on the alarm's minute; the
-    // overlay (inside MusicProvider) plays the chosen media on the chosen
-    // speakers. Set, don't queue — one alarm at a time, a new one replaces.
-    sock.on('alarm:trigger', (alarm) => {
+    // Alarm clock: the backend scheduler fires on the alarm's minute and
+    // waits for this ack before marking it fired (no ack = retry next tick).
+    // The overlay (inside MusicProvider) plays the media on the chosen
+    // speakers. A new alarm replaces a ringing one — stop the previous
+    // alarm's speakers first or its cast keeps playing with no UI to stop it.
+    sock.on('alarm:trigger', (alarm, ack) => {
+      if (typeof ack === 'function') ack('ok');
+      const prev = useStore.getState().activeAlarm;
+      if (prev) {
+        for (const id of prev.speakers || []) {
+          if (id !== 'local') stopCast(id).catch(() => {});
+        }
+      }
       useStore.getState().setActiveAlarm(alarm);
     });
 

@@ -265,7 +265,10 @@ async function castTrack(track, speaker, onWaiting) {
 /**
  * Broadcast a track to several speakers at once (alarm clock). Each speaker
  * gets its own warm + cast; one failing speaker must not block the others.
- * Pass volume=null: the alarm's escalation ladder owns volume after firing.
+ * `volume` may be a number OR a function returning the current number — the
+ * alarm's escalation ladder advances while a cold track is still warming
+ * (up to 240s), and applying a stale step-0 volume after the ladder already
+ * raised it would turn the speaker back down.
  */
 export async function castAlarmToSpeakers(track, speakerIds, volume) {
   let players = [];
@@ -280,9 +283,10 @@ export async function castAlarmToSpeakers(track, speakerIds, volume) {
     await castTrack(track, speaker);
     // Volume AFTER the cast: the receiver app resets to the device's own level
     // when it launches, so a volume_set issued before play_media is lost.
-    if (typeof volume === 'number') {
+    const vol = typeof volume === 'function' ? volume() : volume;
+    if (typeof vol === 'number') {
       try {
-        await haService('media_player', 'volume_set', { entity_id: id, volume_level: volume / 100 });
+        await haService('media_player', 'volume_set', { entity_id: id, volume_level: vol / 100 });
       } catch { /* optional */ }
     }
   }));
@@ -866,14 +870,19 @@ export default function useMusic() {
     }
   }, [currentIndex, outputId, queue]);
 
-  const setOutputId = useCallback((id) => {
+  const setOutputId = useCallback((id, { stopPrev = true } = {}) => {
     const prev = outputRef.current;
     const next = id || 'local';
     setOutputIdState(next);
     outputRef.current = next;
     try { localStorage.setItem(OUTPUT_KEY, next); } catch { /* ignore */ }
 
-    if (prev && prev !== 'local' && prev !== next) {
+    // stopPrev:false — the caller already stopped the previous output and
+    // awaited it (AlarmOverlay). The internal stopCast is fire-and-forget:
+    // its turn_off lands seconds later, and if the previous speaker is being
+    // re-cast right away (alarm broadcast), that late turn_off quits the
+    // freshly loaded receiver app and the alarm stays silent.
+    if (stopPrev && prev && prev !== 'local' && prev !== next) {
       // Pass the speaker so a Cast receiver app is quit, not merely stopped -
       // otherwise the device we just switched away from goes on reporting
       // "playing" to Home Assistant while sitting silent.
@@ -1019,6 +1028,7 @@ export default function useMusic() {
     playerReady: player.ready,
     playerContainerRef: player.containerRef,
     resume: player.play,
+    pause: player.pause,
     search,
     debounceSearch,
     loadRecommended,
