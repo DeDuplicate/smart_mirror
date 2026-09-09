@@ -39,23 +39,22 @@ function Key({ label, onPress, flex = 1, variant = 'default', icon, ariaLabel })
 
   return (
     <button
+      type="button"
       aria-label={ariaLabel || label || undefined}
-      onTouchStart={() => setPressed(true)}
-      onTouchEnd={() => {
-        setPressed(false);
-        onPress();
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        setPressed(true);
       }}
-      onMouseDown={() => setPressed(true)}
-      onMouseUp={() => {
-        setPressed(false);
-        onPress();
-      }}
-      onMouseLeave={() => setPressed(false)}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onClick={onPress}
       className={`
         ${variants[variant]}
         border rounded-xl
         flex items-center justify-center
-        min-w-[48px] h-[52px]
+        min-w-[56px] h-[56px] touch-none
         font-heebo font-medium text-base
         select-none transition-transform
         active:brightness-90
@@ -119,17 +118,23 @@ function BackspaceKey({ onBackspace }) {
 
   return (
     <button
+      type="button"
       aria-label="מחיקה"
-      onTouchStart={startRepeat}
-      onTouchEnd={stopRepeat}
-      onTouchCancel={stopRepeat}
-      onMouseDown={startRepeat}
-      onMouseUp={stopRepeat}
-      onMouseLeave={stopRepeat}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        startRepeat();
+      }}
+      onPointerUp={stopRepeat}
+      onPointerCancel={stopRepeat}
+      onPointerLeave={stopRepeat}
+      onClick={(e) => {
+        if (e.detail === 0) onBackspace();
+      }}
       className="
         bg-s2 border border-bd text-ts rounded-xl
         flex items-center justify-center
-        min-w-[48px] h-[52px]
+        min-w-[56px] h-[56px] touch-none
         select-none transition-transform
         active:brightness-90
       "
