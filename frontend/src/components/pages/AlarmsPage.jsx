@@ -36,9 +36,10 @@ function AlarmRow({ alarm, onEdit, onToggle, onDelete }) {
       <button
         onClick={() => onToggle(alarm)}
         aria-label={t.alarms.enabled}
-        className={`w-16 h-10 rounded-full transition-colors relative shrink-0 ${alarm.enabled ? 'bg-acc' : 'bg-s2 border border-bd'}`}
+        className={`w-16 h-10 rounded-full transition-colors relative shrink-0 border
+          ${alarm.enabled ? 'bg-acc border-transparent' : 'bg-tm/40 border-bd'}`}
       >
-        <span className={`absolute top-1 w-8 h-8 rounded-full bg-white shadow transition-all ${alarm.enabled ? 'start-1' : 'start-7'}`} />
+        <span className={`absolute top-1 w-8 h-8 rounded-full bg-white shadow-md transition-all ${alarm.enabled ? 'start-1' : 'start-7'}`} />
       </button>
       <button
         onClick={() => onDelete(alarm)}
