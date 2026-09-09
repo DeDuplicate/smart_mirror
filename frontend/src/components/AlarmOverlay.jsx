@@ -1,38 +1,52 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import useStore from '../store/index.js';
 import { useMusicContext } from '../context/MusicContext.jsx';
 import { fetchApi } from '../hooks/useApi.js';
 import { castAlarmToSpeakers, setSpeakersVolume, stopCast } from '../hooks/useMusic.js';
 import t from '../i18n/he.json';
 
-// Volume escalation while the alarm rings unanswered: 50% at fire, then
-// +10% every 3 minutes up to 80%. "Nobody stopped it" = the overlay is still
-// up, so the ladder just keeps stepping until dismissed.
-const VOLUME_STEPS = [50, 60, 70, 80];
+// Volume escalation while the alarm rings unanswered: start at the alarm's
+// volume (default 50%), then +10% every 3 minutes up to 80%. "Nobody stopped
+// it" = the overlay is still up, so the ladder just keeps stepping.
 const VOLUME_STEP_MS = 3 * 60 * 1000;
+const ladderFor = (alarm) => [alarm?.volume ?? 50, 60, 70, 80];
 
 /**
  * Fires when the backend emits 'alarm:trigger'. Plays the alarm's song or
  * playlist on every speaker the alarm targets — 'local' means the mirror's
- * own player — and shows a blocking card until dismissed. Dismissing stops
- * the playback it started (speakers get media_stop, local pauses).
+ * own player — and shows a blocking card until dismissed. Dismissing pauses
+ * (never toggles — a toggle can START music if the track already ended) and
+ * restores the pre-alarm local volume.
  *
  * Mounted inside MusicProvider so it can drive the queue/player.
  */
 export default function AlarmOverlay() {
   const alarm = useStore((s) => s.activeAlarm);
   const setActiveAlarm = useStore((s) => s.setActiveAlarm);
+  const addToast = useStore((s) => s.addToast);
   const music = useMusicContext();
   const firedFor = useRef(null);
+  const [playbackError, setPlaybackError] = useState(null);
+  // Current ladder step, shared by the escalation timer AND the per-speaker
+  // post-cast volume_set (a cold track can finish warming after the first
+  // escalation tick — it must get the CURRENT step, not the starting one).
+  const stepRef = useRef(0);
+  // Local volume before the alarm grabbed it; restored on dismiss.
+  const prevVolumeRef = useRef(null);
 
   const speakers = alarm?.speakers || [];
   const useLocal = speakers.includes('local');
   const targets = speakers.filter((s) => s !== 'local');
+  const steps = ladderFor(alarm);
+  const currentStepVolume = () => steps[Math.min(stepRef.current, steps.length - 1)];
 
   // Execute the playback plan exactly once per alarm firing.
   useEffect(() => {
     if (!alarm || firedFor.current === alarm.id) return undefined;
     firedFor.current = alarm.id;
+    setPlaybackError(null);
+    stepRef.current = 0;
+    prevVolumeRef.current = null;
 
     (async () => {
       let track = {
@@ -48,32 +62,39 @@ export default function AlarmOverlay() {
         try {
           const data = await fetchApi(`/api/music/playlist/${encodeURIComponent(alarm.media_id)}`);
           const tracks = data.tracks || [];
-          if (!tracks.length) return;
+          if (!tracks.length) throw new Error('empty playlist');
           track = tracks[0];
           playlistRest = tracks.slice(1);
           // Speakers get the first track; the playlist continues via the
           // auto-related/preheat machinery on 'local' only.
-        } catch {
+        } catch (err) {
+          // Do NOT bail silently: an alarm that plays nothing while pretending
+          // to ring is the worst outcome. Say so and stop here.
+          setPlaybackError(err.message || 'playlist');
+          addToast('error', t.music.castError);
           return;
         }
       }
 
       if (useLocal) {
         // Take over local playback. If the output is currently a speaker,
-        // stop it FIRST and await it: setOutputId's internal stopCast is
-        // fire-and-forget, and letting it float raced the broadcast — its
-        // turn_off landed mid-cast and killed the speaker (05:21 failure).
-        // A stopped target speaker simply gets re-cast a second later.
+        // stop it with media_stop ONLY (no turn_off — it may be an alarm
+        // target about to be re-cast) and AWAIT it, then switch output with
+        // stopPrev:false so setOutputId doesn't fire a second, floating
+        // stopCast whose late turn_off would kill the fresh cast.
         if (music.outputId !== 'local') {
           try { await stopCast(music.outputId); } catch { /* already stopped */ }
-          music.setOutputId('local');
+          music.setOutputId('local', { stopPrev: false });
         }
+        prevVolumeRef.current = music.volume;
         music.playTrack(track, playlistRest);
-        music.setVolume(VOLUME_STEPS[0]);
+        // persist:false — an unanswered alarm must not become the saved
+        // preference (same bug class as reminder ducking).
+        music.setVolume(currentStepVolume(), { persist: false });
       }
 
       if (targets.length) {
-        await castAlarmToSpeakers(track, targets, VOLUME_STEPS[0]);
+        await castAlarmToSpeakers(track, targets, currentStepVolume);
       }
     })();
     // Keyed on the alarm id only — music/targets change identity every
@@ -83,22 +104,19 @@ export default function AlarmOverlay() {
 
   // Volume escalation: one step louder every VOLUME_STEP_MS while the alarm
   // stays unanswered. Starts from step 1 — the cast path already applied
-  // VOLUME_STEPS[0] after the receiver app launched (setting it earlier is
-  // lost: app launch resets to the device's own level). Keyed on the alarm
-  // id so a re-render can't restart or skip steps.
+  // step 0 after the receiver app launched (setting it earlier is lost: app
+  // launch resets to the device's own level). Stops if playback failed.
   useEffect(() => {
-    if (!alarm) return undefined;
-    let step = 1;
-    const applyStep = () => {
-      const v = VOLUME_STEPS[Math.min(step, VOLUME_STEPS.length - 1)];
-      if (useLocal) music.setVolume(v);
+    if (!alarm || playbackError) return undefined;
+    const timer = setInterval(() => {
+      stepRef.current += 1;
+      const v = currentStepVolume();
+      if (useLocal) music.setVolume(v, { persist: false });
       if (targets.length) setSpeakersVolume(targets, v).catch(() => {});
-      step += 1;
-    };
-    const timer = setInterval(applyStep, VOLUME_STEP_MS);
+    }, VOLUME_STEP_MS);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alarm?.id]);
+  }, [alarm?.id, playbackError]);
 
   if (!alarm) return null;
 
@@ -107,7 +125,12 @@ export default function AlarmOverlay() {
       stopCast(id).catch(() => {});
     }
     if (useLocal) {
-      try { music.playPause(); } catch { /* not playing */ }
+      // Pause-only: playPause is a toggle and would START music at the
+      // escalated volume if the alarm track already ended.
+      try { music.pause?.(); } catch { /* not playing */ }
+      if (prevVolumeRef.current != null) {
+        music.setVolume(prevVolumeRef.current, { persist: false });
+      }
     }
     firedFor.current = null;
     setActiveAlarm(null);
@@ -134,7 +157,9 @@ export default function AlarmOverlay() {
           <span className="text-2xl text-ts">{alarm.label || t.alarms.title}</span>
           <span className="text-6xl font-bold text-[var(--tp)]" dir="ltr">{alarm.time}</span>
           <span className="text-2xl text-acc font-semibold break-words">{alarm.media_title}</span>
-          <span className="text-lg text-tm">{t.alarms.ringing}</span>
+          <span className="text-lg text-tm">
+            {playbackError ? t.music.castError : t.alarms.ringing}
+          </span>
         </div>
         <button
           onClick={dismiss}

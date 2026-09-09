@@ -73,17 +73,23 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const db = req.app.locals.db;
-  const existing = db.prepare('SELECT id FROM alarms WHERE id = ?').get(req.params.id);
+  const existing = db.prepare('SELECT * FROM alarms WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not_found' });
 
   const errors = validAlarm(req.body || {});
   if (errors.length) return res.status(400).json({ error: 'invalid_alarm', message: errors.join('; ') });
 
   const b = req.body;
+  // Only clear last_fired when the schedule itself changed — otherwise
+  // renaming (or toggling) an enabled alarm during its own minute makes the
+  // next tick fire it immediately.
+  const scheduleChanged = b.time !== existing.time
+    || JSON.stringify(b.days) !== existing.days;
+
   db.prepare(`
     UPDATE alarms SET label = ?, time = ?, days = ?, enabled = ?, speakers = ?,
-      media_type = ?, media_id = ?, media_title = ?, media_artist = ?, media_image = ?, volume = ?,
-      last_fired = NULL
+      media_type = ?, media_id = ?, media_title = ?, media_artist = ?, media_image = ?, volume = ?
+      ${scheduleChanged ? ', last_fired = NULL' : ''}
     WHERE id = ?
   `).run(
     String(b.label || ''),
@@ -112,8 +118,10 @@ router.delete('/:id', (req, res) => {
 // ---------------------------------------------------------------------------
 // Scheduler. Checks every 15s; fires an alarm when the local HH:MM matches,
 // the day is selected (empty days = every day), and it has not fired this
-// minute. last_fired also makes a missed-then-late start (reboot) not fire
-// stale alarms: we only fire on an exact current-minute match.
+// minute. last_fired is written ONLY after a client acknowledges the
+// trigger — if the kiosk is mid-reload or briefly offline, the alarm is
+// retried on the next tick instead of being silently consumed (the worst
+// failure mode for an alarm clock).
 // ---------------------------------------------------------------------------
 function startScheduler(io, db, logger) {
   const enabled = db.prepare('SELECT * FROM alarms WHERE enabled = 1');
@@ -131,9 +139,18 @@ function startScheduler(io, db, logger) {
         const days = JSON.parse(row.days || '[]');
         if (days.length && !days.includes(day)) continue;
         if (row.last_fired === minuteStamp) continue;
-        markFired.run(minuteStamp, row.id);
         logger?.info('[alarms] firing %s (%s %s)', row.id, row.time, row.label || row.media_title);
-        io.emit('alarm:trigger', rowToAlarm(row));
+        // Broadcast acks wait for EVERY connected socket, and the frontend
+        // opens several per page (each module has its own getSocket). On
+        // timeout the callback still carries the responses of clients that
+        // DID ack — one ack from any live client is enough to mark it fired.
+        io.timeout(5000).emit('alarm:trigger', rowToAlarm(row), (err, responses) => {
+          if (responses && responses.length) {
+            markFired.run(minuteStamp, row.id);
+          } else {
+            logger?.warn('[alarms] %s: no client acked; will retry next tick', row.id);
+          }
+        });
       }
     } catch (err) {
       logger?.warn('[alarms] scheduler tick failed: %s', err.message);

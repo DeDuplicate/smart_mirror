@@ -69,6 +69,20 @@ router.get('/health', async (req, res) => {
     integrations: {},
   };
 
+  // LAN addresses for the Settings → About row (eth0 + wlan0 now that the
+  // mirror can be on WiFi). Frontend reads health.ip first.
+  const lanIps = [];
+  for (const nets of Object.values(os.networkInterfaces())) {
+    for (const net of nets || []) {
+      if (net.family === 'IPv4' && !net.internal) lanIps.push(net.address);
+    }
+  }
+  health.ip = lanIps[0] || null;
+  health.ips = lanIps;
+  // The Pi's boot uptime, not the backend process's: process uptime resets on
+  // every deploy/restart, so "active time" would show 0 right after an update.
+  health.systemUptime = os.uptime();
+
   // Check Home Assistant
   const haHost = process.env.HA_HOST || getConfigValue(db, 'haHost');
   const haToken = process.env.HA_TOKEN || getConfigValue(db, 'haToken');

@@ -558,7 +558,7 @@
     "never": "מעולם לא",
     "days": "ימים",
     "hours": "שעות",
-    "haConnectionOk": "החיבור ל-Home Assistant תקין",
+    "minutes": "דקות",    "haConnectionOk": "החיבור ל-Home Assistant תקין",
     "haConnectionFail": "החיבור ל-Home Assistant נכשל",
     "spotifyConnected": "ספוטיפיי חובר בהצלחה",
     "spotifyDisconnected": "ספוטיפיי נותק בהצלחה",

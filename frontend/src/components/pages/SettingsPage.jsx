@@ -1903,15 +1903,20 @@ function AboutSection() {
 
         if (cancelled) return;
 
-        const uptimeSec = healthData?.uptime || 0;
+        const uptimeSec = healthData?.systemUptime ?? healthData?.uptime ?? 0;
         const days = Math.floor(uptimeSec / 86400);
         const hours = Math.floor((uptimeSec % 86400) / 3600);
+        const minutes = Math.floor((uptimeSec % 3600) / 60);
         const uptimeStr = days > 0
           ? `${days} ${t.settings.days}, ${hours} ${t.settings.hours}`
-          : `${hours} ${t.settings.hours}`;
+          : hours > 0
+            ? `${hours} ${t.settings.hours}, ${minutes} ${t.settings.minutes}`
+            : `${minutes} ${t.settings.minutes}`;
 
-        // Extract IP from health or use fallback
-        const ip = healthData?.ip || healthData?.network?.ip || '---';
+        // All LAN IPs (Ethernet + WiFi can both be up now), or '---'
+        const ip = healthData?.ips?.length
+          ? healthData.ips.join(' · ')
+          : (healthData?.ip || '---');
 
         setInfo({
           version: versionData?.version || '---',
