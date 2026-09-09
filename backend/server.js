@@ -200,6 +200,8 @@ app.use('/api/settings', require('./routes/settings'));
 const systemRoutes = require('./routes/system');
 app.use('/api/system', systemRoutes);
 app.use('/api/quotes', require('./routes/quotes'));
+const alarmsRoutes = require('./routes/alarms');
+app.use('/api/alarms', alarmsRoutes);
 
 // ---------------------------------------------------------------------------
 // 10. HTTP server + Socket.io
@@ -224,6 +226,10 @@ homeAssistantRoutes.setupHAWebSocketRelay(io, logger, db);
 // Nightly update check — the mirror is wall-mounted, so without this nobody
 // would ever discover a new version. Notify-only; installing stays manual.
 systemRoutes.scheduleUpdateChecks(io, logger, require('node-cron'));
+
+// Alarm clock scheduler — fires enabled alarms on their minute and emits
+// 'alarm:trigger' to connected clients (the kiosk plays the media).
+alarmsRoutes.startScheduler(io, db, logger);
 
 io.on('connection', (socket) => {
   logger.info('Socket.io client connected: %s', socket.id);

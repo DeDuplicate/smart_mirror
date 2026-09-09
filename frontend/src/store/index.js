@@ -46,6 +46,15 @@ const reminderSlice = (set, get) => ({
   dismissAllReminders: () => set({ reminders: [] }),
 });
 
+// ─── Alarm Slice ─────────────────────────────────────────────────────────────
+// The alarm currently firing (set by the 'alarm:trigger' socket event, cleared
+// when the user dismisses the overlay). CRUD lives in the AlarmsPage against
+// /api/alarms; only the live firing state is global.
+const alarmSlice = (set) => ({
+  activeAlarm: null,
+  setActiveAlarm: (alarm) => set({ activeAlarm: alarm }),
+});
+
 // ─── Toast Slice ─────────────────────────────────────────────────────────────
 
 let toastId = 0;
@@ -265,6 +274,7 @@ const useStore = create((...args) => ({
   ...tabSlice(...args),
   ...toastSlice(...args),
   ...reminderSlice(...args),
+  ...alarmSlice(...args),
   ...confirmSlice(...args),
   ...settingsSlice(...args),
   ...weatherSlice(...args),

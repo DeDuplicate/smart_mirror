@@ -57,6 +57,18 @@ const TABS = [
     ),
   },
   {
+    label: t.tabs.alarms,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+        <circle cx="12" cy="13" r="8" />
+        <polyline points="12 9 12 13 14.5 15.5" />
+        <line x1="5" y1="3" x2="7.5" y2="5.5" />
+        <line x1="19" y1="3" x2="16.5" y2="5.5" />
+      </svg>
+    ),
+  },
+  {
     label: t.tabs.news,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
