@@ -1,0 +1,18 @@
+[Unit]
+Description=Smart Mirror yt-dlp download daemon (warm YouTube resolver)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=FIRST_USER_NAME
+WorkingDirectory=/opt/smart-mirror/backend
+# Runs from the yt-dlp venv (image/stage-smartmirror/01-app installs it) so
+# `import yt_dlp` resolves. Keeps Python warm: a track download costs ~4-6s
+# here vs ~20s for a cold yt-dlp CLI spawn on a Pi 2.
+ExecStart=/opt/yt-dlp-venv/bin/python bin/yt-dlp-daemon.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
