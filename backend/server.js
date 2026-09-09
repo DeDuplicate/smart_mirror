@@ -143,11 +143,11 @@ function authMiddleware(req, res, next) {
   // Cast / Nest devices over the LAN and cannot carry the bearer token, so they
   // are protected by an HMAC signature of the video id instead.
   // Extension must stay in step with CACHE_FORMATS in routes/music.js — a cast
-  // URL whose extension is missing here gets a 401 from the Nest's fetch. The
-  // cast URL serves .mp3 (verified playable on a Nest Mini); .aac stays
-  // accepted because a stream copy of YouTube's AAC was tried here and links
-  // issued during that experiment must not start 401ing.
-  const streamMatch = req.path.match(/^\/music\/stream\/([a-zA-Z0-9_-]{11})\.(?:aac|mp3)$/);
+  // URL whose extension is missing here gets a 401 from the Nest's fetch,
+  // which looks exactly like an unsupported-format failure. .m4a is the
+  // preferred cast format (AAC stream copy) and .mp3 the fallback; .aac stays
+  // accepted so links issued while that was tried do not start 401ing.
+  const streamMatch = req.path.match(/^\/music\/stream\/([a-zA-Z0-9_-]{11})\.(?:m4a|aac|mp3)$/);
   if (streamMatch && musicRoutes.verifyStreamToken(API_TOKEN, streamMatch[1], req.query.token)) {
     return next();
   }

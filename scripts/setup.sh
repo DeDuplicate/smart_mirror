@@ -38,26 +38,41 @@ success "System packages updated."
 # 3. Install dependencies
 # ---------------------------------------------------------------------------
 info "Installing system dependencies (git, ddcutil, xdotool, ffmpeg)..."
-sudo apt-get install -y git ddcutil xdotool curl gnupg ffmpeg
+sudo apt-get install -y git ddcutil xdotool curl gnupg ffmpeg python3-venv
 
-info "Installing yt-dlp (YouTube audio extraction for Nest/Google Home casting)..."
-if command -v yt-dlp &>/dev/null; then
-  sudo yt-dlp -U || true
-  success "yt-dlp $(yt-dlp --version) is already installed."
-else
-  # Prefer the standalone binary — it self-updates and avoids stale distro pins.
-  sudo curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-    -o /usr/local/bin/yt-dlp
-  sudo chmod a+rx /usr/local/bin/yt-dlp
-  success "yt-dlp $(yt-dlp --version) installed to /usr/local/bin/yt-dlp."
+# yt-dlp goes into a pip venv, not the single-file release download.
+#
+# The release is a zipapp, and Python cannot cache bytecode for modules inside
+# a zip — it recompiles yt-dlp's ~1700 modules on every invocation. Measured on
+# a Pi 2: `yt-dlp --version` alone 12.4s and one URL extraction 24.9s, against
+# 3.1s and 11.0s from a venv with a populated __pycache__. The interpreter
+# itself starts in 247ms, so the whole gap was recompilation. On a 1GHz ARMv7
+# that is most of the delay before a song starts playing.
+YTDLP_VENV=/opt/yt-dlp-venv
+info "Installing yt-dlp into ${YTDLP_VENV} (pip venv, for fast startup)..."
+if [[ ! -x "${YTDLP_VENV}/bin/yt-dlp" ]]; then
+  sudo python3 -m venv "${YTDLP_VENV}"
+  sudo "${YTDLP_VENV}/bin/pip" install --quiet --upgrade pip
 fi
+sudo "${YTDLP_VENV}/bin/pip" install --quiet --upgrade yt-dlp
+# Write .pyc ahead of time so the first cast does not pay the compile cost.
+sudo "${YTDLP_VENV}/bin/python" -m compileall -q "${YTDLP_VENV}/lib" >/dev/null 2>&1 || true
+# Keep the old zipapp, if any, so a broken venv can be reverted by hand.
+if [[ -f /usr/local/bin/yt-dlp && ! -L /usr/local/bin/yt-dlp ]]; then
+  sudo mv /usr/local/bin/yt-dlp /usr/local/bin/yt-dlp.zipapp.bak
+  info "Existing standalone yt-dlp kept at /usr/local/bin/yt-dlp.zipapp.bak"
+fi
+sudo ln -sfn "${YTDLP_VENV}/bin/yt-dlp" /usr/local/bin/yt-dlp
+success "yt-dlp $(yt-dlp --version) installed (venv)."
 
 # YouTube frequently changes its signature scheme, which breaks older yt-dlp
 # builds and stops Nest/Google Home casting. Keep it fresh with a weekly cron.
-info "Scheduling weekly yt-dlp self-update..."
-YTDLP_CRON="0 4 * * 1 /usr/local/bin/yt-dlp -U >/dev/null 2>&1"
-if ! sudo crontab -l 2>/dev/null | grep -qF "/usr/local/bin/yt-dlp -U"; then
-  (sudo crontab -l 2>/dev/null; echo "${YTDLP_CRON}") | sudo crontab -
+# `yt-dlp -U` cannot update a pip install, so update through pip and recompile.
+info "Scheduling weekly yt-dlp update..."
+YTDLP_CRON="0 4 * * 1 ${YTDLP_VENV}/bin/pip install -q -U yt-dlp && ${YTDLP_VENV}/bin/python -m compileall -q ${YTDLP_VENV}/lib >/dev/null 2>&1"
+if ! sudo crontab -l 2>/dev/null | grep -qF "${YTDLP_VENV}/bin/pip install"; then
+  # Drop any cron from the old self-updating binary before adding the new one.
+  (sudo crontab -l 2>/dev/null | grep -vF "/usr/local/bin/yt-dlp -U"; echo "${YTDLP_CRON}") | sudo crontab -
   success "Weekly yt-dlp update scheduled (Mondays 04:00)."
 else
   info "yt-dlp update cron already present."

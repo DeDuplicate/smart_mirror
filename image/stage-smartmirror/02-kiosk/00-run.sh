@@ -5,6 +5,8 @@ sed "s/FIRST_USER_NAME/${FIRST_USER_NAME}/g" files/smart-mirror-backend.service 
   > "${ROOTFS_DIR}/etc/systemd/system/smart-mirror-backend.service"
 sed "s/FIRST_USER_NAME/${FIRST_USER_NAME}/g" files/smart-mirror-frontend.service \
   > "${ROOTFS_DIR}/etc/systemd/system/smart-mirror-frontend.service"
+sed "s/FIRST_USER_NAME/${FIRST_USER_NAME}/g" files/smart-mirror-ytdlp-daemon.service \
+  > "${ROOTFS_DIR}/etc/systemd/system/smart-mirror-ytdlp-daemon.service"
 
 # Console autologin for the kiosk user
 mkdir -p "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d"
@@ -25,6 +27,7 @@ install -m 644 -o 1000 -g 1000 files/bash_profile \
 on_chroot << EOF
 systemctl enable smart-mirror-backend.service
 systemctl enable smart-mirror-frontend.service
+systemctl enable smart-mirror-ytdlp-daemon.service
 systemctl set-default multi-user.target
 
 # Allow non-root X on the console

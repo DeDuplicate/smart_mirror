@@ -11,6 +11,7 @@ ddcutil
 xdotool
 build-essential
 python3
+python3-venv
 fonts-noto-core
 fonts-noto-color-emoji
 network-manager
