@@ -41,7 +41,9 @@ function useMusicDucking() {
     if (!playing || typeof current !== 'number' || current <= DUCK_TO_PERCENT) return undefined;
 
     restoreRef.current = current;
-    apply(Math.round((current * DUCK_TO_PERCENT) / 100));
+    // persist:false — the duck is transient, so it must not overwrite the
+    // saved level. Otherwise a reload mid-ring leaves the mirror at 10%.
+    apply(Math.round((current * DUCK_TO_PERCENT) / 100), { persist: false });
 
     return () => {
       const prev = restoreRef.current;
