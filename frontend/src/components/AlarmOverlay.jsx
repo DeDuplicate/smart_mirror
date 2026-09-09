@@ -9,6 +9,7 @@ import t from '../i18n/he.json';
 // volume (default 50%), then +10% every 3 minutes up to 80%. "Nobody stopped
 // it" = the overlay is still up, so the ladder just keeps stepping.
 const VOLUME_STEP_MS = 3 * 60 * 1000;
+const SNOOZE_MIN = 10;
 const ladderFor = (alarm) => [alarm?.volume ?? 50, 60, 70, 80];
 
 /**
@@ -120,7 +121,7 @@ export default function AlarmOverlay() {
 
   if (!alarm) return null;
 
-  const dismiss = () => {
+  const stopPlayback = () => {
     for (const id of targets) {
       stopCast(id).catch(() => {});
     }
@@ -133,7 +134,23 @@ export default function AlarmOverlay() {
       }
     }
     firedFor.current = null;
+  };
+
+  const dismiss = () => {
+    stopPlayback();
     setActiveAlarm(null);
+  };
+
+  const snooze = async () => {
+    stopPlayback();
+    setActiveAlarm(null);
+    try {
+      await fetchApi(`/api/alarms/${alarm.id}/snooze`, {
+        method: 'POST',
+        body: JSON.stringify({ minutes: SNOOZE_MIN }),
+      });
+      addToast('info', t.alarms.snoozed.replace('{min}', String(SNOOZE_MIN)));
+    } catch { /* the overlay is already down; worst case no re-fire */ }
   };
 
   return (
@@ -161,15 +178,26 @@ export default function AlarmOverlay() {
             {playbackError ? t.music.castError : t.alarms.ringing}
           </span>
         </div>
-        <button
-          onClick={dismiss}
-          autoFocus
-          className="ripple px-16 min-h-[76px] rounded-2xl bg-acc text-white
-                     text-2xl font-bold active:scale-95 transition-transform
-                     duration-[var(--dur-fast)]"
-        >
-          {t.alarms.dismiss}
-        </button>
+        <div className="flex items-center justify-center gap-4 flex-wrap">
+          {/* Snooze first in the RTL flow, dismiss last (primary, focused). */}
+          <button
+            onClick={snooze}
+            className="ripple px-9 min-h-[76px] rounded-2xl bg-[var(--s2)] text-[var(--tp)]
+                       border border-[var(--bd)] text-2xl font-bold active:scale-95
+                       transition-transform duration-[var(--dur-fast)]"
+          >
+            {t.alarms.snooze.replace('{min}', String(SNOOZE_MIN))}
+          </button>
+          <button
+            onClick={dismiss}
+            autoFocus
+            className="ripple px-16 min-h-[76px] rounded-2xl bg-acc text-white
+                       text-2xl font-bold active:scale-95 transition-transform
+                       duration-[var(--dur-fast)]"
+          >
+            {t.alarms.dismiss}
+          </button>
+        </div>
       </div>
     </div>
   );

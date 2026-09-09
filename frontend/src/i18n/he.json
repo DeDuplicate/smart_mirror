@@ -71,6 +71,8 @@
     "emptyHint": "הוסף שעון כדי להתעורר למוזיקה",
     "ringing": "מושמע כעת",
     "dismiss": "כבה",
+    "snooze": "נודניק · {min} דקות",
+    "snoozed": "נדחה ב-{min} דקות",
     "enabled": "פעיל",
     "tracks": "שירים",
     "playlists": "פלייליסטים",

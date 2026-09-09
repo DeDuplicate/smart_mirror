@@ -115,6 +115,19 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Snooze: stop now, re-fire after N minutes. Stored as an epoch in the DB so
+// a backend restart mid-snooze doesn't lose it (an in-memory map would).
+router.post('/:id/snooze', (req, res) => {
+  const db = req.app.locals.db;
+  const existing = db.prepare('SELECT id FROM alarms WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'not_found' });
+
+  const minutes = Math.min(60, Math.max(1, Number(req.body?.minutes) || 10));
+  db.prepare('UPDATE alarms SET snooze_until = ? WHERE id = ?')
+    .run(Date.now() + minutes * 60000, req.params.id);
+  res.json({ ok: true, minutes });
+});
+
 // ---------------------------------------------------------------------------
 // Scheduler. Checks every 15s; fires an alarm when the local HH:MM matches,
 // the day is selected (empty days = every day), and it has not fired this
@@ -125,21 +138,27 @@ router.delete('/:id', (req, res) => {
 // ---------------------------------------------------------------------------
 function startScheduler(io, db, logger) {
   const enabled = db.prepare('SELECT * FROM alarms WHERE enabled = 1');
-  const markFired = db.prepare('UPDATE alarms SET last_fired = ? WHERE id = ?');
+  const markFired = db.prepare('UPDATE alarms SET last_fired = ?, snooze_until = NULL WHERE id = ?');
 
   const tick = () => {
     try {
       const now = new Date();
+      const nowMs = now.getTime();
       const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const day = now.getDay();
       const minuteStamp = now.toISOString().slice(0, 16);
 
       for (const row of enabled.all()) {
-        if (row.time !== hhmm) continue;
+        // A due snooze fires regardless of the clock-time match; an un-acked
+        // snooze stays due (nowMs >= snooze_until keeps matching) and retries.
+        const snoozeDue = row.snooze_until && nowMs >= row.snooze_until;
         const days = JSON.parse(row.days || '[]');
-        if (days.length && !days.includes(day)) continue;
-        if (row.last_fired === minuteStamp) continue;
-        logger?.info('[alarms] firing %s (%s %s)', row.id, row.time, row.label || row.media_title);
+        const timeDue = row.time === hhmm
+          && (!days.length || days.includes(day))
+          && row.last_fired !== minuteStamp;
+        if (!snoozeDue && !timeDue) continue;
+
+        logger?.info('[alarms] firing %s (%s %s%s)', row.id, row.time, row.label || row.media_title, snoozeDue ? ' [snooze]' : '');
         // Broadcast acks wait for EVERY connected socket, and the frontend
         // opens several per page (each module has its own getSocket). On
         // timeout the callback still carries the responses of clients that
