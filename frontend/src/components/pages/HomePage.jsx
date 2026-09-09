@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import t from '../../i18n/he.json';
-import useStore from '../../store/index.js';
+import useStore, { TAB_INDEX } from '../../store/index.js';
 import { HomeSkeleton } from '../Skeleton.jsx';
 import useHomeAssistant from '../../hooks/useHomeAssistant.js';
 import IRRemoteOverlay from '../IRRemoteOverlay.jsx';
@@ -1105,7 +1105,7 @@ export default function HomePage() {
         <HomeIllustration />
         <p className="text-tm text-lg">{t.empty.notConfigured}</p>
         <button
-          onClick={() => setActiveTab(6)}
+          onClick={() => setActiveTab(TAB_INDEX.settings)}
           className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
                      font-medium hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
         >

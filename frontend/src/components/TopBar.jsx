@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import useStore from '../store/index.js';
+import useStore, { TAB_INDEX } from '../store/index.js';
 import t from '../i18n/he.json';
 import WeatherPopup from './WeatherPopup.jsx';
 import WeatherIcon from './WeatherIcon.jsx';
@@ -482,13 +482,13 @@ function MusicMiniPlayer() {
   );
 }
 
-/** Settings gear — switches to Settings tab (index 5) */
+/** Settings gear — switches to the Settings tab */
 function SettingsButton() {
   const setActiveTab = useStore((s) => s.setActiveTab);
 
   return (
     <button
-      onClick={() => setActiveTab(6)}
+      onClick={() => setActiveTab(TAB_INDEX.settings)}
       className="flex items-center justify-center w-[56px] h-[56px] rounded-xl
                  hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                  text-ts hover:text-tp"

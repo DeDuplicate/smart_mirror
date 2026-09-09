@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { io } from 'socket.io-client';
 import './styles/global.css';
-import useStore from './store/index.js';
+import useStore, { TAB_INDEX } from './store/index.js';
 import t from './i18n/he.json';
 import TopBar from './components/TopBar.jsx';
 import TabBar from './components/TabBar.jsx';
@@ -624,7 +624,7 @@ export default function App() {
 
     if (spotify === 'linked') {
       useStore.getState().setConnectionStatus('spotify', 'connected');
-      useStore.getState().setActiveTab(6);
+      useStore.getState().setActiveTab(TAB_INDEX.settings);
       useStore.getState().addToast('success', t.settings.spotifyConnected);
     }
 

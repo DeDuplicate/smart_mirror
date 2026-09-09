@@ -197,19 +197,23 @@ router.post('/connect', async (req, res) => {
   }
 
   try {
-    const args = ['device', 'wifi', 'connect', ssid];
+    // sudo: polkit's per-session rules don't reliably cover the SSH/headless
+    // kiosk session — every connect failed with "Insufficient privileges"
+    // even with a netdev-group rule. The mirror user has NOPASSWD sudo
+    // (010_pi-nopasswd), and this is a single-purpose appliance.
+    const args = ['-n', 'nmcli', 'device', 'wifi', 'connect', ssid];
     if (password) {
       args.push('password', password);
     }
 
     // Connecting can take a while (scan + DHCP) — allow up to 45s
-    const result = await run('nmcli', args, 45000);
+    const result = await run('sudo', args, 45000);
 
     if (!result.ok) {
       logger.error('WiFi connect failed: %s', result.stderr);
       // nmcli leaves a broken saved profile behind on a failed connect
       // (e.g. wrong password), which makes every retry fail — clean it up.
-      await run('nmcli', ['connection', 'delete', ssid]);
+      await run('sudo', ['-n', 'nmcli', 'connection', 'delete', ssid]);
       return res.status(500).json({ error: 'Failed to connect: ' + result.stderr });
     }
 
@@ -233,7 +237,7 @@ router.delete('/:ssid', async (req, res) => {
   }
 
   try {
-    const result = await run('nmcli', ['connection', 'delete', ssid]);
+    const result = await run('sudo', ['-n', 'nmcli', 'connection', 'delete', ssid]);
 
     if (!result.ok) {
       logger.error('WiFi forget failed: %s', result.stderr);
