@@ -388,10 +388,14 @@ function ensureAvatarColumn(db) {
 function syncPeople(db, configuredPeople) {
   if (!Array.isArray(configuredPeople) || configuredPeople.length === 0) return;
 
+  // position is set on first insert only. This upsert runs on every poll, and
+  // its incoming positions are just this tab's localStorage array indexes — so
+  // re-asserting them collided with people added straight to the DB (from
+  // Settings on another device) and made the column order jump around.
   const upsert = db.prepare(`
     INSERT INTO chore_people (id, name, color, position)
     VALUES (?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color, position = excluded.position
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color
   `);
 
   const tx = db.transaction(() => {
@@ -587,13 +591,23 @@ router.post('/people/:personId/tasks', (req, res) => {
     const person = db.prepare('SELECT id FROM chore_people WHERE id = ?').get(personId);
     if (!person) return res.status(404).json({ error: 'Person not found' });
 
+    const body = req.body || {};
+    // Same guard the kanban POST uses above — without it a blank title reached
+    // SQLite and either created an untitled chore or blew up on NOT NULL.
+    const title = String(body.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
     const id = `ct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const { title, emoji, recurrence, dueDate } = req.body;
+    const { emoji, recurrence, dueDate } = body;
+    // created_at is second-resolution, so it cannot break ties on its own.
+    const pos = db
+      .prepare('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM chore_tasks WHERE person_id = ?')
+      .get(personId).pos;
 
     db.prepare(`
-      INSERT INTO chore_tasks (id, person_id, title, emoji, completed, recurrence, due_date)
-      VALUES (?, ?, ?, ?, 0, ?, ?)
-    `).run(id, personId, title, emoji || '📌', recurrence || 'once', dueDate || null);
+      INSERT INTO chore_tasks (id, person_id, title, emoji, completed, recurrence, due_date, position)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+    `).run(id, personId, title, emoji || '📌', recurrence || 'once', dueDate || null, pos);
 
     const task = db.prepare('SELECT * FROM chore_tasks WHERE id = ?').get(id);
 

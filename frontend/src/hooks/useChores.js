@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
+import useStore from '../store/index.js';
+import t from '../i18n/he.json';
 
 // ─── Socket.io singleton (same pattern as useTasks / useHomeAssistant) ─────
 
@@ -67,6 +69,7 @@ export default function useChores() {
   const [error, setError] = useState(null);
   const [hideCompleted, setHideCompletedState] = useState(loadHideCompleted);
   const intervalRef = useRef(null);
+  const addToast = useStore((s) => s.addToast);
 
   // ── Fetch people + chores from the backend (SQLite) ────────────────────
   // If Settings has a configured family, sync it into the DB first so the
@@ -167,9 +170,12 @@ export default function useChores() {
         dueDate: null,
       }),
     });
+    // The POST broadcasts tasks:updated to every socket including this one, so
+    // a refetch can land before this line and already hold the new chore —
+    // append only if it isn't there, or it renders twice under the same key.
     setPeople((prev) =>
       prev.map((person) =>
-        person.id === personId
+        person.id === personId && !person.tasks.some((t) => t.id === created.id)
           ? { ...person, tasks: [...person.tasks, created] }
           : person
       )
@@ -193,10 +199,12 @@ export default function useChores() {
           method: 'DELETE',
         });
       } catch {
+        // Reverting on its own just made the chore reappear with no explanation.
+        addToast('error', t.tasks.choreDeleteError);
         await fetchTasks();
       }
     },
-    [fetchTasks]
+    [fetchTasks, addToast]
   );
 
   // ── Avatar photo (camera/file picker) — persisted to the DB ────────────

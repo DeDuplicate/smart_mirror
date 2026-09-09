@@ -265,6 +265,10 @@
     "uploadPhoto": "לחץ להעלאת תמונה",
     "photoUploaded": "התמונה נשמרה",
     "photoUploadError": "שמירת התמונה נכשלה",
+    "newChoreFor": "מטלה חדשה ל{name}",
+    "choreAdded": "המטלה נוספה",
+    "choreAddError": "הוספת המטלה נכשלה",
+    "choreDeleteError": "מחיקת המטלה נכשלה",
     "choreEmoji": "סמל מטלה",
     "chooseEmoji": "בחר סמל למטלה",
     "removeEmoji": "הסר"

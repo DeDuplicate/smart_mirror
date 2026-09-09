@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import t from '../../i18n/he.json';
 import useStore from '../../store/index.js';
 import { TasksSkeleton } from '../Skeleton.jsx';
@@ -532,6 +533,7 @@ function PersonColumn({
       {addingTask && (
         <AddTaskSheet
           personId={person.id}
+          personName={person.name}
           personColor={person.color}
           onAdd={onAddTask}
           onClose={() => setAddingTask(false)}
@@ -551,45 +553,82 @@ const CHORE_EMOJIS = [
   '🪣', '🧼', '🫧', '🪥', '👶', '🎮', '📱', '⚽',
 ];
 
-function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
+function AddTaskSheet({ personId, personName, personColor, onAdd, onClose }) {
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('');
   const [recurrence, setRecurrence] = useState('once');
-  const [showKeyboard, setShowKeyboard] = useState(false);
+  // The keyboard is the only text input on the kiosk, so it opens with the
+  // sheet. It used to start closed and be flipped on by the input's autoFocus,
+  // which made the sheet jump position on the first frame every single time.
+  const [showKeyboard, setShowKeyboard] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
   const inputRef = useRef(null);
+  const addToast = useStore((s) => s.addToast);
 
-  const handleSave = useCallback(() => {
-    if (!title.trim()) return;
-    onAdd(personId, { title: title.trim(), emoji, recurrence });
-    onClose();
-  }, [title, emoji, recurrence, personId, onAdd, onClose]);
-
-  const handleInputFocus = useCallback(() => {
-    setShowKeyboard(true);
+  useEffect(() => {
+    inputRef.current?.focus({ preventScroll: true });
   }, []);
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+  // Was fire-and-forget: onAdd() unawaited, then onClose() regardless. A failed
+  // add closed the sheet, dropped the chore and surfaced nothing but an
+  // unhandled rejection in a devtools console nobody has open on a wall panel.
+  const handleSave = useCallback(async () => {
+    const clean = title.trim();
+    if (!clean || saving) return;
+    setSaving(true);
+    try {
+      await onAdd(personId, { title: clean, emoji, recurrence });
+      addToast('success', t.tasks.choreAdded);
+      onClose();
+    } catch {
+      addToast('error', t.tasks.choreAddError);
+      setSaving(false);
+    }
+  }, [title, emoji, recurrence, personId, onAdd, onClose, addToast, saving]);
+
+  // Escape the column's clipping and tab transforms, but keep app scaling.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-chore-heading"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/40"
         onClick={onClose}
       />
 
-      {/* Sheet — sits above keyboard when keyboard is open */}
+      {/* Sheet — rests on top of the keyboard. Centred and width-capped: at
+          1920px a full-bleed sheet spread three controls across a metre of
+          glass, and the person you were adding for was never named. */}
       <div
-        className="relative bg-[var(--surf)] rounded-t-3xl border-t border-[var(--bd)] p-5 pb-4 flex flex-col gap-4 celebration-sheet-slide-up"
+        className="absolute bg-[var(--surf)] rounded-t-3xl border-t border-[var(--bd)] p-5 pb-4 flex flex-col gap-4 celebration-sheet-slide-up shadow-modal overflow-y-auto"
         style={{
           zIndex: 51,
-          position: showKeyboard ? 'absolute' : 'relative',
           bottom: showKeyboard ? '40%' : '0',
-          left: 0,
-          right: 0,
-          marginTop: showKeyboard ? undefined : 'auto',
+          insetInline: 0,
+          marginInline: 'auto',
+          width: 'min(720px, 100%)',
+          maxHeight: showKeyboard ? '58%' : '92%',
           transition: 'bottom var(--dur-normal) var(--ease)',
         }}
       >
+        {/* Header — says whose chore this is */}
+        <div className="flex items-center gap-2.5">
+          <span
+            className="w-2.5 h-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: personColor }}
+            aria-hidden="true"
+          />
+          <h2 id="new-chore-heading" className="text-lg font-bold text-[var(--tp)]">
+            {t.tasks.newChoreFor.replace('{name}', personName)}
+          </h2>
+        </div>
         {/* Emoji picker */}
         <div className="flex flex-col gap-2">
           <label className="text-sm font-semibold text-[var(--tp)]">
@@ -648,18 +687,24 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
 
         {/* Title input */}
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-[var(--tp)]">
+          <label htmlFor="new-chore-title" className="text-sm font-semibold text-[var(--tp)]">
             {t.tasks.title}
           </label>
           <input
             ref={inputRef}
+            id="new-chore-title"
             type="text"
+            inputMode="none"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onFocus={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
+            onClick={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSave();
+            }}
             placeholder={t.tasks.titlePlaceholder}
             className="
-              w-full py-3 px-4 rounded-xl text-sm
+              w-full min-h-[56px] py-3 px-4 rounded-xl text-sm
               bg-[var(--s2)] text-[var(--tp)]
               border border-[var(--bd)]
               placeholder-[var(--tm)]
@@ -667,7 +712,6 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
               transition-colors duration-[var(--dur-fast)]
             "
             dir="rtl"
-            autoFocus
           />
         </div>
 
@@ -682,7 +726,7 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
                 key={option.value}
                 onClick={() => setRecurrence(option.value)}
                 className={`
-                  flex-1 py-2.5 px-3 rounded-xl text-sm font-medium
+                  flex-1 min-h-[56px] py-2.5 px-3 rounded-xl text-sm font-medium
                   border transition-all duration-[var(--dur-fast)]
                   ${recurrence === option.value
                     ? 'border-[var(--acc)] bg-[var(--acc)]/10 text-[var(--acc)]'
@@ -700,21 +744,21 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
         <div className="flex gap-3">
           <button
             onClick={handleSave}
-            disabled={!title.trim()}
+            disabled={!title.trim() || saving}
             className="
-              flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white
+              flex-1 min-h-[56px] py-3 px-4 rounded-xl text-sm font-bold text-white
               transition-all duration-[var(--dur-fast)]
               disabled:opacity-40 disabled:cursor-not-allowed
               active:scale-[0.98]
             "
             style={{ backgroundColor: personColor || 'var(--acc)' }}
           >
-            {t.common.save}
+            {saving ? t.common.loading : t.common.save}
           </button>
           <button
             onClick={onClose}
             className="
-              flex-1 py-3 px-4 rounded-xl text-sm font-medium
+              flex-1 min-h-[56px] py-3 px-4 rounded-xl text-sm font-medium
               bg-[var(--s2)] text-[var(--ts)]
               border border-[var(--bd)]
               active:scale-[0.98]
@@ -734,7 +778,8 @@ function AddTaskSheet({ personId, personColor, onAdd, onClose }) {
         onEnter={() => setShowKeyboard(false)}
         onClose={() => setShowKeyboard(false)}
       />
-    </div>
+    </div>,
+    document.getElementById('root') || document.body
   );
 }
 
@@ -771,8 +816,10 @@ export default function TasksPage() {
     return <TasksSkeleton />;
   }
 
-  // Error state
-  if (error) {
+  // Error state — only when there is nothing to show. A failed background poll
+  // used to replace the whole board with this screen, so one flaky 2-minute
+  // refresh wiped every column until the next one happened to succeed.
+  if (error && peopleWithPhotos.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
