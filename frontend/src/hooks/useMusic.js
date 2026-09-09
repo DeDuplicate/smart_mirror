@@ -158,6 +158,9 @@ async function waitUntilWarm(id, onWaiting) {
       return false; // backend unreachable; let the caller fall back
     }
     if (status === 'ready') return true;
+    // The server negative-caches failed conversions: stop polling at once
+    // instead of re-triggering a doomed conversion until the timeout.
+    if (status === 'error') return false;
     if (!announced) {
       announced = true;
       onWaiting?.();
@@ -170,7 +173,14 @@ async function waitUntilWarm(id, onWaiting) {
 async function castViaStream(track, entityId, onWaiting) {
   // Convert first, cast second. The reverse order is why picking a song the
   // server had not cached yet left the speaker silent.
-  await waitUntilWarm(track.id, onWaiting);
+  //
+  // Casting anyway on a timeout is worse than failing: /cast-url reports the
+  // extension it actually holds, so for an unconverted track it falls back to
+  // advertising .mp3 while the conversion may still land as .m4a. Throwing
+  // instead lets castTrack move on to its next strategy.
+  if (!(await waitUntilWarm(track.id, onWaiting))) {
+    throw new Error('track did not finish converting in time');
+  }
 
   const data = await fetchApi(`/api/music/cast-url/${track.id}`);
   const url = data?.url;
@@ -267,18 +277,29 @@ function persist(key, value) {
   } catch { /* quota */ }
 }
 
+/**
+ * Read a persisted number, falling back to `fallback` when the key is absent.
+ *
+ * Not `Number.isFinite(Number(raw))`: getItem returns null for a missing key
+ * and Number(null) is 0, which is finite — so that test silently answered 0 on
+ * a fresh device and the fallback was unreachable. A new mirror started muted
+ * (volume 0) with currentIndex 0 against an empty queue.
+ */
+function loadNumber(key, fallback) {
+  let raw = null;
+  try { raw = localStorage.getItem(key); } catch { /* disabled */ }
+  if (raw === null || raw === '') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export default function useMusic() {
   const addToast = useStore((s) => s.addToast);
+  const removeToast = useStore((s) => s.removeToast);
 
   const [queue, setQueue] = useState(() => loadJson(QUEUE_KEY, []));
-  const [currentIndex, setCurrentIndex] = useState(() => {
-    const saved = Number(localStorage.getItem(INDEX_KEY));
-    return Number.isFinite(saved) ? saved : -1;
-  });
-  const [volume, setVolumeState] = useState(() => {
-    const saved = Number(localStorage.getItem(VOLUME_KEY));
-    return Number.isFinite(saved) ? saved : 70;
-  });
+  const [currentIndex, setCurrentIndex] = useState(() => loadNumber(INDEX_KEY, -1));
+  const [volume, setVolumeState] = useState(() => loadNumber(VOLUME_KEY, 70));
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState('off');
   const [searchQuery, setSearchQuery] = useState('');
@@ -395,6 +416,19 @@ export default function useMusic() {
   useEffect(() => { playerRef.current = player; }, [player]);
   useEffect(() => { handleEndedRef.current = handleEnded; }, [handleEnded]);
 
+  // Cast with a "preparing track" toast that is dismissed as soon as the cast
+  // resolves — success OR failure. The toast's own 90s timer is only a safety
+  // net for a hung conversion; without this it lingered on screen long after
+  // the song had started playing.
+  const startCast = useCallback((track, speaker) => {
+    let warmToast = null;
+    return castTrack(track, speaker, () => {
+      warmToast = addToast('info', t.music.preparingTrack, 90000);
+    }).finally(() => {
+      if (warmToast != null) removeToast(warmToast);
+    });
+  }, [addToast, removeToast]);
+
   const playIndex = useCallback((index, list = queueRef.current) => {
     if (index < 0 || index >= list.length) return;
     setCurrentIndex(index);
@@ -404,7 +438,7 @@ export default function useMusic() {
       try { playerRef.current.pause?.(); } catch { /* ignore */ }
       const speaker = speakersRef.current.find((item) => item.id === outputRef.current)
         || { id: outputRef.current, name: outputRef.current, audioOnly: /nestmini|googlehome|nest_audio/.test(outputRef.current) };
-      castTrack(track, speaker, () => addToast('info', t.music.preparingTrack, 90000))
+      startCast(track, speaker)
         .then(() => setCastPlaying(true))
         .catch(() => {
           addToast('error', t.music.castYoutubeBlocked);
@@ -416,7 +450,7 @@ export default function useMusic() {
       return;
     }
     playerRef.current.load(track.id, true);
-  }, [addToast]);
+  }, [addToast, startCast]);
 
   useEffect(() => { playIndexRef.current = playIndex; }, [playIndex]);
 
@@ -757,7 +791,7 @@ export default function useMusic() {
       if (track?.id) {
         const speaker = speakersRef.current.find((item) => item.id === next)
           || { id: next, name: next, audioOnly: /nestmini|googlehome|nest_audio/.test(next) };
-        castTrack(track, speaker, () => addToast('info', t.music.preparingTrack, 90000))
+        startCast(track, speaker)
           .then(() => setCastPlaying(true))
           .catch(() => {
             addToast('error', t.music.castYoutubeBlocked);
@@ -773,7 +807,7 @@ export default function useMusic() {
       const track = queueRef.current[indexRef.current];
       if (track?.id) playerRef.current.load?.(track.id, true);
     }
-  }, [addToast]);
+  }, [addToast, startCast]);
 
   const playPause = useCallback(() => {
     if (!currentTrack) return;
@@ -839,11 +873,17 @@ export default function useMusic() {
     player.seek(seconds);
   }, [player]);
 
-  const setVolume = useCallback((value) => {
+  // `persist: false` changes the level without recording it as the user's
+  // preference. Reminder ducking needs this: it used to save its own 10% and,
+  // if the page reloaded before the overlay unmounted and restored, the mirror
+  // came back permanently at 10% with no way to tell it had been ducked.
+  const setVolume = useCallback((value, { persist = true } = {}) => {
     const v = Math.max(0, Math.min(100, Number(value) || 0));
     setVolumeState(v);
     player.setVolume(v);
-    try { localStorage.setItem(VOLUME_KEY, String(v)); } catch { /* ignore */ }
+    if (persist) {
+      try { localStorage.setItem(VOLUME_KEY, String(v)); } catch { /* ignore */ }
+    }
     if (outputRef.current && outputRef.current !== 'local') {
       fetchApi('/api/ha/services/media_player/volume_set', {
         method: 'POST',
