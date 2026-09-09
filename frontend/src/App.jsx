@@ -18,6 +18,7 @@ import useAutoTheme from './hooks/useAutoTheme.js';
 import useWeather from './hooks/useWeather.js';
 import useEventReminders from './hooks/useEventReminders.js';
 import ReminderOverlay from './components/ReminderOverlay.jsx';
+import AlarmOverlay from './components/AlarmOverlay.jsx';
 import Screensaver from './components/Screensaver.jsx';
 import { applyTheme, normalizeThemeMode, resolveIsDark } from './theme.js';
 
@@ -27,6 +28,7 @@ const TasksPage    = React.lazy(() => import('./components/pages/TasksPage.jsx')
 const ChoresPage   = React.lazy(() => import('./components/pages/ChoresPage.jsx'));
 const HomePage     = React.lazy(() => import('./components/pages/HomePage.jsx'));
 const MusicPage    = React.lazy(() => import('./components/pages/MusicPage.jsx'));
+const AlarmsPage   = React.lazy(() => import('./components/pages/AlarmsPage.jsx'));
 const NewsPage     = React.lazy(() => import('./components/pages/NewsPage.jsx'));
 const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage.jsx'));
 
@@ -54,6 +56,7 @@ const PAGES = [
   ChoresPage,
   HomePage,
   MusicPage,
+  AlarmsPage,
   NewsPage,
   SettingsPage,
 ];
@@ -717,6 +720,13 @@ export default function App() {
       addToast(type, message);
     });
 
+    // Alarm clock: the backend scheduler fires on the alarm's minute; the
+    // overlay (inside MusicProvider) plays the chosen media on the chosen
+    // speakers. Set, don't queue — one alarm at a time, a new one replaces.
+    sock.on('alarm:trigger', (alarm) => {
+      useStore.getState().setActiveAlarm(alarm);
+    });
+
     return () => {
       sock.off('connect');
       sock.off('disconnect');
@@ -725,6 +735,7 @@ export default function App() {
       sock.off('settings:update');
       sock.off('settings:updated');
       sock.off('toast');
+      sock.off('alarm:trigger');
     };
   }, [setWeather, setConnectionStatus, setAllConnectionStatuses, setSettings, addToast]);
 
@@ -808,7 +819,10 @@ export default function App() {
 
         {/* Event alarm — after <Screensaver /> so it paints above it,
             inside MusicProvider so it can duck the player. */}
+        {/* Reminder + alarm overlays — inside MusicProvider so they can drive
+            the player. */}
         <ReminderOverlay />
+        <AlarmOverlay />
       </MusicProvider>
 
       {/* Overlays */}

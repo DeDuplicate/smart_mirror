@@ -262,8 +262,42 @@ async function castTrack(track, speaker, onWaiting) {
   throw lastErr || new Error('cast failed');
 }
 
-function loadJson(key, fallback) {
+/**
+ * Broadcast a track to several speakers at once (alarm clock). Each speaker
+ * gets its own warm + cast; one failing speaker must not block the others.
+ * Pass volume=null: the alarm's escalation ladder owns volume after firing.
+ */
+export async function castAlarmToSpeakers(track, speakerIds, volume) {
+  let players = [];
   try {
+    const data = await fetchApi('/api/ha/media-players');
+    players = (data.players || []).map(classifyPlayer);
+  } catch { /* fall back to id-based heuristics below */ }
+
+  await Promise.allSettled(speakerIds.map(async (id) => {
+    const speaker = players.find((p) => p.id === id)
+      || { id, name: id, audioOnly: /nestmini|googlehome|nest_audio/.test(String(id)) };
+    await castTrack(track, speaker);
+    // Volume AFTER the cast: the receiver app resets to the device's own level
+    // when it launches, so a volume_set issued before play_media is lost.
+    if (typeof volume === 'number') {
+      try {
+        await haService('media_player', 'volume_set', { entity_id: id, volume_level: volume / 100 });
+      } catch { /* optional */ }
+    }
+  }));
+}
+
+/** Set the same volume (0-100) on several speakers at once (alarm escalation). */
+export async function setSpeakersVolume(speakerIds, volume) {
+  await Promise.allSettled(speakerIds.map((id) =>
+    haService('media_player', 'volume_set', { entity_id: id, volume_level: volume / 100 })
+  ));
+}
+
+export { stopCast };
+
+function loadJson(key, fallback) {  try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
   } catch {
@@ -324,6 +358,13 @@ export default function useMusic() {
   // Anchor for interpolating cast position between HA polls:
   // { position (s), at (ms epoch when that position was current), playing }
   const castAnchorRef = useRef({ position: 0, at: 0, playing: false });
+  const castDurationRef = useRef(0);
+  // End-of-track preheat: when the LAST queued track is 10s from the end,
+  // fetch the auto-related pick and start its server-side conversion, so
+  // handleEnded plays it without a fetch+convert gap.
+  // { forId: the ending track's id, track: the warming pick }
+  const preheatRef = useRef({ forId: null, track: null });
+  const PREHEAT_BEFORE_END_S = 10;
 
   const searchTimer = useRef(null);
   const suggestTimer = useRef(null);
@@ -388,6 +429,19 @@ export default function useMusic() {
 
     const last = list[idx];
     if (last?.id) {
+      // A track preheated during the last 10s is already converting (or
+      // cached) on the server — play it without a second fetch+convert gap.
+      const preheated = preheatRef.current.forId === last.id
+        ? preheatRef.current.track
+        : null;
+      preheatRef.current = { forId: null, track: null };
+      if (preheated?.id && !list.some((q) => q.id === preheated.id)) {
+        const updated = [...list, preheated];
+        setQueue(updated);
+        queueRef.current = updated;
+        playIndexRef.current(updated.length - 1, updated);
+        return;
+      }
       fetchApi(`/api/music/related/${last.id}`).then((data) => {
         const related = (data.tracks || []).filter((item) => !list.some((q) => q.id === item.id));
         if (!related.length) return;
@@ -710,7 +764,10 @@ export default function useMusic() {
         };
         setCastPlaying(playing);
         const dur = Number(attr.media_duration) || 0;
-        if (dur > 0) setCastDuration(dur);
+        if (dur > 0) {
+          setCastDuration(dur);
+          castDurationRef.current = dur;
+        }
 
         // Auto-advance: the local player's onEnded never fires while casting.
         // Google Cast reports state 'idle' (sometimes 'off'/'standby') once a
@@ -735,6 +792,43 @@ export default function useMusic() {
       }
     };
 
+  // Runs on the cast ticker: near the end of the last queued track, discover
+  // and pre-convert the auto-related follow-up so playback continues without
+  // a silence gap. Refs only, so a stale closure inside the interval is fine.
+  const maybePreheat = () => {
+    const list = queueRef.current;
+    const idx = indexRef.current;
+    const cur = list[idx];
+    if (!cur?.id) return;
+    // Only the last track needs this (mid-queue next is warmed on start), and
+    // only when handleEnded would reach the related-fetch path.
+    if (idx < list.length - 1) return;
+    if (repeatRef.current === 'one' || repeatRef.current === 'all') return;
+    if (shuffleRef.current && list.length > 1) return;
+    if (playlistRestRef.current.length) return;
+    if (preheatRef.current.forId === cur.id) return;
+
+    const a = castAnchorRef.current;
+    if (!a.playing || !a.at) return;
+    const dur = castDurationRef.current || cur.durationSeconds || 0;
+    if (dur < PREHEAT_BEFORE_END_S * 3) return; // too short to matter
+    const pos = a.position + (Date.now() - a.at) / 1000;
+    if (pos < dur - PREHEAT_BEFORE_END_S) return;
+
+    preheatRef.current = { forId: cur.id, track: null };
+    fetchApi(`/api/music/related/${cur.id}`).then((data) => {
+      const pick = (data.tracks || []).find((item) => !queueRef.current.some((q) => q.id === item.id));
+      if (!pick?.id) return;
+      preheatRef.current.track = pick;
+      fetchApi(`/api/music/prewarm/${pick.id}`, { method: 'POST' }).catch(() => {});
+    }).catch(() => {
+      // Allow a retry if the fetch failed before the track actually ends.
+      if (preheatRef.current.forId === cur.id && !preheatRef.current.track) {
+        preheatRef.current = { forId: null, track: null };
+      }
+    });
+  };
+
     poll();
     const pollTimer = setInterval(poll, 2000);
     const ticker = setInterval(() => {
@@ -742,6 +836,7 @@ export default function useMusic() {
       if (!a.at) return;
       const extra = a.playing ? (Date.now() - a.at) / 1000 : 0;
       setCastPosition(a.position + extra);
+      maybePreheat();
     }, 500);
 
     return () => {
