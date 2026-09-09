@@ -42,32 +42,44 @@ export default function AlarmOverlay() {
         imageUrl: alarm.media_image,
         durationSeconds: 0,
       };
+      let playlistRest = [];
 
       if (alarm.media_type === 'playlist') {
         try {
           const data = await fetchApi(`/api/music/playlist/${encodeURIComponent(alarm.media_id)}`);
           const tracks = data.tracks || [];
           if (!tracks.length) return;
-          if (useLocal) music.playTrack(tracks[0], tracks.slice(1));
+          track = tracks[0];
+          playlistRest = tracks.slice(1);
           // Speakers get the first track; the playlist continues via the
           // auto-related/preheat machinery on 'local' only.
-          track = tracks[0];
         } catch {
           return;
         }
-      } else if (useLocal) {
-        // An alarm that includes the screen takes over local playback even if
-        // the current output is a speaker.
-        if (music.outputId !== 'local') music.setOutputId('local');
-        music.playTrack(track);
       }
 
-      if (useLocal) music.setVolume(VOLUME_STEPS[0]);
+      if (useLocal) {
+        // Take over local playback. If the output is currently a speaker,
+        // stop it FIRST and await it: setOutputId's internal stopCast is
+        // fire-and-forget, and letting it float raced the broadcast — its
+        // turn_off landed mid-cast and killed the speaker (05:21 failure).
+        // A stopped target speaker simply gets re-cast a second later.
+        if (music.outputId !== 'local') {
+          try { await stopCast(music.outputId); } catch { /* already stopped */ }
+          music.setOutputId('local');
+        }
+        music.playTrack(track, playlistRest);
+        music.setVolume(VOLUME_STEPS[0]);
+      }
+
       if (targets.length) {
         await castAlarmToSpeakers(track, targets, VOLUME_STEPS[0]);
       }
     })();
-  }, [alarm, music, useLocal, targets]);
+    // Keyed on the alarm id only — music/targets change identity every
+    // render and must not re-run (or restart) the playback plan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alarm?.id]);
 
   // Volume escalation: one step louder every VOLUME_STEP_MS while the alarm
   // stays unanswered. Starts from step 1 — the cast path already applied
@@ -103,15 +115,17 @@ export default function AlarmOverlay() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70"
       role="alertdialog"
       aria-modal="true"
       aria-label={t.alarms.title}
     >
+      {/* No pulse animation or backdrop blur here: both repaint a large
+          shadowed card every frame, which visibly flickers on the Pi 2's
+          low-end GPU. The alarm is attention-grabbing by being loud instead. */}
       <div
         className="mx-6 w-full max-w-[640px] rounded-3xl bg-[var(--s1)] border border-[var(--bd)]
-                   shadow-2xl p-8 flex flex-col gap-6 text-center items-center
-                   animate-[pulse_2s_ease-in-out_infinite]"
+                   shadow-2xl p-8 flex flex-col gap-6 text-center items-center"
       >
         {alarm.media_image ? (
           <img src={alarm.media_image} alt="" className="w-32 h-32 rounded-2xl object-cover shadow-lg" />

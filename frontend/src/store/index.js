@@ -17,6 +17,20 @@ export function normalizeIdleMinutes(value) {
 
 // ─── Tab Slice ───────────────────────────────────────────────────────────────
 
+// Single source of truth for tab indexes — must match PAGES in App.jsx and
+// TABS in TabBar.jsx. Hardcoded indexes broke when Alarms was inserted
+// (the settings gear opened News); use TAB_INDEX.settings etc. instead.
+export const TAB_INDEX = {
+  calendar: 0,
+  tasks: 1,
+  chores: 2,
+  home: 3,
+  music: 4,
+  alarms: 5,
+  news: 6,
+  settings: 7,
+};
+
 const tabSlice = (set) => ({
   activeTab: 0,
   previousTab: -1,

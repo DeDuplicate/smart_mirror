@@ -116,6 +116,8 @@
     "connect": "התחבר",
     "forgetNetwork": "שכח רשת",
     "password": "סיסמה",
+    "showPassword": "הצג סיסמה",
+    "hidePassword": "הסתר סיסמה",
     "connected": "מחובר",
     "connecting": "מתחבר...",
     "noNetworks": "לא נמצאו רשתות",
