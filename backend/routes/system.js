@@ -497,6 +497,15 @@ router.get('/check-update', async (req, res) => {
 // npm install on a Pi 4 over a slow link is the long pole here.
 const STAGE_TIMEOUT_MS = 300000;
 
+// The mirror runs with NODE_ENV=production (backend/.env and ecosystem.config),
+// and every child process inherits it -- which makes npm treat the install as
+// --omit=dev and DELETE the devDependencies. vite, the react plugin, tailwind
+// and postcss all live there, so the very next stage ("npx vite build") dies
+// with ERR_MODULE_NOT_FOUND, and the rollback's rebuild then dies the same way,
+// leaving a tree whose frontend can never be rebuilt without a manual install.
+// The build tooling is not optional here: this process exists to run a build.
+const NPM_INSTALL_ARGS = ['install', '--include=dev'];
+
 let updateInProgress = false;
 
 function emitUpdateProgress(io, payload) {
@@ -526,7 +535,7 @@ async function rollbackTo(commit, logger, io) {
   // failure mode this is guarding against.
   let depsOk = true;
   for (const pkgDir of ['backend', 'frontend']) {
-    const deps = await run('npm', ['install'], STAGE_TIMEOUT_MS, {
+    const deps = await run('npm', NPM_INSTALL_ARGS, STAGE_TIMEOUT_MS, {
       cwd: path.join(PROJECT_ROOT, pkgDir),
       shell: IS_WINDOWS,
     });
@@ -604,8 +613,8 @@ router.post('/update', async (req, res) => {
 
   const stages = [
     { name: 'pull',          cmd: 'git', args: ['pull', 'origin', 'main'], cwd: PROJECT_ROOT },
-    { name: 'backend-deps',  cmd: 'npm', args: ['install'], cwd: path.join(PROJECT_ROOT, 'backend') },
-    { name: 'frontend-deps', cmd: 'npm', args: ['install'], cwd: path.join(PROJECT_ROOT, 'frontend') },
+    { name: 'backend-deps',  cmd: 'npm', args: NPM_INSTALL_ARGS, cwd: path.join(PROJECT_ROOT, 'backend') },
+    { name: 'frontend-deps', cmd: 'npm', args: NPM_INSTALL_ARGS, cwd: path.join(PROJECT_ROOT, 'frontend') },
     { name: 'build',         cmd: 'npx', args: ['vite', 'build'], cwd: path.join(PROJECT_ROOT, 'frontend') },
   ];
 
