@@ -16,13 +16,15 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 | Tab | Description |
 |-----|-------------|
-| :calendar: **Calendar** | Day / week / month views (Israeli Sun–Thu week) with Google Calendar sync, local event editor, color-coded events, upcoming-events sidebar with explicit day labels, pull-to-refresh |
-| :white_check_mark: **Tasks** | Kanban board with drag-and-drop, subtasks, priorities, due dates, Google Tasks sync |
+| :calendar: **Calendar** | Day / week / month views (Israeli Sun–Thu week) with Google Calendar ICS sync, local event editor, color-coded events, upcoming-events sidebar with explicit day labels, pull-to-refresh |
+| :white_check_mark: **Tasks** | Kanban board with drag-and-drop, subtasks, priorities, due dates |
 | :star: **Chores** | Per-person columns with progress rings, celebration animations & sounds, family photos |
 | :house: **Smart Home** | Home Assistant tiles, AC control (IR scripts), IR remote, curtain/cover control, power monitor, shopping list |
 | :musical_note: **Music** | YouTube search + IFrame player with queue, plus MP3 casting to Google Nest / Google Home speakers |
+| :alarm_clock: **Alarms** | Multi-room alarm clock with Android-style clock dial, recurring days, YouTube track/playlist alarms, volume escalation, and Google Cast speaker targeting |
 | :newspaper: **News** | Hebrew RSS feeds (Ynet, Channel 14) with full article extraction |
-| :gear: **Settings** | Full configuration UI, family management, dark mode, backup/restore, factory reset, setup wizard |
+
+> **Note:** **Settings** (:gear:) is always accessible directly from the TopBar header (family management, dark mode, display schedule, backups, OTA updates, and setup wizard).
 
 ### :framed_picture: Ambient Screensaver
 
@@ -47,7 +49,7 @@ Both the clock and slideshow styles share one region grid, so every element keep
   phrase without server state, and the order differs each day instead of repeating on a fixed cycle
 - **Configurable rotation interval** (1 minute → once a day) in Settings → Display
 
-
+### :musical_note: Music & Audio Casting
 
 - :mag: **YouTube search** and IFrame playback with queue, shuffle, and repeat
 - :satellite: **Cast to Google Nest Mini / Home** — since Cast-audio speakers can't render YouTube, the backend transcodes the stream to MP3 on the fly (`yt-dlp` → `ffmpeg`) and serves a self-hosted, HMAC-signed LAN URL the speaker can play
@@ -83,6 +85,8 @@ Both the clock and slideshow styles share one region grid, so every element keep
 - :electric_plug: **IR remote control** for TVs per room
 - :snowflake: **AC control** via IR scripts
 - :keyboard: **On-screen keyboard** (Hebrew / English / emoji) for touch input
+- :alarm_clock: **Alarm clock** with Android clock dial, repeating days, YouTube media, volume escalation & speaker targets
+- :bell: **Event reminders** with chime audio alerts, persistent queue & snooze for calendar events
 - :framed_picture: **Screensaver** (clock / photo slideshow) on idle — see [Ambient Screensaver](#framed_picture-ambient-screensaver)
 - :arrow_down: **Pull-to-refresh** on Calendar, Tasks and News
 - :iphone: **PWA installable** on mobile
@@ -162,12 +166,13 @@ Copy `backend/.env.example` to `backend/.env` and fill in your values:
 
 | Variable | Purpose |
 |----------|---------|
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID (Calendar & Tasks) |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `SPOTIFY_CLIENT_ID` | Spotify app client ID (Music tab) |
+| `PORT` | Backend server port (default: `3001`) |
+| `NODE_ENV` | Environment mode (`production` or `development`) |
+| `SPOTIFY_CLIENT_ID` | Spotify app client ID (optional, for Spotify integration) |
 | `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
 | `HA_HOST` | Home Assistant URL (e.g. `http://homeassistant.local:8123`) |
 | `HA_TOKEN` | Home Assistant long-lived access token |
+| `TOKEN_SECRET` | Secret key used to encrypt OAuth tokens at rest (auto-generated if unset) |
 | `YTDLP_PATH` | Path to the `yt-dlp` binary (optional; auto-detected on `PATH`) |
 | `FFMPEG_PATH` | Path to the `ffmpeg` binary (optional; auto-detected on `PATH`) |
 | `STREAM_HOST` | LAN host/IP the speaker uses to reach the MP3 stream (optional; auto-detected, set manually for Docker) |
@@ -183,10 +188,10 @@ smart_mirror/
 │   └── src/
 │       ├── components/
 │       │   ├── pages/       # CalendarPage, TasksPage, ChoresPage, HomePage,
-│       │   │                # MusicPage, NewsPage, SettingsPage
-│       │   ├── TopBar.jsx   # Clock, weather, Hebrew date, dark mode
+│       │   │                # MusicPage, AlarmsPage, NewsPage, SettingsPage
+│       │   ├── TopBar.jsx   # Clock, weather, Hebrew date, dark mode, settings
 │       │   ├── TabBar.jsx   # Bottom navigation tabs
-│       │   └── ...          # Shared UI (modals, overlays, animations)
+│       │   └── ...          # Shared UI (modals, AlarmOverlay, ReminderOverlay, popups)
 │       ├── hooks/           # useCalendar, useChores, useMusic, useHomeAssistant, ...
 │       ├── store/           # Zustand global store
 │       ├── i18n/            # Hebrew translations
@@ -197,8 +202,11 @@ smart_mirror/
 │   └── ...
 ├── scripts/
 │   ├── setup.sh             # Raspberry Pi setup script
+│   ├── sync-to-pi.js        # Auto-sync & deploy to Raspberry Pi
 │   ├── start-kiosk.sh       # Chromium kiosk launcher
-│   └── backup.sh            # Database backup utility
+│   ├── backup.sh            # Database backup utility
+│   ├── set-ha-token.sh      # Home Assistant token configuration script
+│   └── generate-icons.js    # PWA icon generator
 ├── ecosystem.config.js      # PM2 process configuration
 └── package.json
 ```
