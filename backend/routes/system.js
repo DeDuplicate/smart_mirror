@@ -21,6 +21,12 @@ const { runMigrations } = require('../db/migrate');
 // entry in ecosystem.config.js at the repo root.
 const PM2_APP_NAME = 'mirror-backend';
 
+// systemd unit for the same backend on the Pi image (see
+// image/stage-smartmirror/02-kiosk/files/smart-mirror-backend.service). The
+// flashable image runs under systemd, not PM2, so an updater that only knows
+// how to ask PM2 leaves a wall-mounted screen asking to be restarted by hand.
+const SYSTEMD_UNIT = 'smart-mirror-backend';
+
 function getConfigValue(db, key) {
   try {
     const row = db.prepare('SELECT value FROM config WHERE key = ?').get(key);
@@ -568,6 +574,31 @@ async function rollbackTo(commit, logger, io) {
   return true;
 }
 
+/**
+ * Whoever is actually supervising this process, or null if nobody is. PM2 is
+ * checked first because a dev box that has both should behave as it always
+ * has; the Pi image only has systemd. Restarting kills this process, so the
+ * caller must have answered the client before invoking restart().
+ */
+async function detectSupervisor() {
+  const pm2 = await run('pm2', ['describe', PM2_APP_NAME], 15000, { shell: IS_WINDOWS });
+  if (pm2.ok) {
+    return { kind: 'pm2', restart: () => run('pm2', ['restart', PM2_APP_NAME], 15000) };
+  }
+
+  // -n so a sudo password prompt can never hang the restart: without a
+  // passwordless rule this fails immediately and is reported honestly.
+  const active = await run('systemctl', ['is-active', SYSTEMD_UNIT], 10000);
+  if (active.ok && active.stdout.trim() === 'active') {
+    return {
+      kind: 'systemd',
+      restart: () => run('sudo', ['-n', 'systemctl', 'restart', SYSTEMD_UNIT], 30000),
+    };
+  }
+
+  return null;
+}
+
 router.post('/update', async (req, res) => {
   const logger = req.app.locals.logger;
   const io = req.app.locals.io;
@@ -594,7 +625,14 @@ router.post('/update', async (req, res) => {
   // tracked modifications present, and the rollback path would then discard
   // them with `git reset --hard`. A mirror should never silently eat local
   // edits, so this is checked up front rather than assumed.
-  const statusResult = await run('git', ['status', '--porcelain'], 10000, { cwd: PROJECT_ROOT });
+  //
+  // Tracked files only. `git reset --hard` leaves untracked files alone, so
+  // they are not what this guard protects -- and counting them meant one stray
+  // dist.old/ or editor backup on the mirror refused every update from then on,
+  // permanently, with no way to clear it from the screen. An untracked file
+  // that genuinely collides with an incoming one still stops the update, but it
+  // does so at the pull stage, which changes nothing and needs no rollback.
+  const statusResult = await run('git', ['status', '--porcelain', '--untracked-files=no'], 10000, { cwd: PROJECT_ROOT });
   if (!statusResult.ok) {
     updateInProgress = false;
     return res.json({ success: false, message: 'Could not determine working tree state' });
@@ -656,12 +694,15 @@ router.post('/update', async (req, res) => {
     logger.info('Update completed successfully — restarting to load the new code');
     emitUpdateProgress(io, { stage: 'restart', status: 'running' });
 
-    // Only claim a restart will happen if PM2 actually manages this process.
-    // Otherwise the old code keeps serving the newly built frontend and the
-    // update silently appears to have done nothing.
-    const managed = await run('pm2', ['describe', PM2_APP_NAME], 15000, { shell: IS_WINDOWS });
-    if (!managed.ok) {
-      logger.warn('PM2 is not managing "%s" — a manual restart is required', PM2_APP_NAME);
+    // Only claim a restart will happen if something actually manages this
+    // process. Otherwise the old code keeps serving the newly built frontend
+    // and the update silently appears to have done nothing.
+    const supervisor = await detectSupervisor();
+    if (!supervisor) {
+      logger.warn(
+        'Neither PM2 ("%s") nor systemd ("%s") manages this process — a manual restart is required',
+        PM2_APP_NAME, SYSTEMD_UNIT
+      );
       emitUpdateProgress(io, { stage: 'done', status: 'done', restarted: false });
       updateInProgress = false;
       return res.json({
@@ -688,10 +729,11 @@ router.post('/update', async (req, res) => {
     // about to kill this process, and clearing the flag would open a window for
     // a second update to start and then be killed mid-install. If the restart
     // somehow fails the flag is released so the mirror isn't wedged.
+    logger.info('Restarting via %s', supervisor.kind);
     setTimeout(() => {
-      run('pm2', ['restart', PM2_APP_NAME], 15000).then((result) => {
+      supervisor.restart().then((result) => {
         if (!result.ok) {
-          logger.error('Post-update restart failed: %s', result.stderr);
+          logger.error('Post-update restart failed (%s): %s', supervisor.kind, result.stderr);
           updateInProgress = false;
         }
       });
