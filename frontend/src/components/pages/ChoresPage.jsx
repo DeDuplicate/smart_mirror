@@ -36,6 +36,16 @@ function CheckIcon({ className = 'w-5 h-5' }) {
   );
 }
 
+function CloseIcon({ className = 'w-6 h-6' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 function TrashIcon({ className = 'w-4 h-4' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -587,7 +597,9 @@ function AddTaskSheet({ personId, personName, personColor, onAdd, onClose }) {
     }
   }, [title, emoji, recurrence, personId, onAdd, onClose, addToast, saving]);
 
-  // Escape the column's clipping and tab transforms, but keep app scaling.
+  // Same shell as the Tasks and Calendar editors: a full-width panel resting on
+  // the keyboard, a header with a close button, a scrolling body and sticky
+  // actions. Portalled so the person column's overflow cannot clip it.
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex flex-col"
@@ -597,175 +609,176 @@ function AddTaskSheet({ personId, personName, personColor, onAdd, onClose }) {
       onTouchStart={(e) => e.stopPropagation()}
       onTouchEnd={(e) => e.stopPropagation()}
     >
-      {/* Backdrop */}
+      {/* Backdrop — no blur: the Pi kiosk runs Chromium in low-end-device mode,
+          where the extra compositing layer stops the panel painting at all. */}
       <div
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
+        style={{ animation: 'fadeIn var(--dur-fast) var(--ease) forwards' }}
       />
 
-      {/* Sheet — rests on top of the keyboard. Centred and width-capped: at
-          1920px a full-bleed sheet spread three controls across a metre of
-          glass, and the person you were adding for was never named. */}
+      {/* Panel */}
       <div
-        className="absolute bg-[var(--surf)] rounded-t-3xl border-t border-[var(--bd)] p-5 pb-4 flex flex-col gap-4 celebration-sheet-slide-up shadow-modal overflow-y-auto"
+        className="relative bg-surf shadow-modal rounded-t-3xl flex flex-col overflow-hidden
+                   celebration-sheet-slide-up"
         style={{
-          zIndex: 51,
+          position: showKeyboard ? 'absolute' : 'relative',
           bottom: showKeyboard ? '40%' : '0',
-          insetInline: 0,
-          marginInline: 'auto',
-          width: 'min(720px, 100%)',
-          maxHeight: showKeyboard ? '58%' : '92%',
-          transition: 'bottom var(--dur-normal) var(--ease)',
+          left: 0,
+          right: 0,
+          marginTop: showKeyboard ? undefined : 'auto',
+          height: showKeyboard ? '60%' : '80%',
+          transition: 'height 0.25s ease, bottom 0.25s ease',
         }}
       >
         {/* Header — says whose chore this is */}
-        <div className="flex items-center gap-2.5">
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: personColor }}
-            aria-hidden="true"
-          />
-          <h2 id="new-chore-heading" className="text-lg font-bold text-[var(--tp)]">
-            {t.tasks.newChoreFor.replace('{name}', personName)}
-          </h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-bd shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: personColor }}
+              aria-hidden="true"
+            />
+            <h2 id="new-chore-heading" className="text-lg font-bold text-tp truncate">
+              {t.tasks.newChoreFor.replace('{name}', personName)}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-14 h-14 rounded-full text-ts hover:bg-s2
+                       active:scale-95 transition-all duration-[var(--dur-fast)] shrink-0"
+            aria-label={t.common.cancel}
+          >
+            <CloseIcon />
+          </button>
         </div>
-        {/* Emoji picker */}
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-[var(--tp)]">
-            {t.tasks.choreEmoji}
-          </label>
-          <div className="flex items-center gap-3">
-            {/* Selected emoji display / toggle button */}
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(v => !v)}
-              aria-label={t.tasks.chooseEmoji}
-              aria-expanded={showEmojiPicker}
-              className="
-                w-16 h-16 rounded-2xl border-2 flex items-center justify-center
-                text-3xl transition-all duration-[var(--dur-fast)] active:scale-95 shrink-0
-              "
-              style={{
-                borderColor: emoji ? personColor : 'var(--bd)',
-                backgroundColor: emoji ? `${personColor}15` : 'var(--s2)',
-              }}
-            >
-              {emoji || '➕'}
-            </button>
-            {emoji && (
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {/* Emoji */}
+          <div>
+            <label className="block text-sm font-semibold text-tp mb-2">
+              {t.tasks.choreEmoji}
+            </label>
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setEmoji('')}
-                className="min-w-[56px] min-h-[56px] flex items-center justify-center rounded-xl
-                           text-xs text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
+                onClick={() => setShowEmojiPicker((v) => !v)}
+                aria-label={t.tasks.chooseEmoji}
+                aria-expanded={showEmojiPicker}
+                className="w-16 h-16 rounded-2xl border-2 flex items-center justify-center text-3xl
+                           shrink-0 active:scale-95 transition-all duration-[var(--dur-fast)]"
+                style={{
+                  borderColor: emoji ? personColor : 'var(--bd)',
+                  backgroundColor: emoji ? `${personColor}15` : 'var(--s2)',
+                }}
               >
-                {t.tasks.removeEmoji}
+                {emoji || '➕'}
               </button>
+              {emoji && (
+                <button
+                  type="button"
+                  onClick={() => setEmoji('')}
+                  className="min-w-[56px] h-14 px-4 flex items-center justify-center rounded-xl text-sm
+                             text-tm hover:text-coral-d hover:bg-s2 active:scale-95
+                             transition-all duration-[var(--dur-fast)]"
+                >
+                  {t.tasks.removeEmoji}
+                </button>
+              )}
+            </div>
+            {showEmojiPicker && (
+              <div className="grid grid-cols-8 gap-1.5 p-3 mt-3 rounded-xl bg-s2 border border-bd
+                              max-h-[172px] overflow-y-auto">
+                {CHORE_EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                    aria-label={`${t.tasks.chooseEmoji} ${e}`}
+                    aria-pressed={emoji === e}
+                    className={`
+                      w-14 h-14 rounded-xl flex items-center justify-center text-xl
+                      transition-all duration-[var(--dur-fast)] active:scale-95
+                      ${emoji === e ? 'bg-acc/20 ring-2 ring-acc' : 'hover:bg-bd'}
+                    `}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-          {showEmojiPicker && (
-            <div className="grid grid-cols-8 gap-1.5 p-3 bg-[var(--s2)] rounded-xl border border-[var(--bd)] max-h-[172px] overflow-y-auto">
-              {CHORE_EMOJIS.map((e) => (
+
+          {/* Title */}
+          <div>
+            <label htmlFor="new-chore-title" className="block text-sm font-semibold text-tp mb-2">
+              {t.tasks.title}
+            </label>
+            <input
+              ref={inputRef}
+              id="new-chore-title"
+              type="text"
+              inputMode="none"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onFocus={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
+              onClick={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSave();
+              }}
+              placeholder={t.tasks.titlePlaceholder}
+              className="w-full h-14 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
+                         placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30
+                         transition-all duration-[var(--dur-fast)]"
+              dir="rtl"
+            />
+          </div>
+
+          {/* Recurrence */}
+          <div>
+            <label className="block text-sm font-semibold text-tp mb-3">
+              {t.tasks.recurrenceLabel}
+            </label>
+            <div className="flex gap-3">
+              {RECURRENCE_OPTIONS.map((option) => (
                 <button
-                  key={e}
-                  type="button"
-                  onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
-                  aria-label={`${t.tasks.chooseEmoji} ${e}`}
-                  aria-pressed={emoji === e}
+                  key={option.value}
+                  onClick={() => setRecurrence(option.value)}
                   className={`
-                    w-14 h-14 rounded-xl flex items-center justify-center text-xl
-                    transition-all duration-[var(--dur-fast)] active:scale-95
-                    ${emoji === e ? 'bg-[var(--acc)]/20 ring-2 ring-[var(--acc)]' : 'hover:bg-[var(--bd)]'}
+                    flex-1 h-14 px-4 rounded-xl border text-sm font-medium
+                    transition-all duration-[var(--dur-fast)]
+                    ${recurrence === option.value
+                      ? 'border-acc bg-acc/10 text-acc'
+                      : 'border-bd bg-s2 text-ts'
+                    }
                   `}
                 >
-                  {e}
+                  {option.label}
                 </button>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Title input */}
-        <div className="flex flex-col gap-2">
-          <label htmlFor="new-chore-title" className="text-sm font-semibold text-[var(--tp)]">
-            {t.tasks.title}
-          </label>
-          <input
-            ref={inputRef}
-            id="new-chore-title"
-            type="text"
-            inputMode="none"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onFocus={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
-            onClick={() => { setShowKeyboard(true); setShowEmojiPicker(false); }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSave();
-            }}
-            placeholder={t.tasks.titlePlaceholder}
-            className="
-              w-full min-h-[56px] py-3 px-4 rounded-xl text-sm
-              bg-[var(--s2)] text-[var(--tp)]
-              border border-[var(--bd)]
-              placeholder-[var(--tm)]
-              focus:outline-none focus:border-[var(--acc)]
-              transition-colors duration-[var(--dur-fast)]
-            "
-            dir="rtl"
-          />
-        </div>
-
-        {/* Recurrence picker */}
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-[var(--tp)]">
-            {t.tasks.recurrenceLabel}
-          </label>
-          <div className="flex gap-2">
-            {RECURRENCE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setRecurrence(option.value)}
-                className={`
-                  flex-1 min-h-[56px] py-2.5 px-3 rounded-xl text-sm font-medium
-                  border transition-all duration-[var(--dur-fast)]
-                  ${recurrence === option.value
-                    ? 'border-[var(--acc)] bg-[var(--acc)]/10 text-[var(--acc)]'
-                    : 'border-[var(--bd)] bg-[var(--s2)] text-[var(--ts)]'
-                  }
-                `}
-              >
-                {option.label}
-              </button>
-            ))}
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="flex gap-3">
+        {/* Action buttons */}
+        <div className="shrink-0 flex items-center gap-3 px-6 py-4 border-t border-bd bg-surf">
+          <div className="flex-1" />
+          <button
+            onClick={onClose}
+            className="px-6 h-14 rounded-xl border border-bd text-ts font-medium text-sm
+                       hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]"
+          >
+            {t.common.cancel}
+          </button>
           <button
             onClick={handleSave}
             disabled={!title.trim() || saving}
-            className="
-              flex-1 min-h-[56px] py-3 px-4 rounded-xl text-sm font-bold text-white
-              transition-all duration-[var(--dur-fast)]
-              disabled:opacity-40 disabled:cursor-not-allowed
-              active:scale-[0.98]
-            "
-            style={{ backgroundColor: personColor || 'var(--acc)' }}
+            className="px-8 h-14 rounded-xl bg-acc text-white font-semibold text-sm
+                       hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]
+                       disabled:opacity-40 disabled:pointer-events-none"
           >
             {saving ? t.common.loading : t.common.save}
-          </button>
-          <button
-            onClick={onClose}
-            className="
-              flex-1 min-h-[56px] py-3 px-4 rounded-xl text-sm font-medium
-              bg-[var(--s2)] text-[var(--ts)]
-              border border-[var(--bd)]
-              active:scale-[0.98]
-              transition-all duration-[var(--dur-fast)]
-            "
-          >
-            {t.common.cancel}
           </button>
         </div>
       </div>
@@ -773,8 +786,8 @@ function AddTaskSheet({ personId, personName, personColor, onAdd, onClose }) {
       {/* On-screen keyboard */}
       <OnScreenKeyboard
         visible={showKeyboard}
-        onInput={(char) => setTitle(prev => prev + char)}
-        onBackspace={() => setTitle(prev => prev.slice(0, -1))}
+        onInput={(char) => setTitle((prev) => prev + char)}
+        onBackspace={() => setTitle((prev) => prev.slice(0, -1))}
         onEnter={() => setShowKeyboard(false)}
         onClose={() => setShowKeyboard(false)}
       />
