@@ -151,6 +151,7 @@ const settingsSlice = (set, get) => ({
     eventRemindersEnabled: true,
     eventReminderLeadMin: 10,
     reminderTone: 'beep',
+    snoozeMinutes: 10,
     idleTimeout: 5,
     screensaverStyle: 'clock',
     screensaverShowNews: true,

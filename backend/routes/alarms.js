@@ -11,6 +11,7 @@ const router = express.Router();
 // casts the chosen song/playlist to the chosen speakers (see AlarmOverlay).
 // ---------------------------------------------------------------------------
 
+const DEFAULT_SNOOZE_MIN = 10;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function rowToAlarm(row) {
@@ -119,13 +120,19 @@ router.delete('/:id', (req, res) => {
 // a backend restart mid-snooze doesn't lose it (an in-memory map would).
 router.post('/:id/snooze', (req, res) => {
   const db = req.app.locals.db;
-  const existing = db.prepare('SELECT id FROM alarms WHERE id = ?').get(req.params.id);
+  const existing = db.prepare('SELECT id, snooze_count FROM alarms WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not_found' });
 
-  const minutes = Math.min(60, Math.max(1, Number(req.body?.minutes) || 10));
-  db.prepare('UPDATE alarms SET snooze_until = ? WHERE id = ?')
-    .run(Date.now() + minutes * 60000, req.params.id);
-  res.json({ ok: true, minutes });
+  // The body carries the BASE from Settings; the escalation is applied here so
+  // every client agrees on it and a reload cannot restart the ladder. Nth
+  // snooze buys N times the base: 10, 20, 30... still capped at an hour, past
+  // which a snooze stops being a snooze.
+  const base = Math.min(60, Math.max(1, Number(req.body?.minutes) || DEFAULT_SNOOZE_MIN));
+  const count = (existing.snooze_count || 0) + 1;
+  const minutes = Math.min(60, base * count);
+  db.prepare('UPDATE alarms SET snooze_until = ?, snooze_count = ? WHERE id = ?')
+    .run(Date.now() + minutes * 60000, count, req.params.id);
+  res.json({ ok: true, minutes, count });
 });
 
 // ---------------------------------------------------------------------------
@@ -139,6 +146,11 @@ router.post('/:id/snooze', (req, res) => {
 function startScheduler(io, db, logger) {
   const enabled = db.prepare('SELECT * FROM alarms WHERE enabled = 1');
   const markFired = db.prepare('UPDATE alarms SET last_fired = ?, snooze_until = NULL WHERE id = ?');
+  // A fire on the alarm's own clock time is a fresh morning: the snooze ladder
+  // starts over. A snooze re-fire keeps the count, so the next press is longer.
+  const markFiredFresh = db.prepare(
+    'UPDATE alarms SET last_fired = ?, snooze_until = NULL, snooze_count = 0 WHERE id = ?'
+  );
 
   const tick = () => {
     try {
@@ -165,7 +177,7 @@ function startScheduler(io, db, logger) {
         // DID ack — one ack from any live client is enough to mark it fired.
         io.timeout(5000).emit('alarm:trigger', rowToAlarm(row), (err, responses) => {
           if (responses && responses.length) {
-            markFired.run(minuteStamp, row.id);
+            (snoozeDue ? markFired : markFiredFresh).run(minuteStamp, row.id);
           } else {
             logger?.warn('[alarms] %s: no client acked; will retry next tick', row.id);
           }
