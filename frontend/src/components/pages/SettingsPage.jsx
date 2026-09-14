@@ -1121,6 +1121,46 @@ function TasksSection() {
   );
 }
 
+// ─── Section: Alarms ─────────────────────────────────────────────────────────
+
+// The base a snooze is worth. Each further press of נודניק on a ringing alarm
+// buys another multiple of it, so these stay small — 20 as a base is already
+// an hour by the third press, where the backend caps it.
+const SNOOZE_OPTIONS = [
+  { value: '5',  label: '5 דקות' },
+  { value: '10', label: '10 דקות' },
+  { value: '15', label: '15 דקות' },
+  { value: '20', label: '20 דקות' },
+];
+
+function AlarmsSection() {
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const snooze = settings.snoozeMinutes ?? 10;
+
+  return (
+    <Section title={t.settings.alarms}>
+      <div className="flex flex-col gap-2">
+        <SelectRow
+          label={t.settings.snoozeMinutes}
+          value={String(snooze)}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            setSettings({ snoozeMinutes: val });
+            updateSettings({ snoozeMinutes: val });
+          }}
+          options={SNOOZE_OPTIONS}
+        />
+        <p className="text-sm text-tm">
+          {t.settings.snoozeMinutesHint
+            .replace('{min}', String(snooze))
+            .replace('{min2}', String(Math.min(60, snooze * 2)))}
+        </p>
+      </div>
+    </Section>
+  );
+}
+
 // ─── Section: Display ────────────────────────────────────────────────────────
 
 // Discrete steps rather than a free slider — the phrase pool is finite, so
@@ -1981,6 +2021,7 @@ export default function SettingsPage() {
         <div>
           <FamilySection />
           <TasksSection />
+          <AlarmsSection />
           <SystemSection />
           <LogViewerSection />
           <AboutSection />

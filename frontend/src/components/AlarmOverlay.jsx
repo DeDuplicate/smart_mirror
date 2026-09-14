@@ -10,7 +10,8 @@ import t from '../i18n/he.json';
 // volume (default 50%), then +10% every 3 minutes up to 80%. "Nobody stopped
 // it" = the overlay is still up, so the ladder just keeps stepping.
 const VOLUME_STEP_MS = 3 * 60 * 1000;
-const SNOOZE_MIN = 10;
+const DEFAULT_SNOOZE_MIN = 10;
+const MAX_SNOOZE_MIN = 60;
 const ladderFor = (alarm) => [alarm?.volume ?? 50, 60, 70, 80];
 
 /**
@@ -26,6 +27,7 @@ export default function AlarmOverlay() {
   const alarm = useStore((s) => s.activeAlarm);
   const setActiveAlarm = useStore((s) => s.setActiveAlarm);
   const addToast = useStore((s) => s.addToast);
+  const snoozeBase = useStore((s) => s.settings.snoozeMinutes) || DEFAULT_SNOOZE_MIN;
   const music = useMusicContext();
   const firedFor = useRef(null);
   const [playbackError, setPlaybackError] = useState(null);
@@ -42,6 +44,11 @@ export default function AlarmOverlay() {
   // no overlay left on screen to stop it. Which is the one moment a person
   // reliably hits the button: the second the alarm goes off.
   const planRef = useRef({ cancelled: true });
+
+  // Each press of the button is worth one more multiple of the base, and the
+  // count comes back on the alarm itself, so the label says what this press
+  // will actually buy rather than a fixed number the backend then ignores.
+  const nextSnoozeMin = Math.min(MAX_SNOOZE_MIN, snoozeBase * ((alarm?.snooze_count || 0) + 1));
 
   const speakers = alarm?.speakers || [];
   const useLocal = speakers.includes('local');
@@ -170,11 +177,13 @@ export default function AlarmOverlay() {
     stopPlayback();
     setActiveAlarm(null);
     try {
-      await fetchApi(`/api/alarms/${alarm.id}/snooze`, {
+      // Send the base; the backend owns the escalation and reports back the
+      // minutes it actually used, which is what the toast has to say.
+      const res = await fetchApi(`/api/alarms/${alarm.id}/snooze`, {
         method: 'POST',
-        body: JSON.stringify({ minutes: SNOOZE_MIN }),
+        body: JSON.stringify({ minutes: snoozeBase }),
       });
-      addToast('info', t.alarms.snoozed.replace('{min}', String(SNOOZE_MIN)));
+      addToast('info', t.alarms.snoozed.replace('{min}', String(res?.minutes ?? nextSnoozeMin)));
     } catch { /* the overlay is already down; worst case no re-fire */ }
   };
 
@@ -214,7 +223,7 @@ export default function AlarmOverlay() {
                        border border-[var(--bd)] text-2xl font-bold active:scale-95
                        transition-transform duration-[var(--dur-fast)]"
           >
-            {t.alarms.snooze.replace('{min}', String(SNOOZE_MIN))}
+            {t.alarms.snooze.replace('{min}', String(nextSnoozeMin))}
           </button>
           <button
             onClick={dismiss}
