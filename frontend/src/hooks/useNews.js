@@ -181,9 +181,12 @@ export default function useNews() {
     });
   }, []);
 
-  const fetchArticles = useCallback(async () => {
+  // force: the user asked for this (the button, pull-to-refresh, retry), so
+  // tell the backend to go past its half-hour cache. The initial load and the
+  // background poll leave it alone.
+  const fetchArticles = useCallback(async ({ force = false } = {}) => {
     try {
-      const res = await fetchApi(API_BASE);
+      const res = await fetchApi(force ? `${API_BASE}?refresh=1` : API_BASE);
 
       if (!mountedRef.current) return;
 
@@ -267,7 +270,7 @@ export default function useNews() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    await fetchArticles();
+    await fetchArticles({ force: true });
   }, [fetchArticles]);
 
   // Initial fetch
@@ -282,7 +285,7 @@ export default function useNews() {
 
   // Auto-refresh every 30 minutes
   useEffect(() => {
-    intervalRef.current = setInterval(fetchArticles, REFRESH_INTERVAL);
+    intervalRef.current = setInterval(() => fetchArticles(), REFRESH_INTERVAL);
     return () => clearInterval(intervalRef.current);
   }, [fetchArticles]);
 
