@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import t from '../../i18n/he.json';
+import MediaThumb from '../MediaThumb.jsx';
 import { useMusicContext } from '../../context/MusicContext.jsx';
 import { speakerStatus, nowPlayingLine } from '../../hooks/speakerStatus.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
@@ -210,39 +211,6 @@ function VolumeSlider({ volume, onChange }) {
   );
 }
 
-const THUMB_FALLBACKS = ['hqdefault', 'mqdefault', 'default'];
-
-function TrackThumb({ videoId, imageUrl }) {
-  const [level, setLevel] = useState(imageUrl ? -1 : 0);
-  const src = level < 0
-    ? imageUrl
-    : (videoId ? `https://i.ytimg.com/vi/${videoId}/${THUMB_FALLBACKS[level] || 'default'}.jpg` : null);
-
-  if (!src || level >= THUMB_FALLBACKS.length) {
-    return (
-      <div
-        className="w-12 h-12 rounded-xl overflow-hidden shrink-0 flex items-center justify-center"
-        style={{ background: 'linear-gradient(135deg, #6b62e0 0%, #2ab58a 100%)' }}
-      >
-        <MusicNoteIcon className="w-5 h-5 text-white/50" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-s2">
-      <img
-        src={src}
-        alt=""
-        className="w-full h-full object-cover"
-        referrerPolicy="no-referrer"
-        draggable={false}
-        onError={() => setLevel((n) => (n < 0 && videoId ? 0 : n + 1))}
-      />
-    </div>
-  );
-}
-
 function PlaylistRow({ playlist, onOpen, disabled }) {
   return (
     <button
@@ -250,7 +218,7 @@ function PlaylistRow({ playlist, onOpen, disabled }) {
       disabled={disabled}
       className="ripple flex items-center gap-3 w-full min-h-[64px] px-3 py-2.5 rounded-xl text-right hover:bg-s2 disabled:opacity-60"
     >
-      <TrackThumb imageUrl={playlist.imageUrl} />
+      <MediaThumb imageUrl={playlist.imageUrl} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-tp truncate">{playlist.title}</p>
         <p className="text-xs text-ts truncate">
@@ -273,7 +241,7 @@ function TrackRow({ track, isCurrent, onPlay, onQueue, onRemove, showQueueAction
         onClick={onPlay}
         className="ripple flex items-center gap-3 flex-1 min-h-[56px] min-w-0 text-right active:scale-[0.98]"
       >
-        <TrackThumb videoId={track.id} imageUrl={track.imageUrl} />
+        <MediaThumb videoId={track.id} imageUrl={track.imageUrl} />
         <div className="flex-1 min-w-0">
           <p className={`track-title text-sm font-medium truncate ${isCurrent ? 'text-acc' : 'text-tp'}`}>
             {track.title}

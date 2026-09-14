@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import useStore from '../../store/index.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
+import MediaThumb from '../MediaThumb.jsx';
 import t from '../../i18n/he.json';
 
 const DAY_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']; // 0=Sunday .. 6=Saturday
@@ -324,7 +325,12 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
 
             {draft.media && (
               <div className="flex items-center gap-3 rounded-xl bg-lav px-3 py-2 shrink-0">
-                {draft.media.imageUrl ? <img src={draft.media.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover" /> : null}
+                <MediaThumb
+                  videoId={draft.media.type === 'track' ? draft.media.id : null}
+                  imageUrl={draft.media.imageUrl}
+                  className="w-10 h-10 rounded-lg"
+                  iconClassName="w-4 h-4"
+                />
                 <span className="text-lg text-tp font-semibold truncate">{draft.media.title}</span>
                 <span className="text-base text-ts shrink-0">{draft.media.type === 'playlist' ? t.alarms.playlists : t.alarms.tracks}</span>
               </div>
@@ -339,7 +345,12 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
                   onClick={() => patch({ media: { type: item.type, id: item.id, title: item.title, artist: item.artist || '', imageUrl: item.imageUrl || '' } })}
                   className="flex items-center gap-3 rounded-lg px-3 min-h-[52px] text-start hover:bg-s2 active:bg-lav shrink-0"
                 >
-                  {item.imageUrl ? <img src={item.imageUrl} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" /> : null}
+                  <MediaThumb
+                    videoId={item.type === 'track' ? item.id : null}
+                    imageUrl={item.imageUrl}
+                    className="w-9 h-9 rounded-lg"
+                    iconClassName="w-4 h-4"
+                  />
                   <span className="text-lg text-tp truncate">{item.title}</span>
                   {item.artist ? <span className="text-base text-ts truncate">{item.artist}</span> : null}
                   <span className="text-sm text-tm ms-auto shrink-0">{item.type === 'playlist' ? t.alarms.playlists : item.duration || ''}</span>

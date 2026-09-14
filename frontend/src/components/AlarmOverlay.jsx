@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import useStore from '../store/index.js';
 import { useMusicContext } from '../context/MusicContext.jsx';
 import { fetchApi } from '../hooks/useApi.js';
+import MediaThumb from './MediaThumb.jsx';
 import { castAlarmToSpeakers, setSpeakersVolume, stopCast } from '../hooks/useMusic.js';
 import t from '../i18n/he.json';
 
@@ -167,9 +168,12 @@ export default function AlarmOverlay() {
         className="mx-6 w-full max-w-[640px] rounded-3xl bg-[var(--s1)] border border-[var(--bd)]
                    shadow-2xl p-8 flex flex-col gap-6 text-center items-center"
       >
-        {alarm.media_image ? (
-          <img src={alarm.media_image} alt="" className="w-32 h-32 rounded-2xl object-cover shadow-lg" />
-        ) : null}
+        <MediaThumb
+          videoId={alarm.media_type === 'track' ? alarm.media_id : null}
+          imageUrl={alarm.media_image}
+          className="w-32 h-32 rounded-2xl shadow-lg"
+          iconClassName="w-12 h-12"
+        />
         <div className="flex flex-col gap-2">
           <span className="text-2xl text-ts">{alarm.label || t.alarms.title}</span>
           <span className="text-6xl font-bold text-[var(--tp)]" dir="ltr">{alarm.time}</span>
