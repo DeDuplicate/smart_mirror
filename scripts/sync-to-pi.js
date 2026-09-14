@@ -17,9 +17,13 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const PI_HOST = process.env.PI_HOST || '192.168.1.96';
+// Defaults match the flashable image: the app is installed under /opt by
+// image/stage-smartmirror/01-app, not in the mirror user's home. Pointing here
+// at a path that does not exist made every sync fail silently into mkdir -p,
+// scattering a half-copy of the tree into a directory nothing ever runs.
+const PI_HOST = process.env.PI_HOST || '192.168.1.97';
 const PI_USER = process.env.PI_USER || 'mirror';
-const PI_DIR = process.env.PI_DIR || '/home/mirror/smart-mirror';
+const PI_DIR = process.env.PI_DIR || '/opt/smart-mirror';
 const ROOT = path.resolve(__dirname, '..');
 
 const SSH_OPTS = ['-o', 'StrictHostKeyChecking=no', '-o', 'ConnectTimeout=5'];
