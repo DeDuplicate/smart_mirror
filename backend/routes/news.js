@@ -276,9 +276,14 @@ router.get('/', async (req, res) => {
 
   const cacheKey = 'news:headlines';
   const selectionCacheKey = 'news:headlines:selection';
+  // Someone who pressed refresh is asking for what is out there NOW; serving
+  // them the same half-hour-old list is the one case the cache must not win.
+  // Background polling and the initial load still take the cache, so this does
+  // not turn every page view into a fan-out over the feeds.
+  const force = req.query.refresh === '1' || req.query.refresh === 'true';
   try {
-    const cached = getCached(db, cacheKey, NEWS_CACHE_TTL_MS);
-    const cachedSelection = getCached(db, selectionCacheKey, NEWS_CACHE_TTL_MS);
+    const cached = force ? null : getCached(db, cacheKey, NEWS_CACHE_TTL_MS);
+    const cachedSelection = force ? null : getCached(db, selectionCacheKey, NEWS_CACHE_TTL_MS);
     if (cached && cachedSelection === selectionKey) {
       return res.json({ articles: cached, source: 'cache' });
     }
