@@ -35,6 +35,13 @@ export default function AlarmOverlay() {
   const stepRef = useRef(0);
   // Local volume before the alarm grabbed it; restored on dismiss.
   const prevVolumeRef = useRef(null);
+  // The playback plan is async — a playlist fetch, then a cast that can take
+  // seconds to warm — and dismissing has to be able to cancel it mid-flight.
+  // Without this, pressing the button while the fetch is still out pauses
+  // nothing (nothing is playing yet) and the plan then starts the music with
+  // no overlay left on screen to stop it. Which is the one moment a person
+  // reliably hits the button: the second the alarm goes off.
+  const planRef = useRef({ cancelled: true });
 
   const speakers = alarm?.speakers || [];
   const useLocal = speakers.includes('local');
@@ -46,6 +53,8 @@ export default function AlarmOverlay() {
   useEffect(() => {
     if (!alarm || firedFor.current === alarm.id) return undefined;
     firedFor.current = alarm.id;
+    const plan = { cancelled: false };
+    planRef.current = plan;
     setPlaybackError(null);
     stepRef.current = 0;
     prevVolumeRef.current = null;
@@ -63,6 +72,7 @@ export default function AlarmOverlay() {
       if (alarm.media_type === 'playlist') {
         try {
           const data = await fetchApi(`/api/music/playlist/${encodeURIComponent(alarm.media_id)}`);
+          if (plan.cancelled) return;
           const tracks = data.tracks || [];
           if (!tracks.length) throw new Error('empty playlist');
           track = tracks[0];
@@ -70,6 +80,7 @@ export default function AlarmOverlay() {
           // Speakers get the first track; the playlist continues via the
           // auto-related/preheat machinery on 'local' only.
         } catch (err) {
+          if (plan.cancelled) return;
           // Do NOT bail silently: an alarm that plays nothing while pretending
           // to ring is the worst outcome. Say so and stop here.
           setPlaybackError(err.message || 'playlist');
@@ -77,6 +88,8 @@ export default function AlarmOverlay() {
           return;
         }
       }
+
+      if (plan.cancelled) return;
 
       if (useLocal) {
         // Take over local playback. If the output is currently a speaker,
@@ -86,6 +99,7 @@ export default function AlarmOverlay() {
         // stopCast whose late turn_off would kill the fresh cast.
         if (music.outputId !== 'local') {
           try { await stopCast(music.outputId); } catch { /* already stopped */ }
+          if (plan.cancelled) return;
           music.setOutputId('local', { stopPrev: false });
         }
         prevVolumeRef.current = music.volume;
@@ -96,9 +110,16 @@ export default function AlarmOverlay() {
       }
 
       if (targets.length) {
+        if (plan.cancelled) return;
         await castAlarmToSpeakers(track, targets, currentStepVolume);
+        // A cast that was still warming when the alarm was dismissed arrives
+        // here already playing, with nothing left to turn it off.
+        if (plan.cancelled) {
+          for (const id of targets) stopCast(id).catch(() => {});
+        }
       }
     })();
+    return () => { plan.cancelled = true; };
     // Keyed on the alarm id only — music/targets change identity every
     // render and must not re-run (or restart) the playback plan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,6 +144,9 @@ export default function AlarmOverlay() {
   if (!alarm) return null;
 
   const stopPlayback = () => {
+    // Synchronously, ahead of the effect cleanup: that only runs after this
+    // click's render, and a pending await can beat it to the music.
+    planRef.current.cancelled = true;
     for (const id of targets) {
       stopCast(id).catch(() => {});
     }
