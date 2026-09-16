@@ -5,7 +5,8 @@ import t from '../i18n/he.json';
 // ─── ConfirmDialog Component ────────────────────────────────────────────────
 
 export default function ConfirmDialog() {
-  const { isOpen, title, message, onConfirm } = useStore((s) => s.confirm);
+  const { isOpen, title, message, onConfirm, onAlt, confirmLabel, cancelLabel, altLabel } =
+    useStore((s) => s.confirm);
   const hideConfirm = useStore((s) => s.hideConfirm);
   const cardRef = useRef(null);
 
@@ -23,6 +24,11 @@ export default function ConfirmDialog() {
 
   const handleConfirm = () => {
     if (onConfirm) onConfirm();
+    hideConfirm();
+  };
+
+  const handleAlt = () => {
+    if (onAlt) onAlt();
     hideConfirm();
   };
 
@@ -83,8 +89,24 @@ export default function ConfirmDialog() {
             "
             style={{ transitionDuration: 'var(--dur-fast)' }}
           >
-            {t.common.confirm}
+            {confirmLabel || t.common.confirm}
           </button>
+
+          {/* Optional third action - outlined, same 56px touch target */}
+          {onAlt && (
+            <button
+              onClick={handleAlt}
+              className="
+                px-6 min-h-[56px] bg-transparent border border-acc text-acc rounded-xl
+                font-heebo font-medium text-base
+                hover:bg-s2 active:scale-95
+                transition-all select-none
+              "
+              style={{ transitionDuration: 'var(--dur-fast)' }}
+            >
+              {altLabel}
+            </button>
+          )}
 
           {/* Cancel button - outlined */}
           <button
@@ -97,7 +119,7 @@ export default function ConfirmDialog() {
             "
             style={{ transitionDuration: 'var(--dur-fast)' }}
           >
-            {t.common.cancel}
+            {cancelLabel || t.common.cancel}
           </button>
         </div>
       </div>
