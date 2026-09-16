@@ -737,6 +737,17 @@ router.post('/update', async (req, res) => {
   // permanently, with no way to clear it from the screen. An untracked file
   // that genuinely collides with an incoming one still stops the update, but it
   // does so at the pull stage, which changes nothing and needs no rollback.
+  // frontend/dist is a BUILD ARTIFACT that happens to be tracked, so it is
+  // never a local edit worth protecting -- and protecting it wedges the mirror
+  // permanently. That is not hypothetical: the update that first shipped a
+  // tracked dist was itself applied by the previous updater, which still ran
+  // `vite build` unconditionally and so overwrote the very files it had just
+  // pulled. The tree was left with 13 modified/deleted tracked files, and from
+  // then on every update was refused with "local changes" and no way to clear
+  // it from the screen. Discard it before looking for real local edits.
+  await run('git', ['checkout', '--', 'frontend/dist'], 30000, { cwd: PROJECT_ROOT });
+  await run('git', ['clean', '-fd', 'frontend/dist'], 30000, { cwd: PROJECT_ROOT });
+
   const statusResult = await run('git', ['status', '--porcelain', '--untracked-files=no'], 10000, { cwd: PROJECT_ROOT });
   if (!statusResult.ok) {
     updateInProgress = false;
