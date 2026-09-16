@@ -206,6 +206,86 @@ router.post('/brightness', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Touchscreen calibration. Runtime xinput calibration only; defaults are no-op.
+// ---------------------------------------------------------------------------
+function parseXinputDevices(stdout) {
+  const devices = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:[^\w]+)?(.+?)\s+id=(\d+)\s+\[([^\]]+)\]/);
+    if (!match || !/pointer/i.test(match[3]) || /XTEST|Virtual core/i.test(match[1])) continue;
+    devices.push({ id: match[2], name: match[1].trim() });
+  }
+  return devices;
+}
+
+router.get('/touch/devices', async (req, res) => {
+  if (!IS_LINUX) return res.json({ ok: true, mock: true, devices: [] });
+
+  const result = await run('xinput', ['--list', '--short'], 5000, xEnv());
+  if (!result.ok) return res.status(502).json({ ok: false, error: result.stderr || 'xinput failed' });
+
+  const devices = parseXinputDevices(result.stdout);
+  const likely = devices.filter((d) => /touch|ir|frame|egalax|goodix|waveshare|usb/i.test(d.name));
+  res.json({ ok: true, devices: likely.length ? likely : devices });
+});
+
+function boundedNumber(value, fallback, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function xEnv() {
+  const home = os.userInfo().homedir;
+  return {
+    env: {
+      ...process.env,
+      DISPLAY: process.env.DISPLAY || ':0',
+      XAUTHORITY: process.env.XAUTHORITY || path.join(home, '.Xauthority'),
+    },
+  };
+}
+
+router.post('/touch/calibrate', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const deviceId = String(req.body.deviceId || '').trim();
+  if (!/^\d+$/.test(deviceId)) return res.status(400).json({ ok: false, error: 'Invalid touch device' });
+
+  const left = boundedNumber(req.body.left, 0, 0, 30) / 100;
+  const right = boundedNumber(req.body.right, 0, 0, 30) / 100;
+  const top = boundedNumber(req.body.top, 0, 0, 30) / 100;
+  const bottom = boundedNumber(req.body.bottom, 0, 0, 30) / 100;
+  const width = Math.max(0.4, 1 - left - right);
+  const height = Math.max(0.4, 1 - top - bottom);
+  const sx = 1 / width;
+  const sy = 1 / height;
+  const flipX = req.body.flipX === true;
+  const flipY = req.body.flipY === true;
+  const matrix = [
+    flipX ? -sx : sx,
+    0,
+    flipX ? 1 + left * sx : -left * sx,
+    0,
+    flipY ? -sy : sy,
+    flipY ? 1 + top * sy : -top * sy,
+    0,
+    0,
+    1,
+  ].map((n) => String(Number(n.toFixed(6))));
+
+  if (!IS_LINUX) return res.json({ ok: true, mock: true, matrix });
+
+  const result = await run('xinput', ['set-prop', deviceId, 'Coordinate Transformation Matrix', ...matrix], 5000, xEnv());
+  if (!result.ok) {
+    logger.warn('Touch calibration failed: %s', result.stderr);
+    return res.status(502).json({ ok: false, error: result.stderr || 'xinput failed' });
+  }
+
+  logger.info('Touch calibration applied to device %s', deviceId);
+  res.json({ ok: true, matrix });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/system/logs?lines=&level= - recent log entries
 // ---------------------------------------------------------------------------
 router.get('/logs', (req, res) => {

@@ -540,6 +540,15 @@ export default function App() {
   const settingsLoaded = useStore((s) => s.settings.loaded);
   const firstRun = useStore((s) => s.settings.firstRun);
   const screensaverStyle = useStore((s) => s.settings.screensaverStyle) || 'clock';
+  const hideCursor = useStore((s) => s.settings.hideCursor) !== false;
+  const touchCalibrationEnabled = useStore((s) => s.settings.touchCalibrationEnabled === true);
+  const touchDeviceId = useStore((s) => s.settings.touchDeviceId || '');
+  const touchCalLeft = useStore((s) => s.settings.touchCalLeft || 0);
+  const touchCalRight = useStore((s) => s.settings.touchCalRight || 0);
+  const touchCalTop = useStore((s) => s.settings.touchCalTop || 0);
+  const touchCalBottom = useStore((s) => s.settings.touchCalBottom || 0);
+  const touchFlipX = useStore((s) => s.settings.touchFlipX === true);
+  const touchFlipY = useStore((s) => s.settings.touchFlipY === true);
   const [showWizard, setShowWizard] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
@@ -547,6 +556,36 @@ export default function App() {
   useAutoTheme();
   useWeather();
   useEventReminders();
+
+  useEffect(() => {
+    document.documentElement.dataset.cursor = hideCursor ? 'hidden' : 'visible';
+  }, [hideCursor]);
+
+  useEffect(() => {
+    if (!settingsLoaded || !touchCalibrationEnabled || !touchDeviceId) return;
+    fetchApi('/api/system/touch/calibrate', {
+      method: 'POST',
+      body: JSON.stringify({
+        deviceId: touchDeviceId,
+        left: touchCalLeft,
+        right: touchCalRight,
+        top: touchCalTop,
+        bottom: touchCalBottom,
+        flipX: touchFlipX,
+        flipY: touchFlipY,
+      }),
+    }).catch((err) => console.warn('Touch calibration failed:', err.message));
+  }, [
+    settingsLoaded,
+    touchCalibrationEnabled,
+    touchDeviceId,
+    touchCalLeft,
+    touchCalRight,
+    touchCalTop,
+    touchCalBottom,
+    touchFlipX,
+    touchFlipY,
+  ]);
 
   // ── Offline / online detection ──
   useEffect(() => {

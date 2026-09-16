@@ -1258,6 +1258,8 @@ function DisplaySection() {
   const [immichPeople, setImmichPeople] = useState(null);
   const [immichPersonDraft, setImmichPersonDraft] = useState('');
   const [testingImmich, setTestingImmich] = useState(false);
+  const [touchDevices, setTouchDevices] = useState([]);
+  const [applyingTouch, setApplyingTouch] = useState(false);
   const addToast = useStore((s) => s.addToast);
 
   useEffect(() => {
@@ -1339,6 +1341,79 @@ function DisplaySection() {
     updateSettings({ immichPersonIds: next });
     setImmichPersonDraft('');
   }, [immichPersonDraft, settings.immichPersonIds, setSettings, updateSettings]);
+
+  const loadTouchDevices = useCallback(() => {
+    fetchApi('/api/system/touch/devices')
+      .then((d) => {
+        const devices = d?.devices || [];
+        setTouchDevices(devices);
+        if (!settings.touchDeviceId && devices[0]?.id) setSettings({ touchDeviceId: devices[0].id });
+      })
+      .catch(() => setTouchDevices([]));
+  }, [settings.touchDeviceId, setSettings]);
+
+  useEffect(() => {
+    loadTouchDevices();
+  }, [loadTouchDevices]);
+
+  const applyTouchCalibration = useCallback(async () => {
+    const deviceId = settings.touchDeviceId || touchDevices[0]?.id || '';
+    if (!deviceId) return addToast('error', t.settings.touchNoDevice);
+    const patch = {
+      touchCalibrationEnabled: true,
+      touchDeviceId: deviceId,
+      touchCalLeft: Number(settings.touchCalLeft) || 0,
+      touchCalRight: Number(settings.touchCalRight) || 0,
+      touchCalTop: Number(settings.touchCalTop) || 0,
+      touchCalBottom: Number(settings.touchCalBottom) || 0,
+      touchFlipX: settings.touchFlipX === true,
+      touchFlipY: settings.touchFlipY === true,
+    };
+
+    setApplyingTouch(true);
+    try {
+      await updateSettings(patch);
+      await fetchApi('/api/system/touch/calibrate', {
+        method: 'POST',
+        body: JSON.stringify({ deviceId, ...patch }),
+      });
+      setSettings(patch);
+      addToast('success', t.settings.touchApplied);
+    } catch {
+      addToast('error', t.settings.touchFailed);
+    } finally {
+      setApplyingTouch(false);
+    }
+  }, [settings, touchDevices, updateSettings, setSettings, addToast]);
+
+  const resetTouchCalibration = useCallback(async () => {
+    const deviceId = settings.touchDeviceId || touchDevices[0]?.id || '';
+    const patch = {
+      touchCalibrationEnabled: false,
+      touchCalLeft: 0,
+      touchCalRight: 0,
+      touchCalTop: 0,
+      touchCalBottom: 0,
+      touchFlipX: false,
+      touchFlipY: false,
+    };
+    setApplyingTouch(true);
+    try {
+      setSettings(patch);
+      await updateSettings(patch);
+      if (deviceId) {
+        await fetchApi('/api/system/touch/calibrate', {
+          method: 'POST',
+          body: JSON.stringify({ deviceId, left: 0, right: 0, top: 0, bottom: 0, flipX: false, flipY: false }),
+        });
+      }
+      addToast('success', t.settings.touchApplied);
+    } catch {
+      addToast('error', t.settings.touchFailed);
+    } finally {
+      setApplyingTouch(false);
+    }
+  }, [settings.touchDeviceId, touchDevices, setSettings, updateSettings, addToast]);
 
   return (
     <Section title={t.settings.display}>
@@ -1557,6 +1632,93 @@ function DisplaySection() {
           }}
           options={PHRASE_INTERVAL_OPTIONS}
         />
+
+        <div className="flex flex-col gap-3 border-t border-bd pt-4">
+          <ToggleRow
+            label={t.settings.hideCursor}
+            checked={settings.hideCursor !== false}
+            onChange={(val) => {
+              setSettings({ hideCursor: val });
+              updateSettings({ hideCursor: val });
+            }}
+          />
+          <p className="text-sm text-tm -mt-2">{t.settings.hideCursorHint}</p>
+        </div>
+
+        <div className="flex flex-col gap-4 border-t border-bd pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <span className="text-base font-medium text-tp">{t.settings.touchCalibration}</span>
+              <p className="text-sm text-tm">{t.settings.touchCalibrationHint}</p>
+            </div>
+            <Btn icon={<RefreshIcon />} onClick={loadTouchDevices}>
+              {t.settings.touchDetect}
+            </Btn>
+          </div>
+
+          <SelectRow
+            label={t.settings.touchDevice}
+            value={settings.touchDeviceId || touchDevices[0]?.id || ''}
+            onChange={(e) => {
+              setSettings({ touchDeviceId: e.target.value });
+              updateSettings({ touchDeviceId: e.target.value });
+            }}
+            options={
+              touchDevices.length
+                ? touchDevices.map((d) => ({ value: d.id, label: `${d.name} (#${d.id})` }))
+                : [{ value: '', label: t.settings.touchNoDevice }]
+            }
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              ['touchCalLeft', t.settings.touchLeft],
+              ['touchCalRight', t.settings.touchRight],
+              ['touchCalTop', t.settings.touchTop],
+              ['touchCalBottom', t.settings.touchBottom],
+            ].map(([key, label]) => (
+              <SliderRow
+                key={key}
+                label={label}
+                min={0}
+                max={30}
+                value={Number(settings[key]) || 0}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setSettings({ [key]: val });
+                  updateSettings({ [key]: val });
+                }}
+                unit="%"
+              />
+            ))}
+          </div>
+
+          <div className="flex flex-col divide-y divide-bd">
+            <ToggleRow
+              label={t.settings.touchFlipX}
+              checked={settings.touchFlipX === true}
+              onChange={(val) => {
+                setSettings({ touchFlipX: val });
+                updateSettings({ touchFlipX: val });
+              }}
+            />
+            <ToggleRow
+              label={t.settings.touchFlipY}
+              checked={settings.touchFlipY === true}
+              onChange={(val) => {
+                setSettings({ touchFlipY: val });
+                updateSettings({ touchFlipY: val });
+              }}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <Btn icon={applyingTouch ? <Spinner /> : <LinkIcon />} onClick={applyTouchCalibration} disabled={applyingTouch}>
+              {t.settings.touchApply}
+            </Btn>
+            <Btn onClick={resetTouchCalibration}>{t.settings.touchReset}</Btn>
+          </div>
+        </div>
 
         <div className="flex flex-col divide-y divide-bd">
           {/* Temperature unit toggle — segmented control */}
@@ -2247,13 +2409,25 @@ function WifiSection() {
 
 // ─── Section: About ──────────────────────────────────────────────────────────
 
+function formatUptime(seconds) {
+  const uptimeSec = Math.max(0, Math.floor(Number(seconds) || 0));
+  const days = Math.floor(uptimeSec / 86400);
+  const hours = Math.floor((uptimeSec % 86400) / 3600);
+  const minutes = Math.floor((uptimeSec % 3600) / 60);
+  if (days > 0) return `${days} ${t.settings.days}, ${hours} ${t.settings.hours}`;
+  if (hours > 0) return `${hours} ${t.settings.hours}, ${minutes} ${t.settings.minutes}`;
+  if (minutes > 0) return `${minutes} ${t.settings.minutes}`;
+  return t.settings.lessThanMinute;
+}
+
 function AboutSection() {
   const [info, setInfo] = useState({
     version: '...',
     ip: '...',
-    uptime: '...',
+    bootedAt: null,
     buildDate: '...',
   });
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -2268,14 +2442,6 @@ function AboutSection() {
         if (cancelled) return;
 
         const uptimeSec = healthData?.systemUptime ?? healthData?.uptime ?? 0;
-        const days = Math.floor(uptimeSec / 86400);
-        const hours = Math.floor((uptimeSec % 86400) / 3600);
-        const minutes = Math.floor((uptimeSec % 3600) / 60);
-        const uptimeStr = days > 0
-          ? `${days} ${t.settings.days}, ${hours} ${t.settings.hours}`
-          : hours > 0
-            ? `${hours} ${t.settings.hours}, ${minutes} ${t.settings.minutes}`
-            : `${minutes} ${t.settings.minutes}`;
 
         // All LAN IPs (Ethernet + WiFi can both be up now), or '---'
         const ip = healthData?.ips?.length
@@ -2285,7 +2451,7 @@ function AboutSection() {
         setInfo({
           version: versionData?.version || '---',
           ip,
-          uptime: uptimeStr,
+          bootedAt: Date.now() - (Number(uptimeSec) || 0) * 1000,
           buildDate: versionData?.buildDate || new Date().toLocaleDateString('he-IL'),
         });
       } catch {
@@ -2297,10 +2463,15 @@ function AboutSection() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const rows = [
     { label: t.settings.version,   value: info.version },
     { label: t.settings.ipAddress, value: info.ip },
-    { label: t.settings.uptime,    value: info.uptime },
+    { label: t.settings.uptime,    value: info.bootedAt == null ? '...' : formatUptime((now - info.bootedAt) / 1000) },
     { label: t.settings.buildDate, value: info.buildDate },
   ];
 
