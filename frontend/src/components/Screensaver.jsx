@@ -1181,14 +1181,15 @@ function SlideshowMode() {
       )}
       {/* Scrim — keeps text legible over whatever the photo happens to be.
           Real photos are brighter and busier than the gradient deck, so they
-          get a heavier one at the edges -- but the middle band (where the
-          subject usually is) is barely darkened at all now, so the photo
-          reads as a photo, not a dim silhouette behind a fog of text. */}
+          get a dark band at top/bottom, but it's now narrow (top ~22%,
+          bottom ~35%) and nearly transparent (0.02) through the whole middle,
+          so the photo reads bright and vivid rather than dimmed overall --
+          only the text overlays actually need darkening behind them. */}
       <div
         className="absolute inset-0"
         style={{
           background: isPhoto
-            ? 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.08) 40%, rgba(0,0,0,0.6) 100%)'
+            ? 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.02) 22%, rgba(0,0,0,0.02) 65%, rgba(0,0,0,0.45) 100%)'
             : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
         }}
       />
