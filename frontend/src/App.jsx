@@ -27,6 +27,7 @@ import { applyTheme, normalizeThemeMode, resolveIsDark } from './theme.js';
 const CalendarPage = React.lazy(() => import('./components/pages/CalendarPage.jsx'));
 const TasksPage    = React.lazy(() => import('./components/pages/TasksPage.jsx'));
 const ChoresPage   = React.lazy(() => import('./components/pages/ChoresPage.jsx'));
+const SchoolPage   = React.lazy(() => import('./components/pages/SchoolPage.jsx'));
 const HomePage     = React.lazy(() => import('./components/pages/HomePage.jsx'));
 const MusicPage    = React.lazy(() => import('./components/pages/MusicPage.jsx'));
 const AlarmsPage   = React.lazy(() => import('./components/pages/AlarmsPage.jsx'));
@@ -61,6 +62,7 @@ const PAGES = [
   CalendarPage,
   TasksPage,
   ChoresPage,
+  SchoolPage,
   HomePage,
   MusicPage,
   AlarmsPage,
