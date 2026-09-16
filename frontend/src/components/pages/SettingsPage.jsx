@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import t from '../../i18n/he.json';
 import useStore, { UPDATE_INITIATOR_KEY } from '../../store/index.js';
+import { MIN_SLIDE_SECONDS } from '../Screensaver.jsx';
 import useSettings from '../../hooks/useSettings.js';
 import { DEFAULT_LEAD_MIN } from '../../hooks/reminderSchedule.js';
 import {
@@ -1228,13 +1229,14 @@ const PHRASE_INTERVAL_OPTIONS = [
 
 // Photo-frame slide intervals. Matched to how a photo frame is actually used:
 // a few seconds while someone is watching it, minutes when it is wallpaper.
-const PHOTO_INTERVAL_OPTIONS = [
-  { value: '10',  label: '10 שניות' },
-  { value: '15',  label: '15 שניות' },
-  { value: '30',  label: '30 שניות' },
-  { value: '60',  label: 'דקה' },
-  { value: '300', label: '5 דקות' },
-];
+// Seconds between slides. The floor is imported rather than repeated:
+// Screensaver clamps anything lower, so a second copy here could drift and
+// offer a value the slideshow quietly ignores. The ceiling keeps the old
+// dropdown's longest choice (5 minutes), and the step keeps the slider to 60
+// positions so it stays draggable on the touch frame.
+const PHOTO_INTERVAL_MIN = MIN_SLIDE_SECONDS;
+const PHOTO_INTERVAL_MAX = 300;
+const PHOTO_INTERVAL_STEP = 5;
 
 function DisplaySection() {
   const { settings, updateSettings } = useSettings();
@@ -1459,15 +1461,21 @@ function DisplaySection() {
               <p className="text-sm text-tm">{t.settings.photoHint}</p>
             </div>
 
-            <SelectRow
+            <SliderRow
               label={t.settings.photoInterval}
-              value={String(settings.photoIntervalSec ?? 15)}
+              min={PHOTO_INTERVAL_MIN}
+              max={PHOTO_INTERVAL_MAX}
+              step={PHOTO_INTERVAL_STEP}
+              value={settings.photoIntervalSec ?? 15}
               onChange={(e) => {
                 const val = Number(e.target.value);
+                // Local state immediately so the number tracks the thumb;
+                // the write is debounced because a single drag crosses
+                // dozens of steps and would otherwise be dozens of PUTs.
                 setSettings({ photoIntervalSec: val });
-                updateSettings({ photoIntervalSec: val });
+                debouncedSave({ photoIntervalSec: val });
               }}
-              options={PHOTO_INTERVAL_OPTIONS}
+              unit={` ${t.settings.photoIntervalUnit}`}
             />
 
             <SelectRow

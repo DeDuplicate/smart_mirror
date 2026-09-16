@@ -33,7 +33,9 @@ const SLIDESHOW_GRADIENTS = [
 ];
 
 const DEFAULT_SLIDE_SECONDS = 15;
-const MIN_SLIDE_SECONDS = 5;
+// Exported: SettingsPage bounds its slider by this. Two separate copies of
+// the floor would let the UI offer an interval the slideshow silently clamps.
+export const MIN_SLIDE_SECONDS = 5;
 const CROSSFADE_DURATION = 1000; // 1s crossfade
 
 function shuffled(list) {
