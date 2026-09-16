@@ -25,6 +25,15 @@ install -m 644 files/keyboard "${ROOTFS_DIR}/etc/default/keyboard"
 # through its "hdmi:" plug device (not a bare "hw:") or playback fails outright.
 install -m 644 files/asound.conf "${ROOTFS_DIR}/etc/asound.conf"
 
+# Enterprise policy backstop for the Chromium "Translate this page?" bubble.
+# start-kiosk.sh already passes --disable-features=Translate,TranslateUI, but
+# Chromium switches are one flag rename away from silently stopping to work
+# (that's exactly what happened to the older --disable-translate switch this
+# replaced). A managed policy is honoured independently of command-line flags.
+mkdir -p "${ROOTFS_DIR}/etc/chromium/policies/managed"
+install -m 644 files/chromium-policy.json \
+  "${ROOTFS_DIR}/etc/chromium/policies/managed/smart-mirror.json"
+
 # Kiosk X session for the user
 install -m 755 -o 1000 -g 1000 files/xinitrc \
   "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.xinitrc"
