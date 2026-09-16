@@ -21,6 +21,37 @@ function getSocket() {
 
 const REFRESH_INTERVAL = 2 * 60 * 1000;
 
+// Subject-level "packed" toggles use the same checklist endpoint with a
+// synthetic itemKey of `${subject}::__packed__` (backend contract).
+export const PACKED_SUFFIX = '::__packed__';
+export const packedKey = (subject) => `${subject}${PACKED_SUFFIX}`;
+
+function applyToggle(prev, personId, itemKey, checked) {
+  if (!prev) return prev;
+  const isSubject = itemKey.endsWith(PACKED_SUFFIX);
+  const subjectName = isSubject ? itemKey.slice(0, -PACKED_SUFFIX.length) : null;
+  return {
+    ...prev,
+    people: prev.people.map((p) =>
+      String(p.personId) !== String(personId)
+        ? p
+        : {
+            ...p,
+            subjects: p.subjects.map((sub) =>
+              isSubject
+                ? sub.subject === subjectName ? { ...sub, checked } : sub
+                : {
+                    ...sub,
+                    items: sub.items.map((it) =>
+                      it.itemKey === itemKey ? { ...it, checked } : it
+                    ),
+                  }
+            ),
+          }
+    ),
+  };
+}
+
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
 export default function useSchool() {
@@ -75,22 +106,7 @@ export default function useSchool() {
     const onChecklist = ({ personId, date, itemKey, checked } = {}) => {
       setToday((prev) => {
         if (!prev || prev.date !== date) return prev;
-        return {
-          ...prev,
-          people: prev.people.map((p) =>
-            String(p.personId) !== String(personId)
-              ? p
-              : {
-                  ...p,
-                  subjects: p.subjects.map((sub) => ({
-                    ...sub,
-                    items: sub.items.map((it) =>
-                      it.itemKey === itemKey ? { ...it, checked: !!checked } : it
-                    ),
-                  })),
-                }
-          ),
-        };
+        return applyToggle(prev, personId, itemKey, !!checked);
       });
     };
     s.on('school:updated', onUpdated);
@@ -107,25 +123,7 @@ export default function useSchool() {
   const toggleItem = useCallback(
     async (personId, itemKey, checked) => {
       const date = today?.date || toLocalDateKey(new Date());
-      setToday((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          people: prev.people.map((p) =>
-            String(p.personId) !== String(personId)
-              ? p
-              : {
-                  ...p,
-                  subjects: p.subjects.map((sub) => ({
-                    ...sub,
-                    items: sub.items.map((it) =>
-                      it.itemKey === itemKey ? { ...it, checked } : it
-                    ),
-                  })),
-                }
-          ),
-        };
-      });
+      setToday((prev) => applyToggle(prev, personId, itemKey, checked));
       try {
         await fetchApi('/api/school/checklist/toggle', {
           method: 'POST',

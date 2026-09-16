@@ -87,7 +87,8 @@
     "packedProgress": "{packed} מתוך {total} בתיק",
     "noPeople": "אין ילדים מוגדרים",
     "noSchedule": "עדיין לא הוגדרה מערכת שעות",
-    "packed": "בתיק"
+    "packed": "בתיק",
+    "subjectPacked": "סמן מקצוע כמוכן"
   },
   "common": {
     "cancel": "ביטול",

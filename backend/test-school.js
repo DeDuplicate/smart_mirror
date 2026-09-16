@@ -61,8 +61,8 @@ test('school schedule and daily packing checklist', async (t) => {
       {
         personId: 'child', name: 'Test child', color: '#123456',
         subjects: [
-          { subject, items: equipment.map((label) => ({ itemKey: `${subject}::${label}`, label, checked: false })) },
-          { subject: 'math', items: [] },
+          { subject, checked: false, items: equipment.map((label) => ({ itemKey: `${subject}::${label}`, label, checked: false })) },
+          { subject: 'math', checked: false, items: [] },
         ],
       },
       { personId: 'other', name: 'Other child', color: '#654321', subjects: [] },
@@ -75,6 +75,20 @@ test('school schedule and daily packing checklist', async (t) => {
   assert.equal((await request('GET', '/today?date=2026-09-23')).people[0].subjects[0].items[0].checked, false);
   await request('PUT', '/schedule/other/3', { subjects: [subject] });
   assert.equal((await request('GET', `/today?date=${date}`)).people[1].subjects[0].items[0].checked, false);
+  const unpackedSubjects = (await request('GET', `/today?date=${date}`)).people[0].subjects;
+  assert.deepEqual(unpackedSubjects[0].items.map((item) => item.checked), [true, false]);
+  for (const [index, packedSubject] of [subject, 'math'].entries()) {
+    const packedToggle = { ...toggle, itemKey: `${packedSubject}::__packed__` };
+    await request('POST', '/checklist/toggle', packedToggle);
+    const packedSubjects = (await request('GET', `/today?date=${date}`)).people[0].subjects;
+    assert.deepEqual(packedSubjects, unpackedSubjects.map((entry, i) => ({
+      ...entry, checked: i === index,
+    })));
+    assert.equal((await request('GET', '/today?date=2026-09-23')).people[0].subjects[index].checked, false);
+    assert.equal((await request('GET', `/today?date=${date}`)).people[1].subjects[0].checked, false);
+    await request('POST', '/checklist/toggle', { ...packedToggle, checked: false });
+    assert.deepEqual((await request('GET', `/today?date=${date}`)).people[0].subjects, unpackedSubjects);
+  }
   await request('POST', '/checklist/toggle', { ...toggle, checked: false });
   assert.equal((await request('GET', `/today?date=${date}`)).people[0].subjects[0].items[0].checked, false);
   assert.deepEqual(events.at(-1), ['school:checklist-updated', { ...toggle, checked: false }]);
