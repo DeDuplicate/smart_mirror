@@ -82,9 +82,13 @@ function usePhotoFrame() {
 }
 
 /**
- * One crossfade layer. A photo gets a blurred copy of itself behind it in
- * "contain" mode, so a portrait picture sits on its own colours instead of
- * black bars — the look every digital photo frame uses.
+ * One crossfade layer. "Contain" mode letterboxes the photo against the
+ * screensaver's own plain dark background rather than an enlarged, blurred
+ * copy of the same photo -- that "photo frame" trick looked like a wall of
+ * blur around the picture (on portrait AND landscape photos both) rather
+ * than a frame, and it was also the source of a whole separate rendering
+ * bug on the Pi's software rasterizer. Plain dark bars are simpler and look
+ * cleaner.
  */
 function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
   const fade = {
@@ -105,24 +109,6 @@ function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
 
   return (
     <div className="absolute inset-0 isolate" style={fade}>
-      {!cover && (
-        <>
-          <div
-            className="absolute photo-backdrop"
-            style={{
-              backgroundImage: image,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          />
-          {/* Sibling, not a child: .photo-backdrop's filter would blur the
-              dither away. Blurring a dark photo makes a gradient too smooth
-              for 8 bits -- this layer measured 94 distinct colours against
-              50,000 in the sharp photo beside it -- and the noise is what
-              breaks those steps up. */}
-          <div className="absolute inset-0 photo-backdrop-dither" />
-        </>
-      )}
       <div
         // Cover crops anyway, so it can take the full Ken Burns move. Contain
         // is there precisely to show the whole photo, so it gets the gentle

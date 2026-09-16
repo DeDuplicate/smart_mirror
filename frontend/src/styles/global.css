@@ -858,51 +858,19 @@ html[data-cursor="hidden"] * {
   will-change: transform;
 }
 
-/* Blurred backdrop behind a "contain" photo.
-   ------------------------------------------------------------------------
-   This used to be `filter: blur(24px) brightness(0.6); transform: scale(1.2);`
-   on a full 1920x1080 `inset-0` element. On this Pi 2, with GPU rasterization
-   off, that ran Skia's CPU blur over the whole viewport in ~90px-tall raster
-   strips, and the strip-halo padding didn't fully stitch: three independent
-   model reviews of a live x11grab screenshot measured a dead-straight,
-   content-independent horizontal seam every 90px, confined to this element
-   (the sharp centre photo beside it had none). No amount of dither fixes a
-   1px multiplicative step between raster strips -- dither only masks smooth
-   8-bit banding.
-
-   Fix: never CSS-blur a full-viewport layer in software mode. The box below
-   is laid out at 240x135 (16:9, well under any raster tile size Chromium
-   uses in low-end mode), so `background-size: cover` paints the photo into
-   that small bitmap -- which is itself a natural, cheap blur, no filter
-   graph involved -- and `transform: scale()` (a plain geometric transform,
-   not a spatial filter, so it has no halo to get wrong) stretches it back
-   over the viewport. 9.6x recreates the old 1.2x overscan (240 * 9.6 = 2304
-   = 1.2 * 1920). Brightness alone has no spatial radius, so it's still safe
-   as a filter. */
-.photo-backdrop {
-  top: 50%;
-  left: 50%;
-  width: 240px;
-  height: 135px;
-  transform: translate(-50%, -50%) scale(9.6);
-  filter: brightness(0.6);
-  z-index: 0;
-}
-
-/* The dither MUST be a sibling of .photo-backdrop, never a child or its
-   ::after. A CSS filter applies to an element's whole subtree, so noise
-   placed inside the blurred element is itself blurred to flat grey and does
-   nothing at all -- which is exactly how the first attempt at this failed,
-   silently and while measuring as "improved". */
+/* Noise dither tile, currently used only on the scrim (via .scrim-dither
+   below) to break up 8-bit gradient banding on the Pi's software rasterizer.
+   It used to also back a blurred "contain" letterbox backdrop, removed
+   because an enlarged blurred copy of the photo behind it read as a wall of
+   blur rather than a frame, for both portrait and landscape photos -- plain
+   dark letterbox bars (the screensaver's own background) look cleaner. */
 .photo-backdrop-dither {
   pointer-events: none;
   z-index: 1;
   /* One 256px tile, rasterized once and repeated -- not a per-frame filter.
      baseFrequency stays under ~0.9 (well below the 1px-grid Nyquist limit)
      so the turbulence still reads as grain, not aliased per-pixel static;
-     numOctaves 2 keeps it a soft multi-scale texture instead of flat noise.
-     Opacity raised from 0.12 -- still faint alone, but this is what's
-     actually breaking up the ~94-colour banding steps, not the tile size. */
+     numOctaves 2 keeps it a soft multi-scale texture instead of flat noise. */
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='256' height='256' filter='url(%23n)'/></svg>");
   background-repeat: repeat;
   background-size: 256px 256px;
