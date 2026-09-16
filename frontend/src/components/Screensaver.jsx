@@ -7,6 +7,7 @@ import useDailyPhrase from '../hooks/useDailyPhrase.js';
 import useCalendar, { toLocalDateKey, eventFallsOnDay } from '../hooks/useCalendar.js';
 import useTasks from '../hooks/useTasks.js';
 import useNews from '../hooks/useNews.js';
+import { fetchApi } from '../hooks/useApi.js';
 import { getHebrewDateParts } from '../utils/hebrewDate.js';
 import { useMusicContext } from '../context/MusicContext.jsx';
 import {
@@ -18,7 +19,10 @@ import {
 // Two modes: "clock" (full-screen dark clock) or "slideshow" (Ken Burns photos).
 // Fades in on mount. Any touch/click dismisses it via onDismiss callback.
 
-// ─── Gradient "photos" for slideshow placeholder ─────────────────────────────
+// ─── Photo frame / slideshow backdrop ────────────────────────────────────────
+// The slideshow shows photos from backend/data/photos/. These gradients are
+// the fallback deck for when that folder is empty, so a fresh install still
+// gets a working screensaver.
 
 const SLIDESHOW_GRADIENTS = [
   'linear-gradient(135deg, #1a1c2e 0%, #2d1b69 30%, #0a0a1f 100%)',
@@ -28,8 +32,105 @@ const SLIDESHOW_GRADIENTS = [
   'linear-gradient(130deg, #1a1a0a 0%, #3a2a1a 35%, #0a0a1f 100%)',
 ];
 
-const SLIDE_DURATION = 15000; // 15s per slide
+const DEFAULT_SLIDE_SECONDS = 15;
+const MIN_SLIDE_SECONDS = 5;
 const CROSSFADE_DURATION = 1000; // 1s crossfade
+
+function shuffled(list) {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Photos the user dropped into backend/data/photos/, shuffled once per
+ * screensaver appearance so it never opens on the same picture twice running.
+ * Returns null while loading — callers show nothing rather than flashing the
+ * gradient deck for one frame before the photos land.
+ */
+function usePhotoFrame() {
+  const [photos, setPhotos] = useState(null);
+  const photoSource = useStore((st) => st.settings.photoSource);
+  const photoSubdir = useStore((st) => st.settings.photoSubdir);
+  const immichAlbumId = useStore((st) => st.settings.immichAlbumId);
+  const immichPersonIds = useStore((st) => st.settings.immichPersonIds);
+  const immichPersonKey = Array.isArray(immichPersonIds) ? immichPersonIds.join('|') : '';
+
+  useEffect(() => {
+    let cancelled = false;
+    setPhotos(null);
+    fetchApi('/api/photoframe/list')
+      .then((data) => {
+        if (cancelled) return;
+        const urls = Array.isArray(data?.photos) ? data.photos.map((p) => p.url) : [];
+        setPhotos(shuffled(urls));
+      })
+      .catch(() => {
+        if (!cancelled) setPhotos([]); // gradients are a fine fallback
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photoSource, photoSubdir, immichAlbumId, immichPersonKey]);
+
+  return photos;
+}
+
+/**
+ * One crossfade layer. A photo gets a blurred copy of itself behind it in
+ * "contain" mode, so a portrait picture sits on its own colours instead of
+ * black bars — the look every digital photo frame uses.
+ */
+function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
+  const fade = {
+    opacity: visible ? 1 : 0,
+    transition: `opacity ${CROSSFADE_DURATION}ms ease`,
+  };
+
+  if (!isPhoto) {
+    return (
+      <div
+        className={`absolute inset-0 ${kenburns}`}
+        style={{ background: slide, ...fade, willChange: 'transform' }}
+      />
+    );
+  }
+
+  const image = `url("${slide}")`;
+
+  return (
+    <div className="absolute inset-0" style={fade}>
+      {!cover && (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: image,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(40px) brightness(0.6)',
+            transform: 'scale(1.2)',
+          }}
+        />
+      )}
+      <div
+        // Cover crops anyway, so it can take the full Ken Burns move. Contain
+        // is there precisely to show the whole photo, so it gets the gentle
+        // drift instead.
+        className={`absolute inset-0 ${cover ? kenburns : 'photo-drift'}`}
+        style={{
+          backgroundImage: image,
+          backgroundSize: cover ? 'cover' : 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          animationDuration: `${durationMs}ms`,
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── Clock Display ───────────────────────────────────────────────────────────
 
@@ -1038,55 +1139,61 @@ function ClockMode() {
 function SlideshowMode() {
   const time = useClock();
 
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [nextSlide, setNextSlide] = useState(1);
-  const [transitioning, setTransitioning] = useState(false);
-  const slideTimerRef = useRef(null);
+  const photos = usePhotoFrame();
+  const intervalSec = useStore((st) => st.settings.photoIntervalSec);
+  const cover = useStore((st) => st.settings.photoFit) === 'cover';
 
-  // Cycle through slides
+  const isPhoto = Array.isArray(photos) && photos.length > 0;
+  const slides = useMemo(() => (photos === null ? [] : isPhoto ? photos : SLIDESHOW_GRADIENTS), [photos, isPhoto]);
+  const slideMs =
+    Math.max(MIN_SLIDE_SECONDS, Number(intervalSec) || DEFAULT_SLIDE_SECONDS) * 1000;
+
+  const [index, setIndex] = useState(0);
+  const next = slides.length ? (index + 1) % slides.length : 0;
+
+  // Cycle through one decoded layer. Crossfading two real photos looked like a
+  // flicker/double image on the mirror, and preloading is enough here.
   useEffect(() => {
-    slideTimerRef.current = setInterval(() => {
-      setTransitioning(true);
+    setIndex(0);
+    if (slides.length < 2) return undefined;
 
-      // After crossfade completes, swap slides
-      setTimeout(() => {
-        setCurrentSlide((prev) => (prev + 1) % SLIDESHOW_GRADIENTS.length);
-        setNextSlide((prev) => (prev + 1) % SLIDESHOW_GRADIENTS.length);
-        setTransitioning(false);
-      }, CROSSFADE_DURATION);
-    }, SLIDE_DURATION);
+    const slideTimer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % slides.length);
+    }, slideMs);
 
-    return () => {
-      if (slideTimerRef.current) clearInterval(slideTimerRef.current);
-    };
-  }, []);
+    return () => clearInterval(slideTimer);
+  }, [slides, slideMs]);
+
+  // Decode the next photo ahead of time — on the Pi a cold JPEG can take
+  // longer than the crossfade, which shows up as a flash of empty frame.
+  useEffect(() => {
+    if (!isPhoto) return;
+    const img = new Image();
+    img.src = slides[next];
+  }, [isPhoto, slides, next]);
 
   const background = (
     <>
-      <div
-        className="absolute inset-0 kenburns-1"
-        style={{
-          background: SLIDESHOW_GRADIENTS[currentSlide],
-          opacity: transitioning ? 0 : 1,
-          transition: `opacity ${CROSSFADE_DURATION}ms ease`,
-          willChange: 'transform',
-        }}
-      />
-      <div
-        className="absolute inset-0 kenburns-2"
-        style={{
-          background: SLIDESHOW_GRADIENTS[nextSlide],
-          opacity: transitioning ? 1 : 0,
-          transition: `opacity ${CROSSFADE_DURATION}ms ease`,
-          willChange: 'transform',
-        }}
-      />
-      {/* Scrim — keeps text legible over whatever the photo happens to be */}
+      {slides.length > 0 && (
+        <SlideLayer
+          key={slides[index]}
+          slide={slides[index]}
+          isPhoto={isPhoto}
+          cover={cover}
+          kenburns="kenburns-1"
+          visible
+          durationMs={slideMs}
+        />
+      )}
+      {/* Scrim — keeps text legible over whatever the photo happens to be.
+          Real photos are brighter and busier than the gradient deck, so they
+          get a heavier one. */}
       <div
         className="absolute inset-0"
         style={{
-          background:
-            'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
+          background: isPhoto
+            ? 'linear-gradient(to bottom, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.78) 100%)'
+            : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
         }}
       />
     </>

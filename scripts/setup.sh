@@ -38,7 +38,7 @@ success "System packages updated."
 # 3. Install dependencies
 # ---------------------------------------------------------------------------
 info "Installing system dependencies (git, ddcutil, xdotool, ffmpeg)..."
-sudo apt-get install -y git ddcutil xdotool curl gnupg ffmpeg python3-venv
+sudo apt-get install -y git ddcutil xdotool curl gnupg ffmpeg python3-venv cifs-utils smbclient
 
 # yt-dlp goes into a pip venv, not the single-file release download.
 #

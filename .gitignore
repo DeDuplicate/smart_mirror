@@ -33,3 +33,8 @@ backend/data/sounds/reminders/*
 !backend/data/sounds/reminders/Buzzer.mp3
 !backend/data/sounds/reminders/Chime.mp3
 !backend/data/sounds/reminders/Pager.mp3
+
+# Photo-frame images for the slideshow screensaver. Family photos stay on the
+# device, out of git - see backend/data/photos/README.md.
+backend/data/photos/*
+!backend/data/photos/README.md

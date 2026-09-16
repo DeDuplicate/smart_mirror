@@ -1,0 +1,92 @@
+'use strict';
+
+// Self-check for the photo-frame listing. No framework, no fixtures:
+//   node backend/test-photos.js
+// Covers what would silently empty the frame: non-image files slipping in,
+// subfolder albums being missed, the depth cap, and junk dotfiles (.DS_Store,
+// Synology's @eaDir thumbnails) showing up as "photos".
+
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const { walkPhotos, resolveSubdir, parseShares, isValidSmbHost, PHOTO_ROOT } = require('./routes/photos');
+
+function makeTree() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'photo-frame-'));
+  const write = (rel) => {
+    const abs = path.join(root, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, '');
+  };
+  write('beach.JPG');          // upper-case extension still counts
+  write('README.md');          // the committed readme must not become a slide
+  write('notes.txt');
+  write('.DS_Store');
+  write('trips/eilat.jpeg');
+  write('trips/2024/snow.webp');
+  write('trips/2024/deep/deeper/too-far.png'); // depth 4 > PHOTO_MAX_DEPTH
+  return root;
+}
+
+test('lists only images, walks albums, skips junk and over-deep dirs', async () => {
+  const root = makeTree();
+  try {
+    const found = (await walkPhotos(root)).sort();
+    assert.deepEqual(found, ['beach.JPG', 'trips/2024/snow.webp', 'trips/eilat.jpeg']);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('missing directory rejects with ENOENT so the route falls back to gradients', async () => {
+  await assert.rejects(
+    () => walkPhotos(path.join(os.tmpdir(), 'no-such-photo-dir-xyz')),
+    (err) => err.code === 'ENOENT'
+  );
+});
+
+// The folder picker hands back whatever the user tapped, so this is the guard
+// that keeps a crafted path from reading outside the photo directory.
+test('resolveSubdir confines the folder picker to the photo directory', () => {
+  assert.equal(resolveSubdir(''), PHOTO_ROOT);
+  assert.equal(resolveSubdir('nas/trips'), path.join(PHOTO_ROOT, 'nas', 'trips'));
+  assert.equal(resolveSubdir('/nas'), path.join(PHOTO_ROOT, 'nas')); // leading slash is not absolute
+  // Express has already percent-decoded req.query by the time we see it, so
+  // these are the shapes that actually arrive from a crafted request.
+  const backslashes = String.raw`..\..\windows`; // a Windows-style traversal
+  for (const evil of ['..', '../..', 'nas/../../etc', '../../../etc/passwd', backslashes]) {
+    assert.equal(resolveSubdir(evil), null, `should reject ${evil}`);
+  }
+});
+
+// smbclient --grepable output. The admin shares are the interesting case:
+// every NAS offers IPC$/print$ and neither is ever a photo share.
+test('parseShares keeps disk shares and drops admin shares and printers', () => {
+  const stdout = [
+    'Disk|photos|Family photos',
+    'Disk|media|',
+    'Disk|IPC$|IPC Service (nas)',
+    'Disk|print$|Printer Drivers',
+    'Printer|HP_LaserJet|office printer',
+    'IPC|IPC$|IPC Service',
+    '',
+    'garbage line with no pipes',
+  ].join('\n');
+
+  assert.deepEqual(parseShares(stdout), [
+    { name: 'photos', comment: 'Family photos' },
+    { name: 'media', comment: '' },
+  ]);
+});
+
+test('isValidSmbHost rejects anything smbclient would read as a flag', () => {
+  for (const good of ['nas', 'nas.local', '192.168.1.50', 'my-nas-01']) {
+    assert.equal(isValidSmbHost(good), true, `should accept ${good}`);
+  }
+  for (const bad of ['-L', '--option', '', 'nas;rm -rf /', 'nas/share', '//nas', 'nas ']) {
+    assert.equal(isValidSmbHost(bad), false, `should reject ${JSON.stringify(bad)}`);
+  }
+});
