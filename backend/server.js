@@ -196,6 +196,23 @@ app.use(
   })
 );
 
+// Photo-frame images for the slideshow screensaver. Same rationale as the
+// reminder sounds above: dropped onto a running Pi without rebuilding the
+// frontend bundle, and family photos stay out of git - see
+// backend/data/photos/README.md.
+app.use(
+  '/api/photos',
+  express.static(path.join(__dirname, 'data', 'photos'), {
+    fallthrough: false,
+    maxAge: '1d',
+  })
+);
+
+// JSON API for the photo frame (listing, folder picker, Immich, share mount).
+// Deliberately a different prefix from the static files above so a folder on
+// a mounted share can never shadow an endpoint name.
+app.use('/api/photoframe', require('./routes/photos'));
+
 app.use('/api/settings', require('./routes/settings'));
 const systemRoutes = require('./routes/system');
 app.use('/api/system', systemRoutes);

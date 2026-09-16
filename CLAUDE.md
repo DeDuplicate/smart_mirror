@@ -82,7 +82,7 @@ Frontend talks to backend via HTTP + WebSocket (Socket.io). Backend proxies all 
 
 ## Frontend Components (Key)
 
-TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiPopup, ShoppingListPopup, ACControlPopup, IRRemoteOverlay, OAuthOverlay, ConnectionBanner, OnScreenKeyboard (Hebrew/English/emoji), ConfirmDialog, ToastContainer, TouchRipple, Screensaver (clock/slideshow), CelebrationAnimation (Canvas fireworks), ErrorBoundary, Skeleton loaders
+TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiPopup, ShoppingListPopup, ACControlPopup, IRRemoteOverlay, OAuthOverlay, ConnectionBanner, OnScreenKeyboard (Hebrew/English/emoji), ConfirmDialog, ToastContainer, TouchRipple, Screensaver (clock / photo-frame slideshow), CelebrationAnimation (Canvas fireworks), ErrorBoundary, Skeleton loaders
 
 ## Backend Routes
 
@@ -96,7 +96,8 @@ TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiP
 | `/api/music/*` | YouTube search, suggest, related videos |
 | `/api/news/*` | RSS feeds + readability extraction |
 | `/api/wifi/*` | Network scan/connect/forget (nmcli) |
-| `/api/settings/*` | Config CRUD in SQLite |
+| `/api/photos/*` | Photo-frame images from `backend/data/photos/` (static) |
+| `/api/settings/*` | Config CRUD in SQLite (incl. `GET /photos` listing) |
 | `/api/system/*` | Health, brightness, logs, update, backup, schedule |
 
 ## Key Integration Details

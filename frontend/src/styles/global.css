@@ -829,6 +829,24 @@
   will-change: transform;
 }
 
+/* Photo frame: a much gentler drift than Ken Burns. The photo is rendered
+   with background-size: contain so the whole picture is visible - a 1.04
+   overscale trims ~2% off the long edge at the far end of the cycle, which
+   keeps faces intact where kenburns-1's 1.15 would not. */
+@keyframes photoDrift {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.04);
+  }
+}
+
+.photo-drift {
+  animation: photoDrift 15s linear infinite alternate;
+  will-change: transform;
+}
+
 /* ========================================================================
    Pull-to-Refresh Indicator
    ======================================================================== */

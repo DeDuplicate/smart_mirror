@@ -15,12 +15,28 @@ function applyHomeAssistantEnv(updates) {
   }
 }
 
+// Settings the client may set but must never be told back. The value is
+// replaced by a `<key>Set` boolean everywhere it would otherwise be returned
+// or broadcast, and an empty value on the way in means "keep the one I have".
+// spotifyClientSecret was being handed to every LAN client by GET /api/settings
+// until it joined this list; nothing in the UI reads it back, only auth.js does.
+const SECRET_SETTINGS = ['haToken', 'immichApiKey', 'spotifyClientSecret'];
+
+function isSecretSetting(key) {
+  return SECRET_SETTINGS.includes(key);
+}
+
+function secretSetFlag(key) {
+  return `${key}Set`;
+}
+
 function sanitizeSettingsPatch(updates) {
   const safe = { ...updates };
-  if ('haToken' in safe) {
-    delete safe.haToken;
-    if (typeof updates.haToken === 'string' && updates.haToken.trim()) {
-      safe.haTokenSet = true;
+  for (const key of SECRET_SETTINGS) {
+    if (!(key in safe)) continue;
+    delete safe[key];
+    if (typeof updates[key] === 'string' && updates[key].trim()) {
+      safe[secretSetFlag(key)] = true;
     }
   }
   return safe;
@@ -38,8 +54,8 @@ router.get('/', (req, res) => {
     for (const row of rows) {
       // Skip internal/secret keys — never send secrets to the client
       if (row.key === 'api_token' || row.key === 'token_secret') continue;
-      if (row.key === 'haToken') {
-        settings.haTokenSet = Boolean(row.value);
+      if (isSecretSetting(row.key)) {
+        settings[secretSetFlag(row.key)] = Boolean(row.value);
         continue;
       }
 
@@ -79,7 +95,7 @@ router.put('/', (req, res) => {
         // Prevent overwriting internal/secret keys via settings endpoint
         if (key === 'api_token' || key === 'token_secret') continue;
         // Empty secret means "leave the existing one" — the UI never re-sends it.
-        if (key === 'haToken' && (value === '' || value == null)) continue;
+        if (isSecretSetting(key) && (value === '' || value == null)) continue;
         const serialized = typeof value === 'string' ? value : JSON.stringify(value);
         upsert.run(key, serialized);
       }
@@ -116,7 +132,7 @@ router.put('/:key', (req, res) => {
   if (value === undefined) {
     return res.status(400).json({ error: 'Request body must contain a "value" field' });
   }
-  if (key === 'haToken' && (value === '' || value == null)) {
+  if (isSecretSetting(key) && (value === '' || value == null)) {
     return res.json({ ok: true, key, unchanged: true });
   }
 
@@ -133,8 +149,8 @@ router.put('/:key', (req, res) => {
     const io = req.app.locals.io;
     if (io) io.emit('settings:updated', sanitizeSettingsPatch({ [key]: value }));
 
-    if (key === 'haToken') {
-      return res.json({ ok: true, key, haTokenSet: true });
+    if (isSecretSetting(key)) {
+      return res.json({ ok: true, key, [secretSetFlag(key)]: true });
     }
     res.json({ ok: true, key, value });
   } catch (err) {

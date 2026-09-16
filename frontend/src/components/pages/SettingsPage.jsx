@@ -12,6 +12,8 @@ import {
 } from '../../hooks/reminderTones.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import WifiPopup from '../WifiPopup.jsx';
+import FolderPickerPopup from '../FolderPickerPopup.jsx';
+import SmbSetupPopup from '../SmbSetupPopup.jsx';
 
 // ─── Socket.io singleton (same pattern as useTasks / useHomeAssistant) ──────
 
@@ -71,6 +73,16 @@ function WifiIcon({ className = 'w-4 h-4' }) {
       <path d="M1.42 9a16 16 0 0 1 21.16 0" />
       <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
       <line x1="12" y1="20" x2="12.01" y2="20" />
+    </svg>
+  );
+}
+
+function ShareIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
+      <rect x="3" y="4" width="18" height="7" rx="2" />
+      <rect x="3" y="13" width="18" height="7" rx="2" />
+      <path d="M7 7.5h.01M7 16.5h.01" strokeLinecap="round" />
     </svg>
   );
 }
@@ -184,6 +196,44 @@ function SelectRow({ label, value, onChange, options, className = '' }) {
       </div>
     </div>
   );
+}
+
+function CheckboxListRow({ label, values, onChange, options, emptyLabel }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-ts">{label}</span>
+      {options.length === 0 ? (
+        <span className="text-sm text-tm">{emptyLabel}</span>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {options.map((o) => {
+            const checked = values.includes(o.value);
+            return (
+              <label
+                key={o.value}
+                className={`min-h-[56px] rounded-xl border px-4 flex items-center gap-3 text-base
+                            ${checked ? 'bg-acc/15 border-acc text-tp' : 'bg-s2 border-bd text-ts'}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    onChange(checked ? values.filter((v) => v !== o.value) : [...values, o.value])
+                  }
+                  className="w-5 h-5 accent-[var(--color-accent)]"
+                />
+                <span className="truncate">{o.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function immichPersonIdFromText(text) {
+  return text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] || '';
 }
 
 /** Toggle switch row (label left, switch right) */
@@ -1176,13 +1226,119 @@ const PHRASE_INTERVAL_OPTIONS = [
   { value: '1440', label: 'פעם ביום' },
 ];
 
+// Photo-frame slide intervals. Matched to how a photo frame is actually used:
+// a few seconds while someone is watching it, minutes when it is wallpaper.
+const PHOTO_INTERVAL_OPTIONS = [
+  { value: '10',  label: '10 שניות' },
+  { value: '15',  label: '15 שניות' },
+  { value: '30',  label: '30 שניות' },
+  { value: '60',  label: 'דקה' },
+  { value: '300', label: '5 דקות' },
+];
+
 function DisplaySection() {
   const { settings, updateSettings } = useSettings();
   const { setSettings, setThemeMode } = useStore();
 
+  const debouncedSave = useDebouncedSave(updateSettings);
+
   const idleMin = settings.idleTimeout || 5;
   const screensaver = settings.screensaverStyle || 'clock';
   const phraseIntervalMin = settings.phraseIntervalMin ?? 10;
+
+  const photoSource = settings.photoSource || 'local';
+
+  // How many photos the current source actually yields — the one number that
+  // tells the user whether the frame will show anything at all.
+  const [photoCount, setPhotoCount] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [folderOpen, setFolderOpen] = useState(false);
+  const [smbOpen, setSmbOpen] = useState(false);
+  const [immichAlbums, setImmichAlbums] = useState(null);
+  const [immichPeople, setImmichPeople] = useState(null);
+  const [immichPersonDraft, setImmichPersonDraft] = useState('');
+  const [testingImmich, setTestingImmich] = useState(false);
+  const addToast = useStore((s) => s.addToast);
+
+  useEffect(() => {
+    if (screensaver !== 'slideshow') return undefined;
+    let cancelled = false;
+    fetchApi('/api/photoframe/list')
+      .then((d) => {
+        if (!cancelled) setPhotoCount(Array.isArray(d?.photos) ? d.photos.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [screensaver, photoSource, settings.photoSubdir, settings.immichAlbumId, settings.immichPersonIds, reloadKey]);
+
+  // Album list for the dropdown. Refetched whenever the key changes, since a
+  // wrong key is the usual reason the list is empty.
+  useEffect(() => {
+    if (screensaver !== 'slideshow' || photoSource !== 'immich') return undefined;
+    let cancelled = false;
+    fetchApi('/api/photoframe/albums')
+      .then((d) => {
+        if (!cancelled) setImmichAlbums(d?.albums || []);
+      })
+      .catch(() => {
+        if (!cancelled) setImmichAlbums([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [screensaver, photoSource, settings.immichUrl, settings.immichApiKeySet, reloadKey]);
+
+  useEffect(() => {
+    if (screensaver !== 'slideshow' || photoSource !== 'immich') return undefined;
+    let cancelled = false;
+    fetchApi('/api/photoframe/people')
+      .then((d) => {
+        if (!cancelled) setImmichPeople(d?.people || []);
+      })
+      .catch(() => {
+        if (!cancelled) setImmichPeople([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [screensaver, photoSource, settings.immichUrl, settings.immichApiKeySet, reloadKey]);
+
+  const handleImmichTest = useCallback(async () => {
+    setTestingImmich(true);
+    try {
+      const patch = { photoSource: 'immich', immichUrl: settings.immichUrl || '' };
+      if (settings.immichApiKey) patch.immichApiKey = settings.immichApiKey;
+      if (settings.immichAlbumId !== undefined) patch.immichAlbumId = settings.immichAlbumId;
+      patch.immichPersonIds = Array.isArray(settings.immichPersonIds) ? settings.immichPersonIds : [];
+      const saved = await updateSettings(patch);
+      if (!saved) throw new Error('save-failed');
+
+      const data = await fetchApi('/api/photoframe/list');
+      if (data?.error) throw new Error(data.error);
+      setPhotoCount(Array.isArray(data?.photos) ? data.photos.length : 0);
+      setReloadKey((k) => k + 1);
+      addToast('success', t.photoFrame.immichOk);
+    } catch {
+      addToast('error', t.photoFrame.immichFailed);
+    } finally {
+      setTestingImmich(false);
+    }
+  }, [settings.immichUrl, settings.immichApiKey, settings.immichAlbumId, settings.immichPersonIds, updateSettings, addToast]);
+
+  const addImmichPersonId = useCallback(() => {
+    const id = immichPersonIdFromText(immichPersonDraft);
+    if (!id) return;
+    const ids = Array.isArray(settings.immichPersonIds) ? settings.immichPersonIds : [];
+    if (ids.includes(id)) return setImmichPersonDraft('');
+    const next = [...ids, id];
+    setSettings({ immichPersonIds: next });
+    updateSettings({ immichPersonIds: next });
+    setImmichPersonDraft('');
+  }, [immichPersonDraft, settings.immichPersonIds, setSettings, updateSettings]);
 
   return (
     <Section title={t.settings.display}>
@@ -1210,6 +1366,174 @@ function DisplaySection() {
             { value: 'slideshow', label: t.settings.screensaverSlideshow },
           ]}
         />
+
+        {/* Photo frame — only relevant once the slideshow is the screensaver */}
+        {screensaver === 'slideshow' && (
+          <div className="flex flex-col gap-4 ps-3 border-s-2 border-bd">
+            <div className="flex flex-col gap-1">
+              <span className="text-base font-medium text-ts">{t.settings.photoFrame}</span>
+              <p className="text-sm text-tm">
+                {photoCount == null
+                  ? '…'
+                  : photoCount === 0
+                    ? t.settings.photoCountEmpty
+                    : photoCount === 1
+                      ? t.settings.photoCountOne
+                      : t.settings.photoCount.replace('{n}', String(photoCount))}
+              </p>
+              <p className="text-sm text-tm">{t.settings.photoHint}</p>
+            </div>
+
+            <SelectRow
+              label={t.settings.photoInterval}
+              value={String(settings.photoIntervalSec ?? 15)}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setSettings({ photoIntervalSec: val });
+                updateSettings({ photoIntervalSec: val });
+              }}
+              options={PHOTO_INTERVAL_OPTIONS}
+            />
+
+            <SelectRow
+              label={t.settings.photoFit}
+              value={settings.photoFit || 'contain'}
+              onChange={(e) => {
+                setSettings({ photoFit: e.target.value });
+                updateSettings({ photoFit: e.target.value });
+              }}
+              options={[
+                { value: 'contain', label: t.settings.photoFitContain },
+                { value: 'cover',   label: t.settings.photoFitCover },
+              ]}
+            />
+
+            <SelectRow
+              label={t.photoFrame.source}
+              value={photoSource}
+              onChange={(e) => {
+                setSettings({ photoSource: e.target.value });
+                updateSettings({ photoSource: e.target.value });
+              }}
+              options={[
+                { value: 'local',  label: t.photoFrame.sourceLocal },
+                { value: 'smb',    label: t.photoFrame.sourceSmb },
+                { value: 'immich', label: t.photoFrame.sourceImmich },
+              ]}
+            />
+
+            {/* A mounted share is just a folder under the photo directory, so
+                local and SMB share one picker — SMB only adds the mount step. */}
+            {photoSource !== 'immich' && (
+              <div className="flex flex-col gap-2">
+                {photoSource === 'smb' && (
+                  <Btn icon={<ShareIcon />} onClick={() => setSmbOpen(true)}>
+                    {t.photoFrame.smbTitle}
+                  </Btn>
+                )}
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-ts">{t.photoFrame.folder}</span>
+                    <p className="text-base text-tp truncate" dir="auto">
+                      {settings.photoSubdir || t.photoFrame.folderRoot}
+                    </p>
+                  </div>
+                  <Btn onClick={() => setFolderOpen(true)}>{t.photoFrame.browse}</Btn>
+                </div>
+              </div>
+            )}
+
+            {photoSource === 'immich' && (
+              <div className="flex flex-col gap-4">
+                <InputRow
+                  label={t.photoFrame.immichUrl}
+                  placeholder={t.photoFrame.immichUrlPlaceholder}
+                  value={settings.immichUrl || ''}
+                  onChange={(e) => {
+                    setSettings({ immichUrl: e.target.value });
+                    debouncedSave({ immichUrl: e.target.value });
+                  }}
+                />
+                <InputRow
+                  label={t.photoFrame.immichApiKey}
+                  type="password"
+                  // The server never sends the key back, so an untouched field
+                  // stays empty and an empty save means "keep what you have".
+                  placeholder={settings.immichApiKeySet ? '••••••••' : ''}
+                  value={settings.immichApiKey || ''}
+                  onChange={(e) => {
+                    setSettings({ immichApiKey: e.target.value });
+                    debouncedSave({ immichApiKey: e.target.value });
+                  }}
+                />
+                <SelectRow
+                  label={t.photoFrame.immichAlbum}
+                  value={settings.immichAlbumId || ''}
+                  onChange={(e) => {
+                    setSettings({ immichAlbumId: e.target.value });
+                    updateSettings({ immichAlbumId: e.target.value });
+                  }}
+                  options={[
+                    { value: '',          label: t.photoFrame.immichAlbumRandom },
+                    { value: 'favorites', label: t.photoFrame.immichAlbumFavorites },
+                    ...(immichAlbums || []).map((a) => ({
+                      value: a.id,
+                      label: `${a.name} (${a.count})`,
+                    })),
+                  ]}
+                />
+                <CheckboxListRow
+                  label={t.photoFrame.immichPeople}
+                  values={Array.isArray(settings.immichPersonIds) ? settings.immichPersonIds : []}
+                  onChange={(ids) => {
+                    setSettings({ immichPersonIds: ids });
+                    updateSettings({ immichPersonIds: ids });
+                  }}
+                  options={[
+                    ...(immichPeople || []).map((p) => ({
+                      value: p.id,
+                      label: p.count ? `${p.name} (${p.count})` : p.name,
+                    })),
+                    ...(Array.isArray(settings.immichPersonIds) ? settings.immichPersonIds : [])
+                      .filter((id) => !(immichPeople || []).some((p) => p.id === id))
+                      .map((id) => ({ value: id, label: id })),
+                  ]}
+                  emptyLabel={t.photoFrame.immichPeopleAll}
+                />
+                <div className="flex items-end gap-2">
+                  <InputRow
+                    className="flex-1"
+                    label={t.photoFrame.immichPersonUrl}
+                    placeholder={t.photoFrame.immichPersonUrlPlaceholder}
+                    value={immichPersonDraft}
+                    onChange={(e) => setImmichPersonDraft(e.target.value)}
+                  />
+                  <Btn onClick={addImmichPersonId} disabled={!immichPersonIdFromText(immichPersonDraft)}>
+                    {t.photoFrame.immichPersonAdd}
+                  </Btn>
+                </div>
+                <Btn icon={testingImmich ? <Spinner /> : <LinkIcon />} onClick={handleImmichTest} disabled={testingImmich}>
+                  {t.photoFrame.immichTest}
+                </Btn>
+              </div>
+            )}
+
+            <FolderPickerPopup
+              visible={folderOpen}
+              value={settings.photoSubdir || ''}
+              onClose={() => setFolderOpen(false)}
+              onSelect={(folder) => {
+                setSettings({ photoSubdir: folder });
+                updateSettings({ photoSubdir: folder });
+              }}
+            />
+            <SmbSetupPopup
+              visible={smbOpen}
+              onClose={() => setSmbOpen(false)}
+              onMounted={() => setReloadKey((k) => k + 1)}
+            />
+          </div>
+        )}
 
         <div className="flex flex-col">
           <ToggleRow
