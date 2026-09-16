@@ -82,7 +82,13 @@ while true; do
     --disable-smooth-scrolling \
     --disable-composited-antialiasing \
     --num-raster-threads=2 \
-    --ignore-gpu-blocklist \
+    `# --ignore-gpu-blocklist forces GPU rasterization past Chromium's own` \
+    `# blocklist for this unsupported VC4 setup. Tried in 0749386: it improved` \
+    `# color depth on the blurred screensaver backdrop (94 -> 272 colours) but` \
+    `# re-triggered the CMA exhaustion that crashes the GPU process into` \
+    `# software rendering mid-session -- visible as banding/ghost-stripe` \
+    `# artifacts and a stuttery screensaver exit while it recovers. Leave the` \
+    `# GPU blocklisted; software rendering is slower per frame but stable.` \
     --autoplay-policy=no-user-gesture-required \
     --noerrdialogs \
     --disable-infobars \
