@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { walkPhotos, resolveSubdir, parseShares, isValidSmbHost, PHOTO_ROOT } = require('./routes/photos');
+const { walkPhotos, resolveSubdir, parseShares, isValidSmbHost, PHOTO_ROOT, mergeSettledAssets } = require('./routes/photos');
 
 function makeTree() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'photo-frame-'));
@@ -89,4 +89,54 @@ test('isValidSmbHost rejects anything smbclient would read as a flag', () => {
   for (const bad of ['-L', '--option', '', 'nas;rm -rf /', 'nas/share', '//nas', 'nas ']) {
     assert.equal(isValidSmbHost(bad), false, `should reject ${JSON.stringify(bad)}`);
   }
+});
+
+// ─── Immich per-person fan-out ───────────────────────────────────────────────
+// Immich's personIds is an AND, so selecting four family members asked for
+// photos containing all four at once and returned nothing at all. The fan-out
+// queries each person separately; this is what merges the results.
+
+const ok = (value) => ({ status: 'fulfilled', value });
+const bad = (reason) => ({ status: 'rejected', reason });
+
+test('mergeSettledAssets unions people rather than intersecting them', () => {
+  const merged = mergeSettledAssets([
+    ok([{ id: 'a' }, { id: 'b' }]),
+    ok([{ id: 'c' }]),
+  ]);
+  assert.deepEqual(merged.map((a) => a.id), ['a', 'b', 'c']);
+});
+
+test('mergeSettledAssets shows a shared photo once, not once per person', () => {
+  // A family photo comes back from every selected person's query.
+  const merged = mergeSettledAssets([
+    ok([{ id: 'shared' }, { id: 'only-mum' }]),
+    ok([{ id: 'shared' }, { id: 'only-dad' }]),
+    ok([{ id: 'shared' }]),
+  ]);
+  assert.deepEqual(merged.map((a) => a.id), ['shared', 'only-mum', 'only-dad']);
+});
+
+test('mergeSettledAssets keeps going when one person fails', () => {
+  // Three people still make a slideshow; blanking the frame would be worse.
+  const merged = mergeSettledAssets([
+    ok([{ id: 'a' }]),
+    bad(new Error('Immich 500')),
+    ok([{ id: 'b' }]),
+  ]);
+  assert.deepEqual(merged.map((a) => a.id), ['a', 'b']);
+});
+
+test('mergeSettledAssets rethrows when every query failed', () => {
+  // All failing is the server being down, not an empty library. It has to
+  // surface so /list reports 'unreachable' instead of a silent blank frame.
+  assert.throws(
+    () => mergeSettledAssets([bad(new Error('Immich 401')), bad(new Error('Immich 401'))]),
+    /Immich 401/
+  );
+});
+
+test('mergeSettledAssets tolerates an empty or malformed result', () => {
+  assert.deepEqual(mergeSettledAssets([ok([]), ok(undefined), ok([{ id: 'a' }, null])]),
+    [{ id: 'a' }]);
 });
