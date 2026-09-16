@@ -100,6 +100,11 @@ while true; do
     --disable-extensions \
     --disable-sync \
     --disable-translate \
+    `# --disable-translate is the old switch; modern Chromium ignores it and` \
+    `# still pops the "Translate this page?" bubble (seen live on the Hebrew` \
+    `# screensaver). --disable-features is the switch that actually suppresses` \
+    `# it now.` \
+    --disable-features=Translate,TranslateUI \
     --disable-dev-shm-usage \
     --no-sandbox \
     --js-flags="--max-old-space-size=128" \

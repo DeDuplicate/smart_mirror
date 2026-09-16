@@ -860,24 +860,32 @@ html[data-cursor="hidden"] * {
 
 /* Blurred backdrop behind a "contain" photo.
    ------------------------------------------------------------------------
-   A large blur of a darkened photo produces an extremely smooth gradient,
-   and an 8-bit surface cannot represent one: measured on the mirror, a
-   single frame kept ~50,000 distinct colours in the sharp centre photo and
-   collapsed to 94 in this blurred copy of the SAME image. That reads on
-   screen as coarse topographic contour banding -- "like it's on 32 colors".
+   This used to be `filter: blur(24px) brightness(0.6); transform: scale(1.2);`
+   on a full 1920x1080 `inset-0` element. On this Pi 2, with GPU rasterization
+   off, that ran Skia's CPU blur over the whole viewport in ~90px-tall raster
+   strips, and the strip-halo padding didn't fully stitch: three independent
+   model reviews of a live x11grab screenshot measured a dead-straight,
+   content-independent horizontal seam every 90px, confined to this element
+   (the sharp centre photo beside it had none). No amount of dither fixes a
+   1px multiplicative step between raster strips -- dither only masks smooth
+   8-bit banding.
 
-   It is not a display or decode problem (the framebuffer is 24-bit RGB888
-   and the photo itself is fine) and it is not the rasterizer: enabling GPU
-   rasterization moved it from 94 to 272 colours, still ~200x short, while
-   bringing back the CMA exhaustion that crashes the GPU process.
-
-   So it is fixed where it is caused. A faint noise tile dithers the
-   quantization steps into something the eye integrates rather than reads as
-   edges, and the smaller blur radius both leaves more real detail to mask
-   the remaining steps and costs the Pi 2 less per frame. */
+   Fix: never CSS-blur a full-viewport layer in software mode. The box below
+   is laid out at 240x135 (16:9, well under any raster tile size Chromium
+   uses in low-end mode), so `background-size: cover` paints the photo into
+   that small bitmap -- which is itself a natural, cheap blur, no filter
+   graph involved -- and `transform: scale()` (a plain geometric transform,
+   not a spatial filter, so it has no halo to get wrong) stretches it back
+   over the viewport. 9.6x recreates the old 1.2x overscan (240 * 9.6 = 2304
+   = 1.2 * 1920). Brightness alone has no spatial radius, so it's still safe
+   as a filter. */
 .photo-backdrop {
-  filter: blur(24px) brightness(0.6);
-  transform: scale(1.2);
+  top: 50%;
+  left: 50%;
+  width: 240px;
+  height: 135px;
+  transform: translate(-50%, -50%) scale(9.6);
+  filter: brightness(0.6);
   z-index: 0;
 }
 

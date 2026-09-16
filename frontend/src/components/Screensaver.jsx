@@ -108,7 +108,7 @@ function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
       {!cover && (
         <>
           <div
-            className="absolute inset-0 photo-backdrop"
+            className="absolute photo-backdrop"
             style={{
               backgroundImage: image,
               backgroundSize: 'cover',
