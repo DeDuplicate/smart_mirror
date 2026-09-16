@@ -1950,7 +1950,14 @@ function SystemSection() {
 
     fetchApi('/api/system/version')
       .then((data) => {
-        if (!cancelled && data?.version) setVersion(data.version);
+        if (cancelled || !data?.version) return;
+        // package.json's version is hand-bumped and has been "1.0.0" since the
+        // first commit, so on its own this line never changes and an update
+        // that worked looks like it did nothing. The booted commit is the part
+        // that actually moves, so show it alongside.
+        setVersion(
+          data.commit ? `${data.version} · ${data.commit.slice(0, 7)}` : data.version
+        );
       })
       .catch(() => {});
 
@@ -2072,6 +2079,27 @@ function SystemSection() {
               addToast('error', t.settings.updateNotApplied);
             } else {
               addToast('success', t.settings.updateSuccess);
+              // The backend restarted into the new code and the new bundle is
+              // on disk, but THIS page is still the JS the kiosk loaded at
+              // boot -- nothing in a long-lived Chromium kiosk reloads itself.
+              // Without one of these the update reports success and the screen
+              // keeps showing the old frontend until someone reboots the Pi.
+              showConfirm({
+                title: t.settings.updateReloadTitle,
+                message: t.settings.updateReloadMessage,
+                confirmLabel: t.settings.updateReloadApp,
+                altLabel: t.settings.updateRebootPi,
+                cancelLabel: t.settings.updateReloadLater,
+                onConfirm: () => window.location.reload(),
+                onAlt: async () => {
+                  try {
+                    await fetchApi('/api/system/reboot', { method: 'POST' });
+                    addToast('info', t.settings.restartingPi);
+                  } catch {
+                    addToast('error', t.settings.restartFailed);
+                  }
+                },
+              });
             }
           } catch {
             addToast('error', t.settings.updateCheckFailed);

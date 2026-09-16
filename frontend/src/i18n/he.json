@@ -712,7 +712,12 @@
     "touchApply": "החל כיול",
     "touchReset": "איפוס כיול",
     "touchApplied": "כיול המגע הוחל",
-    "touchFailed": "כיול המגע נכשל"
+    "touchFailed": "כיול המגע נכשל",
+    "updateReloadTitle": "העדכון הותקן",
+    "updateReloadMessage": "הקוד החדש מותקן. יש לטעון מחדש את האפליקציה כדי לראות את השינויים.",
+    "updateReloadApp": "טען מחדש",
+    "updateRebootPi": "הפעל מחדש את המסך",
+    "updateReloadLater": "אחר כך"
   },
   "setup": {
     "welcome": "ברוך הבא",

@@ -113,31 +113,37 @@ const toastSlice = (set, get) => ({
 
 // ─── Confirm Dialog Slice ────────────────────────────────────────────────────
 
+// `altLabel`/`onAlt` add an optional third button, and the *Label fields let a
+// caller name the actions. Both exist for the post-update prompt, which has to
+// offer three real choices ("reload the app" / "reboot the Pi" / "later") that
+// a generic confirm/cancel pair cannot express.
+const CONFIRM_CLOSED = {
+  isOpen: false,
+  title: '',
+  message: '',
+  onConfirm: null,
+  onAlt: null,
+  confirmLabel: '',
+  cancelLabel: '',
+  altLabel: '',
+};
+
 const confirmSlice = (set) => ({
-  confirm: {
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: null,
-  },
-  showConfirm: ({ title, message, onConfirm }) =>
+  confirm: { ...CONFIRM_CLOSED },
+  showConfirm: ({ title, message, onConfirm, onAlt, confirmLabel, cancelLabel, altLabel }) =>
     set({
       confirm: {
         isOpen: true,
         title,
         message,
         onConfirm,
+        onAlt: onAlt || null,
+        confirmLabel: confirmLabel || '',
+        cancelLabel: cancelLabel || '',
+        altLabel: altLabel || '',
       },
     }),
-  hideConfirm: () =>
-    set({
-      confirm: {
-        isOpen: false,
-        title: '',
-        message: '',
-        onConfirm: null,
-      },
-    }),
+  hideConfirm: () => set({ confirm: { ...CONFIRM_CLOSED } }),
 });
 
 // ─── Settings Slice ──────────────────────────────────────────────────────────
