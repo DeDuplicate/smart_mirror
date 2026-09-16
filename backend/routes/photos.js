@@ -288,8 +288,53 @@ function immichSearchBody(albumId, personIds = []) {
   return base;
 }
 
-/** Ask Immich for the slide deck. '' = random across the library. */
+/**
+ * Ask Immich for the slide deck. '' = random across the library.
+ *
+ * Immich treats `personIds` as an AND: it returns only assets containing
+ * EVERY id listed. The Settings picker reads as "show photos of these family
+ * members", so four selected people asked for photos with all four in frame
+ * at once — of which a real library has approximately none. The response was
+ * a perfectly successful empty list, so the frame just went blank with no
+ * error anywhere to explain it.
+ *
+ * There is no OR mode in the search API, so fan out one query per person and
+ * merge. Individual failures are tolerated: one unreachable person's worth of
+ * photos should not blank a frame that could still show the other three.
+ */
 async function immichAssets(cfg, albumId, personIds = []) {
+  if (personIds.length > 1) {
+    const settled = await Promise.allSettled(
+      personIds.map((id) => immichAssetsForQuery(cfg, albumId, [id]))
+    );
+
+    return mergeSettledAssets(settled);
+  }
+
+  return immichAssetsForQuery(cfg, albumId, personIds);
+}
+
+/**
+ * Collapse the per-person fan-out into one slide deck.
+ *
+ * A photo with two selected people in it comes back from both of their
+ * queries and would otherwise appear twice in the slideshow. Every query
+ * failing is a server problem rather than an empty result, and is rethrown so
+ * the caller reports 'unreachable' instead of quietly showing a blank frame.
+ */
+function mergeSettledAssets(settled) {
+  const fulfilled = settled.filter((r) => r.status === 'fulfilled');
+  if (!fulfilled.length) throw settled[0].reason;
+
+  const byId = new Map();
+  for (const asset of fulfilled.flatMap((r) => r.value || [])) {
+    if (asset?.id && !byId.has(asset.id)) byId.set(asset.id, asset);
+  }
+  return [...byId.values()];
+}
+
+/** One Immich search. `personIds` holds at most one id — see immichAssets. */
+async function immichAssetsForQuery(cfg, albumId, personIds = []) {
   const body = immichSearchBody(albumId, personIds);
 
   if (!albumId && !personIds.length) {
@@ -472,3 +517,4 @@ module.exports.resolveSubdir = resolveSubdir;
 module.exports.parseShares = parseShares;
 module.exports.isValidSmbHost = isValidSmbHost;
 module.exports.PHOTO_ROOT = PHOTO_ROOT;
+module.exports.mergeSettledAssets = mergeSettledAssets;
