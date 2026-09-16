@@ -592,6 +592,25 @@ const STAGE_TIMEOUT_MS = 300000;
 // The build tooling is not optional here: this process exists to run a build.
 const NPM_INSTALL_ARGS = ['install', '--include=dev'];
 
+// The built frontend is committed, so a normal update just pulls it. Building
+// on the mirror itself is what this avoids: on the 1GB Pi 2 `vite build`
+// spiked memory hard enough to exhaust CMA, which killed Chromium's GPU
+// process and left the display in SOFTWARE rendering until the next reboot --
+// an update that visibly degraded the screen it was updating.
+//
+// Still built on demand when dist is genuinely absent (a fresh clone, or a
+// commit that forgot to rebuild), because serving nothing is worse than a
+// slow update.
+const DIST_INDEX = path.join(PROJECT_ROOT, 'frontend', 'dist', 'index.html');
+
+function buildStage() {
+  return { name: 'build', cmd: 'npx', args: ['vite', 'build'], cwd: path.join(PROJECT_ROOT, 'frontend') };
+}
+
+function needsBuild() {
+  return !fs.existsSync(DIST_INDEX);
+}
+
 let updateInProgress = false;
 
 function emitUpdateProgress(io, payload) {
@@ -639,14 +658,20 @@ async function rollbackTo(commit, logger, io) {
     return false;
   }
 
-  const build = await run('npx', ['vite', 'build'], STAGE_TIMEOUT_MS, {
-    cwd: path.join(PROJECT_ROOT, 'frontend'),
-    shell: IS_WINDOWS,
-  });
-  if (!build.ok) {
-    logger.error('Rollback rebuild failed: %s', build.stderr);
-    emitUpdateProgress(io, { stage: 'rollback', status: 'failed', error: build.stderr });
-    return false;
+  // `git reset --hard` above restored dist along with the source, since it is
+  // tracked -- so the bundle already matches the commit we rolled back to and
+  // rebuilding it would only repeat the memory spike that may well be what
+  // broke this update in the first place.
+  if (needsBuild()) {
+    const build = await run('npx', ['vite', 'build'], STAGE_TIMEOUT_MS, {
+      cwd: path.join(PROJECT_ROOT, 'frontend'),
+      shell: IS_WINDOWS,
+    });
+    if (!build.ok) {
+      logger.error('Rollback rebuild failed: %s', build.stderr);
+      emitUpdateProgress(io, { stage: 'rollback', status: 'failed', error: build.stderr });
+      return false;
+    }
   }
 
   logger.warn('Rollback to %s complete', commit);
@@ -732,9 +757,11 @@ router.post('/update', async (req, res) => {
   const stages = [
     { name: 'pull',          cmd: 'git', args: ['pull', 'origin', 'main'], cwd: PROJECT_ROOT },
     { name: 'backend-deps',  cmd: 'npm', args: NPM_INSTALL_ARGS, cwd: path.join(PROJECT_ROOT, 'backend') },
+    // vite preview serves dist, so the frontend deps are a runtime need here,
+    // not just a build-time one.
     { name: 'frontend-deps', cmd: 'npm', args: NPM_INSTALL_ARGS, cwd: path.join(PROJECT_ROOT, 'frontend') },
-    { name: 'build',         cmd: 'npx', args: ['vite', 'build'], cwd: path.join(PROJECT_ROOT, 'frontend') },
   ];
+  if (needsBuild()) stages.push(buildStage());
 
   try {
     let output = '';

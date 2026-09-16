@@ -28,6 +28,12 @@ cd backend && npm install && node server.js
 # Production (PM2)
 pm2 start ecosystem.config.js
 
+# IMPORTANT: rebuild and COMMIT frontend/dist with any frontend change.
+# The mirror is a 1GB Pi 2 and no longer builds on-device -- `vite build`
+# there exhausted CMA, killed Chromium's GPU process and dropped the display
+# into software rendering. The in-app updater only builds if dist is missing.
+cd frontend && npx vite build && cd .. && git add frontend/dist
+
 # Generate PWA icons (SVG; run once after clone)
 node scripts/generate-icons.js
 
