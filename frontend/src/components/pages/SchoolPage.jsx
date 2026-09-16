@@ -176,14 +176,23 @@ function PersonColumn({ person, avatar, onToggleItem }) {
 // ─── SchoolPage ────────────────────────────────────────────────────────────
 
 export default function SchoolPage() {
-  const { today, people, loading, error, toggleItem } = useSchool();
+  const { today, schedule, people, loading, error, toggleItem } = useSchool();
 
   const avatarById = useMemo(
     () => Object.fromEntries(people.map((p) => [String(p.id), p.avatar])),
     [people]
   );
 
-  const todayPeople = today?.people || [];
+  // Only show children who actually have a weekly schedule configured
+  // somewhere (any day) — a person with none attached has nothing to show
+  // here and just clutters the row with an empty column.
+  const hasScheduleConfigured = useCallback(
+    (personId) =>
+      Object.values(schedule[personId] || {}).some((subjects) => subjects.length > 0),
+    [schedule]
+  );
+
+  const todayPeople = (today?.people || []).filter((p) => hasScheduleConfigured(p.personId));
   const dayName = t.topBar.daysLong[new Date().getDay()];
 
   if (loading) return <TasksSkeleton />;
@@ -199,7 +208,7 @@ export default function SchoolPage() {
     );
   }
 
-  if (todayPeople.length === 0) {
+  if (people.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -211,7 +220,9 @@ export default function SchoolPage() {
     );
   }
 
-  const nothingScheduled = todayPeople.every((p) => p.subjects.length === 0);
+  // People exist, but none of them (or none scheduled for today) have any
+  // subjects configured — same empty state either way.
+  const nothingScheduled = todayPeople.length === 0 || todayPeople.every((p) => p.subjects.length === 0);
 
   return (
     <div className="flex flex-col h-full p-4 gap-3">
