@@ -148,7 +148,26 @@ pm2 save
 success "PM2 processes started and saved."
 
 # ---------------------------------------------------------------------------
-# 9. Summary
+# 9. HDMI audio
+# ---------------------------------------------------------------------------
+# The flashable image installs this (image/stage-smartmirror/02-kiosk), but a
+# Pi set up by this script never got it -- and without it ALSA defaults to the
+# analog headphone jack, so the mirror's music plays into an empty socket with
+# no error to explain it. Same file, so the two install paths cannot drift.
+ASOUND_SRC="${PROJECT_DIR}/image/stage-smartmirror/02-kiosk/files/asound.conf"
+if [ -f "${ASOUND_SRC}" ]; then
+  if [ -f /etc/asound.conf ]; then
+    info "/etc/asound.conf already exists — leaving it alone."
+  else
+    sudo install -m 644 "${ASOUND_SRC}" /etc/asound.conf
+    success "HDMI audio configured (/etc/asound.conf)."
+  fi
+else
+  error "asound.conf not found in the repo — HDMI audio not configured."
+fi
+
+# ---------------------------------------------------------------------------
+# 10. Summary
 # ---------------------------------------------------------------------------
 LOCAL_IP="$(hostname -I | awk '{print $1}')"
 echo ""
