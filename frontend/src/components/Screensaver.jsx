@@ -38,6 +38,16 @@ const DEFAULT_SLIDE_SECONDS = 15;
 export const MIN_SLIDE_SECONDS = 5;
 const CROSSFADE_DURATION = 1000; // 1s crossfade
 
+// Overlay text/icon legibility over a REAL PHOTO (compact/photo mode only).
+// Now that the global scrim is gone (see SlideshowMode), photos render at
+// full natural brightness, so every overlay widget carries its own contrast.
+// A single soft blur only lowers local average luminance -- it never gives a
+// glyph a hard edge, so low-opacity white text still washes into a bright/
+// busy photo. This pairs a tight near-black layer (the edge) with a wider
+// soft halo (the "glow" look the rest of the app already uses).
+const PHOTO_TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.9), 0 0 14px rgba(0,0,0,0.75)';
+const PHOTO_ICON_SHADOW = 'drop-shadow(0 1px 2px rgba(0,0,0,0.9)) drop-shadow(0 0 10px rgba(0,0,0,0.7))';
+
 function shuffled(list) {
   const out = [...list];
   for (let i = out.length - 1; i > 0; i--) {
@@ -175,7 +185,7 @@ function ScreensaverWeather({ compact = false }) {
 
   const unitLabel = temperatureUnit === 'celsius' ? t.weather.celsius : t.weather.fahrenheit;
   const iconSize = compact ? 56 : 76;
-  const shadow = compact ? '0 1px 8px rgba(0,0,0,0.55)' : 'none';
+  const shadow = compact ? PHOTO_TEXT_SHADOW : 'none';
 
   return (
     <div className="flex flex-col items-end select-none" dir="rtl">
@@ -195,20 +205,20 @@ function ScreensaverWeather({ compact = false }) {
           </span>
         )}
         {weather.code != null && (
-          <div style={{ filter: compact ? 'drop-shadow(0 1px 6px rgba(0,0,0,0.5))' : 'none' }}>
+          <div style={{ filter: compact ? PHOTO_ICON_SHADOW : 'none' }}>
             <WeatherIcon code={weather.code} size={iconSize} />
           </div>
         )}
       </div>
 
       <div
-        className="flex items-center gap-3 text-white/55 font-light"
+        className={`flex items-center gap-3 ${compact ? 'text-white/85' : 'text-white/55'} font-light`}
         style={{ fontSize: compact ? 16 : 21, marginTop: 6, textShadow: shadow }}
       >
         {weather.code != null && <span>{getConditionLabel(weather.code)}</span>}
         {weather.feelsLike != null && (
           <>
-            <span className="text-white/25">·</span>
+            <span className={compact ? 'text-white/60' : 'text-white/25'}>·</span>
             <span>
               {t.weather.feelsLike} {Math.round(weather.feelsLike)}
               {unitLabel}
@@ -239,7 +249,7 @@ function ScreensaverForecast({ compact = false }) {
 
   return (
     <div className="flex flex-col items-stretch w-full select-none" dir="rtl" style={{ maxWidth: compact ? 380 : 460 }}>
-      <SectionHeading label={t.weather.forecast} />
+      <SectionHeading label={t.weather.forecast} photo={compact} />
       <div className="flex flex-col mt-3">
         {days.map((day) => {
           const isToday = day.date === todayKey;
@@ -254,18 +264,29 @@ function ScreensaverForecast({ compact = false }) {
               }}
             >
               <span
-                className={isToday ? 'text-white/85 font-medium' : 'text-white/55 font-light'}
-                style={{ fontSize: rowFont }}
+                className={
+                  isToday
+                    ? 'text-white/85 font-medium'
+                    : `${compact ? 'text-white/70' : 'text-white/55'} font-light`
+                }
+                style={{ fontSize: rowFont, textShadow: compact ? PHOTO_TEXT_SHADOW : 'none' }}
               >
                 {isToday ? t.weather.today : day.dayName}
               </span>
 
-              <WeatherIcon code={day.code} size={compact ? 26 : 32} />
+              <div style={{ filter: compact ? PHOTO_ICON_SHADOW : 'none' }}>
+                <WeatherIcon code={day.code} size={compact ? 26 : 32} />
+              </div>
 
               {/* High — the number people actually plan around */}
               <span
                 className="text-white/90 text-center"
-                style={{ fontFamily: "'DM Mono', monospace", fontSize: rowFont, fontWeight: 500 }}
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: rowFont,
+                  fontWeight: 500,
+                  textShadow: compact ? PHOTO_TEXT_SHADOW : 'none',
+                }}
               >
                 {Math.round(day.high)}
                 {unitLabel}
@@ -273,8 +294,12 @@ function ScreensaverForecast({ compact = false }) {
 
               {/* Low — recedes so the pair reads as a range */}
               <span
-                className="text-white/40 text-center font-light"
-                style={{ fontFamily: "'DM Mono', monospace", fontSize: rowFont }}
+                className={`${compact ? 'text-white/65' : 'text-white/40'} text-center font-light`}
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: rowFont,
+                  textShadow: compact ? PHOTO_TEXT_SHADOW : 'none',
+                }}
               >
                 {Math.round(day.low)}
                 {unitLabel}
@@ -289,7 +314,7 @@ function ScreensaverForecast({ compact = false }) {
 
 // ─── Shabbat times (Friday + Saturday only) ──────────────────────────────────
 
-function FlameIcon({ size = 20 }) {
+function FlameIcon({ size = 20, style }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -302,6 +327,7 @@ function FlameIcon({ size = 20 }) {
       strokeLinejoin="round"
       aria-hidden="true"
       className="shrink-0"
+      style={style}
     >
       <path d="M12 2c1.5 3.5 5 5.5 5 9.5a5 5 0 0 1-10 0C7 8.5 10.5 6 12 2z" />
     </svg>
@@ -316,7 +342,7 @@ function FlameIcon({ size = 20 }) {
  * Friday shows when Shabbat comes IN; Saturday shows when it goes OUT — an
  * "entry" time is meaningless once Shabbat has already begun.
  */
-function ScreensaverShabbat({ date }) {
+function ScreensaverShabbat({ date, compact = false }) {
   const { shabbatCandles, shabbatHavdalah } = useHebrewCalendar();
 
   const day = date.getDay(); // 0=Sun … 5=Fri, 6=Sat
@@ -329,11 +355,15 @@ function ScreensaverShabbat({ date }) {
   if (!timeStr) return null;
 
   return (
-    <div className="flex items-center gap-2 select-none text-white/50" dir="rtl">
-      <FlameIcon size={18} />
+    <div
+      className={`flex items-center gap-2 select-none ${compact ? 'text-white/80' : 'text-white/50'}`}
+      dir="rtl"
+      style={{ textShadow: compact ? PHOTO_TEXT_SHADOW : 'none' }}
+    >
+      <FlameIcon size={18} style={{ filter: compact ? PHOTO_ICON_SHADOW : 'none' }} />
       <span className="text-base font-light">{label}</span>
       <span
-        className="text-white/75 text-base"
+        className={`${compact ? 'text-white/95' : 'text-white/75'} text-base`}
         style={{ fontFamily: "'DM Mono', monospace" }}
       >
         {timeStr}
@@ -344,9 +374,19 @@ function ScreensaverShabbat({ date }) {
 
 // ─── Daily phrase (המשפט היומי) ──────────────────────────────────────────────
 
-function DailyPhrase({ compact = false }) {
+function DailyPhrase({ compact = false, photoMode = false }) {
   const phrase = useDailyPhrase();
   if (!phrase?.text) return null;
+
+  // Slideshow mode sits the quote over a real (now bright) photo instead of
+  // a dark gradient, so it needs its own shadow even when not `compact` --
+  // but it should NOT also shrink to the compact font sizes, so this is a
+  // separate flag rather than reusing `compact` for both concerns.
+  const textShadow = compact
+    ? PHOTO_TEXT_SHADOW
+    : photoMode
+      ? PHOTO_TEXT_SHADOW
+      : 'none';
 
   return (
     <div
@@ -357,22 +397,24 @@ function DailyPhrase({ compact = false }) {
         className="text-white/90 font-light leading-relaxed line-clamp-3"
         style={{
           fontSize: compact ? 28 : 42,
-          textShadow: compact ? '0 1px 8px rgba(0,0,0,0.55)' : 'none',
+          textShadow,
         }}
       >
         {phrase.text}
       </p>
 
       {/* Attribution — set well below the quote so it reads as a footnote
-          rather than a second line of the sentence itself. */}
+          rather than a second line of the sentence itself. A soft shadow
+          alone can't rescue a very translucent fill over a bright photo, so
+          photoMode also lifts the fill itself. */}
       {phrase.source && (
         <p
-          className="text-white/40 font-light line-clamp-1"
+          className={`${photoMode ? 'text-white/80' : 'text-white/40'} font-light line-clamp-1`}
           style={{
             fontSize: compact ? 15 : 19,
             marginTop: compact ? 8 : 14,
             letterSpacing: '0.02em',
-            textShadow: compact ? '0 1px 8px rgba(0,0,0,0.55)' : 'none',
+            textShadow,
           }}
         >
           — {phrase.source}
@@ -382,12 +424,12 @@ function DailyPhrase({ compact = false }) {
       {/* Optional gloss, when the source supplies one */}
       {phrase.explanation && (
         <p
-          className="text-white/30 font-light leading-snug line-clamp-2"
+          className={`${photoMode ? 'text-white/70' : 'text-white/30'} font-light leading-snug line-clamp-2`}
           style={{
             fontSize: compact ? 14 : 17,
             marginTop: 6,
             maxWidth: compact ? 480 : 720,
-            textShadow: compact ? '0 1px 8px rgba(0,0,0,0.55)' : 'none',
+            textShadow,
           }}
         >
           {phrase.explanation}
@@ -671,16 +713,23 @@ function ScreensaverNowPlaying({ compact = false }) {
 // Letterspaced label with a hairline rule running to the far edge. Gives every
 // panel the same entry point so the eye can scan regions instead of hunting.
 
-function SectionHeading({ label }) {
+function SectionHeading({ label, photo = false }) {
   return (
     <div className="flex items-center gap-3 w-full" dir="rtl">
       <span
-        className="text-white/45 font-semibold shrink-0"
-        style={{ fontSize: 13, letterSpacing: '0.14em' }}
+        className={`${photo ? 'text-white/80' : 'text-white/45'} font-semibold shrink-0`}
+        style={{
+          fontSize: 13,
+          letterSpacing: '0.14em',
+          textShadow: photo ? PHOTO_TEXT_SHADOW : 'none',
+        }}
       >
         {label}
       </span>
-      <span className="h-px flex-1 bg-white/[0.14]" />
+      <span
+        className={`h-px flex-1 ${photo ? 'bg-white/[0.35]' : 'bg-white/[0.14]'}`}
+        style={{ boxShadow: photo ? '0 1px 2px rgba(0,0,0,0.7)' : 'none' }}
+      />
     </div>
   );
 }
@@ -837,20 +886,26 @@ function AgendaRow({ item, compact }) {
           <StarIcon
             className="shrink-0"
             style={{
-              opacity: style.opacity,
+              opacity: compact ? Math.max(style.opacity, 0.9) : style.opacity,
               width: Math.round(style.title * scale * 0.62),
               height: Math.round(style.title * scale * 0.62),
               alignSelf: 'center',
+              filter: compact ? PHOTO_ICON_SHADOW : 'none',
             }}
           />
         )}
         <span
           className="truncate text-white"
           style={{
-            opacity: style.opacity,
+            // Over a photo, translucency reads as washout, not hierarchy —
+            // keep the tiering visible via size/weight instead, and lift the
+            // fill itself so the shadow below actually has an opaque edge to
+            // sit against.
+            opacity: compact ? Math.max(style.opacity, 0.9) : style.opacity,
             fontSize: Math.round(style.title * scale),
             fontWeight: style.weight,
             lineHeight: 1.25,
+            textShadow: compact ? PHOTO_TEXT_SHADOW : 'none',
           }}
         >
           {item.title}
@@ -863,11 +918,14 @@ function AgendaRow({ item, compact }) {
       <span
         className="shrink-0 text-end tabular-nums whitespace-nowrap"
         style={{
-          color: item.showPill ? 'var(--acc2, #3dd9a0)' : 'rgba(255,255,255,0.5)',
+          color: item.showPill
+            ? 'var(--acc2, #3dd9a0)'
+            : compact ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.5)',
           fontSize: Math.round((isClockTime ? style.hour : style.hour * 0.78) * scale),
           fontWeight: item.showPill ? 600 : style.hourWeight,
           fontFamily: isClockTime && !item.showPill ? "'DM Mono', monospace" : 'inherit',
           lineHeight: 1.25,
+          textShadow: compact ? PHOTO_TEXT_SHADOW : 'none',
         }}
       >
         {timeText}
@@ -896,7 +954,7 @@ function ScreensaverAgenda({ now, compact = false }) {
       className="w-full select-none"
       style={{ maxWidth: compact ? 520 : 660 }}
     >
-      <SectionHeading label={t.screensaver.upNext} />
+      <SectionHeading label={t.screensaver.upNext} photo={compact} />
       <div
         className="flex flex-col mt-3"
         style={{ maskImage: fadeMask, WebkitMaskImage: fadeMask }}
@@ -980,22 +1038,28 @@ function ScreensaverNewsTicker({ now, compact = false }) {
   return (
     <div
       dir="rtl"
-      className="flex flex-col items-center text-center gap-1.5 w-full select-none"
+      className="relative flex flex-col items-center text-center gap-1.5 w-full select-none"
       style={{
         opacity: shown ? 1 : 0,
         transition: `opacity ${NEWS_FADE_MS}ms ease`,
       }}
     >
       {byline && (
-        <span className="text-white/40 font-light" style={{ fontSize: compact ? 13 : 15 }}>
+        <span
+          className={`relative ${compact ? 'text-white/85' : 'text-white/55'} font-light`}
+          style={{
+            fontSize: compact ? 13 : 15,
+            textShadow: compact ? PHOTO_TEXT_SHADOW : '0 1px 6px rgba(0,0,0,0.5)',
+          }}
+        >
           {byline}
         </span>
       )}
       <p
-        className="text-white/85 font-light leading-snug max-w-[1200px] line-clamp-2"
+        className="relative text-white/95 font-light leading-snug max-w-[1200px] line-clamp-2"
         style={{
           fontSize: compact ? 22 : 28,
-          textShadow: compact ? '0 1px 8px rgba(0,0,0,0.55)' : 'none',
+          textShadow: compact ? PHOTO_TEXT_SHADOW : '0 2px 8px rgba(0,0,0,0.6)',
         }}
       >
         {article.title}
@@ -1057,7 +1121,7 @@ function ScreensaverClock({ time, compact = false }) {
   const { hh, mm, ss } = formatClockTime(time);
   const gregorian = formatGregorianDate(time);
   const hebrew = getHebrewDateParts(time).full;
-  const shadow = compact ? '0 2px 12px rgba(0,0,0,0.6)' : 'none';
+  const shadow = compact ? PHOTO_TEXT_SHADOW : 'none';
 
   return (
     <div className="flex flex-col items-start" dir="rtl">
@@ -1074,7 +1138,7 @@ function ScreensaverClock({ time, compact = false }) {
         }}
       >
         <span>{hh}</span>
-        <span style={{ opacity: 0.6 }}>:</span>
+        <span style={{ opacity: compact ? 1 : 0.6, color: compact ? 'rgba(255,255,255,0.85)' : undefined }}>:</span>
         <span>{mm}</span>
         {!compact && (
           <span style={{ fontSize: 60, opacity: 0.4, marginInlineStart: 24 }}>{ss}</span>
@@ -1082,7 +1146,7 @@ function ScreensaverClock({ time, compact = false }) {
       </div>
 
       <p
-        className="text-white/55 font-light"
+        className={`${compact ? 'text-white/85' : 'text-white/55'} font-light`}
         style={{ fontSize: compact ? 16 : 22, marginTop: compact ? 10 : 16, textShadow: shadow }}
       >
         {gregorian}
@@ -1091,7 +1155,7 @@ function ScreensaverClock({ time, compact = false }) {
       {/* Hebrew calendar date + year, subordinate to the Gregorian line */}
       {hebrew && (
         <p
-          className="text-white/35 font-light"
+          className={`${compact ? 'text-white/70' : 'text-white/35'} font-light`}
           style={{ fontSize: compact ? 14 : 19, marginTop: 4, textShadow: shadow }}
         >
           {hebrew}
@@ -1179,28 +1243,28 @@ function SlideshowMode() {
           durationMs={slideMs}
         />
       )}
-      {/* Scrim — keeps text legible over whatever the photo happens to be.
-          Real photos are brighter and busier than the gradient deck, so they
-          get a dark band at top/bottom, but it's now narrow (top ~22%,
-          bottom ~35%) and nearly transparent (0.02) through the whole middle,
-          so the photo reads bright and vivid rather than dimmed overall --
-          only the text overlays actually need darkening behind them. */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: isPhoto
-            ? 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.02) 22%, rgba(0,0,0,0.02) 65%, rgba(0,0,0,0.45) 100%)'
-            : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
-        }}
-      />
-      {/* The scrim above is itself a 3-stop alpha gradient with no dithering,
-          rendered on every frame (photo or gradient deck) regardless of the
-          .photo-backdrop-dither used for "contain" letterboxing -- on this
-          Pi's software rasterizer it bands the same way the blurred backdrop
-          did. Reuse the same noise tile here, unconditionally, but with the
-          `scrim-dither` modifier (see global.css) so it doesn't haze the
-          sharp photo it's sitting on top of. */}
-      <div className="absolute inset-0 photo-backdrop-dither scrim-dither" />
+      {/* Scrim — only needed over the gradient deck (no real photo loaded
+          yet), to keep text legible against its flat colour. Real photos
+          get no scrim at all: an earlier version darkened the whole photo
+          (or a top/bottom band of it) to help text legibility, but users
+          consistently read that as a grey/black "shade" laid over the
+          photo, however light it was tuned. Text now carries its own
+          per-element shadow instead (see DailyPhrase's photoMode, the news
+          ticker, ScreensaverWeather's compact shadow, etc.), so the photo
+          itself stays completely untouched. */}
+      {!isPhoto && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
+          }}
+        />
+      )}
+      {/* The scrim above is a 3-stop alpha gradient with no dithering, which
+          bands on this Pi's software rasterizer -- but it's now only ever
+          rendered over the flat gradient deck, so the dither is scoped the
+          same way. */}
+      {!isPhoto && <div className="absolute inset-0 photo-backdrop-dither scrim-dither" />}
     </>
   );
 
@@ -1216,11 +1280,11 @@ function SlideshowMode() {
       topEnd={
         <>
           <ScreensaverWeather compact />
-          <ScreensaverShabbat date={time} />
+          <ScreensaverShabbat date={time} compact />
           <ScreensaverForecast compact />
         </>
       }
-      center={<DailyPhrase />}
+      center={<DailyPhrase photoMode />}
       playerBar={<ScreensaverNowPlaying compact />}
       bottomBar={<ScreensaverNews now={time} compact />}
     />
