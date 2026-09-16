@@ -89,6 +89,18 @@ while true; do
     `# software rendering mid-session -- visible as banding/ghost-stripe` \
     `# artifacts and a stuttery screensaver exit while it recovers. Leave the` \
     `# GPU blocklisted; software rendering is slower per frame but stable.` \
+    `# Go further and disable the GPU process outright rather than relying on` \
+    `# the blocklist to steer Chromium away from it: on this board the GPU` \
+    `# process was still being started (and occasionally still crashing into` \
+    `# a mid-session fallback, the exact "worse" symptom being fixed here).` \
+    `# These flags remove the VC4 GPU path entirely up front, so every frame` \
+    `# is software-rendered (Skia/SwiftShader) from launch, consistently.` \
+    --disable-gpu \
+    --disable-gpu-compositing \
+    --use-gl=disabled \
+    --disable-accelerated-2d-canvas \
+    --disable-accelerated-video-decode \
+    --disable-accelerated-video-encode \
     --autoplay-policy=no-user-gesture-required \
     --noerrdialogs \
     --disable-infobars \
