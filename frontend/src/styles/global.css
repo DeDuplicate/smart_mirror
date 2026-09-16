@@ -913,6 +913,19 @@ html[data-cursor="hidden"] * {
   z-index: 2;
 }
 
+/* Scrim-only variant of the dither, used on the always-present text-legibility
+   scrim (see Screensaver.jsx). That div paints over the ENTIRE frame,
+   including the sharp "contain" photo itself -- the base 0.18 opacity grain
+   was tuned against a dark, already-blurred backdrop and reads as a visible
+   haze over a normal photo, dulling colour and contrast. `mix-blend-mode:
+   overlay` perturbs the underlying pixels instead of flatly compositing grey
+   over them, so it still breaks up 8-bit banding without washing out colour,
+   and the opacity drops accordingly. Same tile, no extra cost. */
+.photo-backdrop-dither.scrim-dither {
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
+
 /* ========================================================================
    Pull-to-Refresh Indicator
    ======================================================================== */

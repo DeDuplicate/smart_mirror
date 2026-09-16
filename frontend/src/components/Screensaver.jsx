@@ -1195,12 +1195,14 @@ function SlideshowMode() {
       )}
       {/* Scrim — keeps text legible over whatever the photo happens to be.
           Real photos are brighter and busier than the gradient deck, so they
-          get a heavier one. */}
+          get a heavier one at the edges -- but the middle band (where the
+          subject usually is) is barely darkened at all now, so the photo
+          reads as a photo, not a dim silhouette behind a fog of text. */}
       <div
         className="absolute inset-0"
         style={{
           background: isPhoto
-            ? 'linear-gradient(to bottom, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.78) 100%)'
+            ? 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.08) 40%, rgba(0,0,0,0.6) 100%)'
             : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
         }}
       />
@@ -1208,8 +1210,10 @@ function SlideshowMode() {
           rendered on every frame (photo or gradient deck) regardless of the
           .photo-backdrop-dither used for "contain" letterboxing -- on this
           Pi's software rasterizer it bands the same way the blurred backdrop
-          did. Reuse the same noise tile here, unconditionally. */}
-      <div className="absolute inset-0 photo-backdrop-dither" />
+          did. Reuse the same noise tile here, unconditionally, but with the
+          `scrim-dither` modifier (see global.css) so it doesn't haze the
+          sharp photo it's sitting on top of. */}
+      <div className="absolute inset-0 photo-backdrop-dither scrim-dither" />
     </>
   );
 
