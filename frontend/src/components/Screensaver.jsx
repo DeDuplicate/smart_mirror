@@ -106,18 +106,22 @@ function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
   return (
     <div className="absolute inset-0" style={fade}>
       {!cover && (
-        <div
-          // .photo-backdrop carries the blur, the darkening and a faint noise
-          // dither. The dither is not decoration: blurring a dark photo makes
-          // a gradient too smooth for 8 bits, and this same layer measured 94
-          // distinct colours against 50,000 in the sharp photo beside it.
-          className="absolute inset-0 photo-backdrop"
-          style={{
-            backgroundImage: image,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        />
+        <>
+          <div
+            className="absolute inset-0 photo-backdrop"
+            style={{
+              backgroundImage: image,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+          {/* Sibling, not a child: .photo-backdrop's filter would blur the
+              dither away. Blurring a dark photo makes a gradient too smooth
+              for 8 bits -- this layer measured 94 distinct colours against
+              50,000 in the sharp photo beside it -- and the noise is what
+              breaks those steps up. */}
+          <div className="absolute inset-0 photo-backdrop-dither" />
+        </>
       )}
       <div
         // Cover crops anyway, so it can take the full Ken Burns move. Contain
