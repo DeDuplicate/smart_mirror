@@ -717,7 +717,8 @@
     "updateReloadMessage": "הקוד החדש מותקן. יש לטעון מחדש את האפליקציה כדי לראות את השינויים.",
     "updateReloadApp": "טען מחדש",
     "updateRebootPi": "הפעל מחדש את המסך",
-    "updateReloadLater": "אחר כך"
+    "updateReloadLater": "אחר כך",
+    "photoIntervalUnit": "שניות"
   },
   "setup": {
     "welcome": "ברוך הבא",
