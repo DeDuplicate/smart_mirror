@@ -18,6 +18,13 @@ sed "s/FIRST_USER_NAME/${FIRST_USER_NAME}/g" files/autologin.conf \
 # stuck on US only. Written after stage2 so it overrides pi-gen's KEYBOARD_*.
 install -m 644 files/keyboard "${ROOTFS_DIR}/etc/default/keyboard"
 
+# Default audio to HDMI, not the analog headphone jack. The Pi exposes two
+# ALSA cards (bcm2835 Headphones + vc4-hdmi) and picks card 0 (headphones) as
+# the default with no config, so nothing plays through the screen's speakers.
+# vc4-hdmi also only accepts IEC958-framed PCM, so the default must route
+# through its "hdmi:" plug device (not a bare "hw:") or playback fails outright.
+install -m 644 files/asound.conf "${ROOTFS_DIR}/etc/asound.conf"
+
 # Kiosk X session for the user
 install -m 755 -o 1000 -g 1000 files/xinitrc \
   "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.xinitrc"
