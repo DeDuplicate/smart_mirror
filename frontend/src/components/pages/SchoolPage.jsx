@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import t from '../../i18n/he.json';
 import { TasksSkeleton } from '../Skeleton.jsx';
-import useSchool from '../../hooks/useSchool.js';
+import useSchool, { packedKey } from '../../hooks/useSchool.js';
 import CelebrationAnimation from '../CelebrationAnimation.jsx';
 
 // ─── Icons ─────────────────────────────────────────────────────────────────
@@ -67,18 +67,76 @@ function ItemRow({ item, personColor, onToggle }) {
   );
 }
 
+// ─── Subject header (whole-subject "packed" tick) ──────────────────────────
+
+function SubjectHeader({ subject, personColor, onToggle }) {
+  const [justToggled, setJustToggled] = useState(false);
+  const checked = !!subject.checked;
+
+  const handleToggle = useCallback(() => {
+    setJustToggled(true);
+    setTimeout(() => setJustToggled(false), 500);
+    onToggle(packedKey(subject.subject), !checked);
+  }, [onToggle, subject.subject, checked]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleToggle}
+      aria-pressed={checked}
+      aria-label={`${subject.subject} — ${t.school.subjectPacked}${checked ? ` — ${t.school.packed}` : ''}`}
+      className={`
+        w-full flex items-center gap-2 ps-1 pe-2 py-1 rounded-xl min-h-[56px]
+        transition-all duration-[var(--dur-fast)] active:scale-[0.98]
+        ${checked ? 'bg-[var(--mint-bg)]' : 'bg-transparent'}
+      `}
+    >
+      <div
+        aria-hidden="true"
+        className={`
+          flex-shrink-0 w-[36px] h-[36px] rounded-full
+          flex items-center justify-center
+          border-2 transition-all duration-[var(--dur-normal)]
+          ${checked
+            ? 'border-[var(--acc2)] bg-[var(--acc2)]'
+            : 'border-[var(--tm)] bg-transparent'}
+          ${justToggled ? 'task-checkbox-animate' : ''}
+        `}
+      >
+        {checked && <CheckIcon className="w-4 h-4 text-white" />}
+      </div>
+      <span
+        className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+        style={{ backgroundColor: personColor }}
+        aria-hidden="true"
+      />
+      <h3
+        className={`
+          flex-1 text-start text-sm font-semibold truncate
+          transition-all duration-[var(--dur-normal)]
+          ${checked ? 'line-through text-[var(--tm)]' : 'text-[var(--ts)]'}
+        `}
+      >
+        {subject.subject}
+      </h3>
+    </button>
+  );
+}
+
 // ─── Person column ─────────────────────────────────────────────────────────
 
 function PersonColumn({ person, avatar, onToggleItem }) {
   const columnRef = useRef(null);
   const [celebrating, setCelebrating] = useState(false);
 
-  const allItems = useMemo(
-    () => person.subjects.flatMap((s) => s.items),
+  // Each subject contributes one unit (its own "packed" tick) plus one unit
+  // per equipment item, so a subject with no items is still 1 thing to pack.
+  const allUnits = useMemo(
+    () => person.subjects.flatMap((s) => [{ checked: !!s.checked }, ...s.items]),
     [person.subjects]
   );
-  const total = allItems.length;
-  const packed = allItems.filter((i) => i.checked).length;
+  const total = allUnits.length;
+  const packed = allUnits.filter((u) => u.checked).length;
   const progress = total > 0 ? packed / total : 0;
   const allDone = total > 0 && packed === total;
 
@@ -146,14 +204,11 @@ function PersonColumn({ person, avatar, onToggleItem }) {
         )}
         {person.subjects.map((sub, idx) => (
           <section key={`${sub.subject}-${idx}`} className="flex flex-col gap-2">
-            <h3 className="flex items-center gap-2 px-1 text-sm font-semibold text-[var(--ts)]">
-              <span
-                className="inline-block w-2 h-2 rounded-full"
-                style={{ backgroundColor: person.color }}
-                aria-hidden="true"
-              />
-              {sub.subject}
-            </h3>
+            <SubjectHeader
+              subject={sub}
+              personColor={person.color}
+              onToggle={handleToggle}
+            />
             {sub.items.length === 0 ? (
               <div className="px-3 py-2 text-xs text-[var(--tm)]">{t.school.noItems}</div>
             ) : (

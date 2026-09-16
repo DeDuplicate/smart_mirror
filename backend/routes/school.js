@@ -140,6 +140,7 @@ router.get('/today', (req, res) => {
           color: person.color,
           subjects: subjects.all(person.id, day).map(({ subject }) => ({
             subject,
+            checked: checked.has(`${subject}::__packed__`),
             items: items.all(subject).map(({ item }) => {
               const itemKey = `${subject}::${item}`;
               return { itemKey, label: item, checked: checked.has(itemKey) };
