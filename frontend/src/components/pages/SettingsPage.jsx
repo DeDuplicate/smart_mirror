@@ -13,6 +13,7 @@ import {
 } from '../../hooks/reminderTones.js';
 import { fetchApi } from '../../hooks/useApi.js';
 import useSchool from '../../hooks/useSchool.js';
+import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import WifiPopup from '../WifiPopup.jsx';
 import FolderPickerPopup from '../FolderPickerPopup.jsx';
 import SmbSetupPopup from '../SmbSetupPopup.jsx';
@@ -1187,6 +1188,11 @@ function ArrowIcon({ up = false, className = 'w-4 h-4' }) {
 /** Ordered text list with add / remove / reorder — used for both subjects and items */
 function EditableList({ list, onChange, placeholder, emptyLabel, removeLabel, reorder = true, datalistId, suggestions }) {
   const [draft, setDraft] = useState('');
+  // The kiosk has no physical keyboard, so text inputs must drive the app's
+  // own on-screen keyboard (same pattern as Chores/Tasks/Alarms) instead of
+  // relying on a native mobile keyboard that never appears on the Pi.
+  const [showKeyboard, setShowKeyboard] = useState(false);
+  const inputRef = useRef(null);
 
   const add = () => {
     const v = draft.trim();
@@ -1241,10 +1247,14 @@ function EditableList({ list, onChange, placeholder, emptyLabel, removeLabel, re
       )}
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           type="text"
+          inputMode="none"
           value={draft}
           list={datalistId}
           onChange={(e) => setDraft(e.target.value)}
+          onFocus={() => setShowKeyboard(true)}
+          onClick={() => setShowKeyboard(true)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder={placeholder}
           className="flex-1 min-h-[56px] px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-base placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
@@ -1260,6 +1270,13 @@ function EditableList({ list, onChange, placeholder, emptyLabel, removeLabel, re
           {t.common.add}
         </Btn>
       </div>
+      <OnScreenKeyboard
+        visible={showKeyboard}
+        onInput={(char) => setDraft((prev) => prev + char)}
+        onBackspace={() => setDraft((prev) => prev.slice(0, -1))}
+        onEnter={() => { add(); setShowKeyboard(false); }}
+        onClose={() => setShowKeyboard(false)}
+      />
     </div>
   );
 }
