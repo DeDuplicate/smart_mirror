@@ -805,6 +805,14 @@ router.post('/update', async (req, res) => {
       message: output.toString().slice(-500),
     });
 
+    // Tell every connected client the code on disk has moved. The kiosk is a
+    // browser tab that was loaded at boot and never reloads itself, so without
+    // this the mirror keeps running the old bundle indefinitely -- including
+    // when the update was triggered from somewhere else entirely (a phone),
+    // where nothing on the mirror's own screen would ever know. Sent before
+    // the restart because this process is about to die.
+    if (io) io.emit('system:updated', { previousCommit });
+
     // Deliberately NOT clearing updateInProgress here: the pending restart is
     // about to kill this process, and clearing the flag would open a window for
     // a second update to start and then be killed mid-install. If the restart

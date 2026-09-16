@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { io } from 'socket.io-client';
 import './styles/global.css';
-import useStore, { TAB_INDEX } from './store/index.js';
+import useStore, { TAB_INDEX, UPDATE_INITIATOR_KEY } from './store/index.js';
 import t from './i18n/he.json';
 import TopBar from './components/TopBar.jsx';
 import TabBar from './components/TabBar.jsx';
@@ -36,6 +36,12 @@ const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage.js
 // ─── Socket.io singleton ─────────────────────────────────────────────────────
 
 let socket = null;
+
+// Set when the backend announces an update, consumed on the next reconnect.
+// Module scope rather than an effect-local: the socket is a singleton that
+// outlives the effect, and a re-run between the announcement and the
+// reconnect would otherwise silently drop the pending reload.
+let reloadOnReconnect = false;
 
 function getSocket() {
   if (!socket) {
@@ -722,8 +728,32 @@ export default function App() {
   useEffect(() => {
     const sock = getSocket();
 
+    // An update replaces the bundle on disk, but this tab goes on running the
+    // JS it loaded at boot — on a wall-mounted kiosk that is forever. Reload
+    // on the *reconnect*, not on the event itself: the backend announces the
+    // update and then immediately restarts, so reloading straight away would
+    // race a server that is on its way down. The reconnect is the signal that
+    // the new backend is serving again.
+    //
+    // Skipped in the tab that started the update: it shows its own
+    // reload/reboot/later prompt, and an auto-reload would race the choice.
+    sock.on('system:updated', () => {
+      let initiated = false;
+      try {
+        initiated = sessionStorage.getItem(UPDATE_INITIATOR_KEY) === '1';
+      } catch {
+        // Storage blocked — treat as "not the initiator" and reload, which is
+        // the safe default: a stale kiosk is the failure worth avoiding.
+      }
+      reloadOnReconnect = !initiated;
+    });
+
     sock.on('connect', () => {
       setConnectionStatus('wifi', 'connected');
+      if (reloadOnReconnect) {
+        reloadOnReconnect = false;
+        window.location.reload();
+      }
     });
 
     sock.on('disconnect', () => {
@@ -777,6 +807,7 @@ export default function App() {
     });
 
     return () => {
+      sock.off('system:updated');
       sock.off('connect');
       sock.off('disconnect');
       sock.off('weather:update');
