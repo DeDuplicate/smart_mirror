@@ -15,6 +15,12 @@ export function normalizeIdleMinutes(value) {
   return Math.min(30, Math.max(1, Math.round(n)));
 }
 
+// sessionStorage flag marking "this tab started the update". The post-update
+// prompt lives in Settings, but the auto-reload listener lives in App, so the
+// two need a way to agree on which tab is which. sessionStorage rather than a
+// module variable: it is per-tab by definition, which is exactly the scope.
+export const UPDATE_INITIATOR_KEY = 'mirror:update-initiator';
+
 // ─── Tab Slice ───────────────────────────────────────────────────────────────
 
 // Single source of truth for tab indexes — must match PAGES in App.jsx and

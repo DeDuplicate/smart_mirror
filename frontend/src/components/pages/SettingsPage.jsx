@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import t from '../../i18n/he.json';
-import useStore from '../../store/index.js';
+import useStore, { UPDATE_INITIATOR_KEY } from '../../store/index.js';
 import useSettings from '../../hooks/useSettings.js';
 import { DEFAULT_LEAD_MIN } from '../../hooks/reminderSchedule.js';
 import {
@@ -2020,6 +2020,14 @@ function SystemSection() {
         if (updatingRef.current) return;
         updatingRef.current = true;
         setUpdating(true);
+        // Claim this tab as the one driving the update, so App's global
+        // auto-reload leaves it alone and the prompt below gets to decide.
+        try {
+          sessionStorage.setItem(UPDATE_INITIATOR_KEY, '1');
+        } catch {
+          // Private mode / blocked storage: worst case this tab auto-reloads
+          // like any other, which is still the right outcome.
+        }
         setUpdateStage({ stage: 'pull', status: 'running' });
         try {
           let installFailed = false;
@@ -2108,6 +2116,14 @@ function SystemSection() {
           updatingRef.current = false;
           setUpdating(false);
           setUpdateStage(null);
+          // Release the claim. If it survived, the *next* update run from
+          // anywhere would find this tab still marked as the initiator and
+          // skip the auto-reload that is supposed to rescue it.
+          try {
+            sessionStorage.removeItem(UPDATE_INITIATOR_KEY);
+          } catch {
+            // Nothing to release if storage was unavailable to begin with.
+          }
         }
       },
     });
