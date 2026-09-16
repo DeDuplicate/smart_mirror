@@ -878,6 +878,7 @@ html[data-cursor="hidden"] * {
 .photo-backdrop {
   filter: blur(24px) brightness(0.6);
   transform: scale(1.2);
+  z-index: 0;
 }
 
 /* The dither MUST be a sibling of .photo-backdrop, never a child or its
@@ -887,9 +888,21 @@ html[data-cursor="hidden"] * {
    silently and while measuring as "improved". */
 .photo-backdrop-dither {
   pointer-events: none;
-  /* One 120px tile, rasterized once and repeated -- not a per-frame filter. */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
-  opacity: 0.12;
+  z-index: 1;
+  /* One 256px tile, rasterized once and repeated -- not a per-frame filter.
+     baseFrequency stays under ~0.9 (well below the 1px-grid Nyquist limit)
+     so the turbulence still reads as grain, not aliased per-pixel static;
+     numOctaves 2 keeps it a soft multi-scale texture instead of flat noise.
+     Opacity raised from 0.12 -- still faint alone, but this is what's
+     actually breaking up the ~94-colour banding steps, not the tile size. */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='256' height='256' filter='url(%23n)'/></svg>");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  opacity: 0.18;
+}
+
+.photo-main {
+  z-index: 2;
 }
 
 /* ========================================================================
