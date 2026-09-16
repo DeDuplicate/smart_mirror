@@ -537,11 +537,12 @@ function PopupSlider({ value, min, max, step = 1, label, suffix = '', onChange }
   );
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-2" data-no-swipe="true">
       <span className="text-xs font-semibold text-ts">{label}</span>
       <div className="flex items-center gap-3">
         <div
           ref={trackRef}
+          data-no-swipe="true"
           className="relative w-12 h-48 rounded-full bg-s2 cursor-pointer overflow-hidden"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}

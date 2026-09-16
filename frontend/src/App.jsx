@@ -68,6 +68,36 @@ const PAGES = [
   SettingsPage,
 ];
 
+const SWIPE_BLOCK_SELECTOR = [
+  '[data-no-swipe]',
+  'input',
+  'textarea',
+  'select',
+  'button',
+  'a',
+  '[draggable="true"]',
+].join(', ');
+
+function shouldIgnoreTabSwipe(target, container) {
+  let el = target instanceof Element ? target : target?.parentElement;
+
+  while (el && el !== container) {
+    if (el.matches(SWIPE_BLOCK_SELECTOR)) return true;
+
+    const style = window.getComputedStyle(el);
+    if (
+      el.scrollWidth > el.clientWidth &&
+      (style.overflowX === 'auto' || style.overflowX === 'scroll')
+    ) {
+      return true;
+    }
+
+    el = el.parentElement;
+  }
+
+  return false;
+}
+
 // ─── Tab Content with transition ─────────────────────────────────────────────
 
 function TabContent() {
@@ -107,10 +137,16 @@ function TabContent() {
   // ── Swipe detection for tab navigation ──
   const handleTouchStart = useCallback((e) => {
     const touch = e.touches[0];
-    touchRef.current = { startX: touch.clientX, startY: touch.clientY };
+    touchRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      ignoreThisGesture: shouldIgnoreTabSwipe(e.target, contentRef.current),
+    };
   }, []);
 
   const handleTouchEnd = useCallback((e) => {
+    if (touchRef.current.ignoreThisGesture) return;
+
     const touch = e.changedTouches[0];
     const dx = touch.clientX - touchRef.current.startX;
     const dy = Math.abs(touch.clientY - touchRef.current.startY);
