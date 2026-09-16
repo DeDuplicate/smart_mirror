@@ -104,7 +104,7 @@ function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
   const image = `url("${slide}")`;
 
   return (
-    <div className="absolute inset-0" style={fade}>
+    <div className="absolute inset-0 isolate" style={fade}>
       {!cover && (
         <>
           <div
@@ -127,7 +127,7 @@ function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
         // Cover crops anyway, so it can take the full Ken Burns move. Contain
         // is there precisely to show the whole photo, so it gets the gentle
         // drift instead.
-        className={`absolute inset-0 ${cover ? kenburns : 'photo-drift'}`}
+        className={`absolute inset-0 photo-main ${cover ? kenburns : 'photo-drift'}`}
         style={{
           backgroundImage: image,
           backgroundSize: cover ? 'cover' : 'contain',
@@ -1204,6 +1204,12 @@ function SlideshowMode() {
             : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.65) 100%)',
         }}
       />
+      {/* The scrim above is itself a 3-stop alpha gradient with no dithering,
+          rendered on every frame (photo or gradient deck) regardless of the
+          .photo-backdrop-dither used for "contain" letterboxing -- on this
+          Pi's software rasterizer it bands the same way the blurred backdrop
+          did. Reuse the same noise tile here, unconditionally. */}
+      <div className="absolute inset-0 photo-backdrop-dither" />
     </>
   );
 
