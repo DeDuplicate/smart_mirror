@@ -107,7 +107,7 @@ function TabContent() {
   const [displayedTab, setDisplayedTab] = useState(activeTab);
   const [animClass, setAnimClass] = useState('');
   const contentRef = useRef(null);
-  const touchRef = useRef({ startX: 0, startY: 0 });
+  const touchRef = useRef({ id: null, startX: 0, startY: 0, ignoreThisGesture: true });
 
   useEffect(() => {
     if (activeTab === displayedTab) return;
@@ -136,23 +136,46 @@ function TabContent() {
 
   // ── Swipe detection for tab navigation ──
   const handleTouchStart = useCallback((e) => {
+    // A second finger (or an IR-frame ghost point) mid-gesture must never re-arm
+    // the swipe with an unguarded target/start position.
+    if (e.touches.length > 1) {
+      touchRef.current.ignoreThisGesture = true;
+      return;
+    }
     const touch = e.touches[0];
     touchRef.current = {
+      id: touch.identifier,
       startX: touch.clientX,
       startY: touch.clientY,
       ignoreThisGesture: shouldIgnoreTabSwipe(e.target, contentRef.current),
     };
   }, []);
 
-  const handleTouchEnd = useCallback((e) => {
-    if (touchRef.current.ignoreThisGesture) return;
+  const handleTouchCancel = useCallback(() => {
+    touchRef.current.ignoreThisGesture = true;
+  }, []);
 
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - touchRef.current.startX;
-    const dy = Math.abs(touch.clientY - touchRef.current.startY);
+  const handleTouchEnd = useCallback((e) => {
+    const state = touchRef.current;
+    if (state.ignoreThisGesture) return;
+
+    const touch = Array.from(e.changedTouches).find((t) => t.identifier === state.id);
+    if (!touch) return;
+
+    // One gesture may switch tabs at most once, even if several touchend events fire.
+    state.ignoreThisGesture = true;
+
+    const dx = touch.clientX - state.startX;
+    const dy = Math.abs(touch.clientY - state.startY);
 
     // Minimum 50px horizontal, max 30px vertical deviation
     if (Math.abs(dx) < 50 || dy > 30) return;
+
+    // Also honour blocked elements under the finger where it lifted (imprecise touchstart).
+    const endEl = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (endEl && contentRef.current?.contains(endEl) && shouldIgnoreTabSwipe(endEl, contentRef.current)) {
+      return;
+    }
 
     const current = useStore.getState().activeTab;
     if (dx < 0 && current < PAGES.length - 1) {
@@ -172,6 +195,7 @@ function TabContent() {
       className={`flex-1 overflow-hidden relative ${animClass}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
     >
       <Suspense fallback={<SplashScreen />}>
         <ActivePage />

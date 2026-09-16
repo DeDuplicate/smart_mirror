@@ -173,10 +173,16 @@ function ProgressBar({ progress, duration, onSeek }) {
     <div className="w-full flex flex-col gap-1.5">
       <div
         ref={barRef}
-        className="w-full h-2 bg-s2 rounded-full cursor-pointer overflow-hidden"
+        className="w-full h-2 bg-s2 rounded-full cursor-pointer overflow-visible relative"
         onClick={handleClick}
         dir="rtl"
+        data-no-swipe="true"
       >
+        {/* Invisible 56px touch target centered on the 8px visual bar — same
+            fix as VolumeSlider: a touch that lands a few px off the thin bar
+            (very plausible on the IR frame) must still count as "interacting
+            with this control", not as a tab-swipe. */}
+        <div className="absolute inset-x-0 -inset-y-6" style={{ minHeight: 56 }} />
         <div
           className="h-full rounded-full transition-[width] duration-500 ease-linear"
           style={{ width: `${Math.min(100, pct)}%`, backgroundColor: 'var(--acc)' }}
@@ -192,9 +198,9 @@ function ProgressBar({ progress, duration, onSeek }) {
 
 function VolumeSlider({ volume, onChange }) {
   return (
-    <div className="w-full flex items-center gap-3" dir="rtl" data-no-swipe="true">
+    <div className="w-full flex items-center gap-3 min-h-[56px]" dir="rtl" data-no-swipe="true">
       <SpeakerIcon className="w-5 h-5 text-ts shrink-0" volume={volume} />
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-h-[56px] flex items-center">
         <input
           data-no-swipe="true"
           type="range"
@@ -966,7 +972,12 @@ export default function MusicPage() {
         .music-volume-slider {
           -webkit-appearance: none;
           appearance: none;
-          height: 8px;
+          /* 56px hit box for the IR touch frame; the 8px track is painted only in the content box */
+          box-sizing: border-box;
+          height: 56px;
+          padding: 24px 0;
+          background-clip: content-box;
+          touch-action: none;
           border-radius: 9999px;
           background: linear-gradient(
             to left,
