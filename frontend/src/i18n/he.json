@@ -43,6 +43,7 @@
     "calendar": "לוח שנה",
     "tasks": "משימות",
     "chores": "מטלות",
+    "school": "בית ספר",
     "smartHome": "בית חכם",
     "music": "מוזיקה",
     "alarms": "שעון מעורר",
@@ -77,6 +78,16 @@
     "tracks": "שירים",
     "playlists": "פלייליסטים",
     "deleteConfirm": "למחוק את השעון?"
+  },
+  "school": {
+    "title": "מה להביא היום",
+    "noSchoolToday": "אין לימודים היום",
+    "noItems": "אין ציוד מיוחד",
+    "allPacked": "הכול בתיק!",
+    "packedProgress": "{packed} מתוך {total} בתיק",
+    "noPeople": "אין ילדים מוגדרים",
+    "noSchedule": "עדיין לא הוגדרה מערכת שעות",
+    "packed": "בתיק"
   },
   "common": {
     "cancel": "ביטול",
@@ -718,7 +729,24 @@
     "updateReloadApp": "טען מחדש",
     "updateRebootPi": "הפעל מחדש את המסך",
     "updateReloadLater": "אחר כך",
-    "photoIntervalUnit": "שניות"
+    "photoIntervalUnit": "שניות",
+    "school": "מערכת שעות",
+    "schoolDesc": "לכל ילד: רשימת המקצועות בכל יום, ולכל מקצוע מה צריך להביא. הלשונית \"בית ספר\" מציגה את הציוד של היום.",
+    "schoolNoPeople": "אין בני משפחה — הוסף בסעיף בני המשפחה",
+    "schoolSubjects": "מקצועות",
+    "schoolSubjectPlaceholder": "מקצוע... (למשל אמנות)",
+    "schoolNoSubjects": "אין מקצועות ביום זה",
+    "schoolItemsTitle": "ציוד לפי מקצוע",
+    "schoolItemsDesc": "שם המקצוע חייב להיות זהה בדיוק לזה שבמערכת השעות",
+    "schoolNewSubjectPlaceholder": "מקצוע חדש...",
+    "schoolItemPlaceholder": "פריט להביא... (למשל חליל)",
+    "schoolNoItems": "אין פריטים",
+    "schoolNoMappings": "עדיין לא הוגדר ציוד לאף מקצוע",
+    "schoolRemoveSubject": "הסר מקצוע",
+    "schoolRemoveItem": "הסר פריט",
+    "schoolMoveUp": "העלה",
+    "schoolMoveDown": "הורד",
+    "schoolSaveFailed": "שמירת מערכת השעות נכשלה"
   },
   "setup": {
     "welcome": "ברוך הבא",

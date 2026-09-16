@@ -179,6 +179,7 @@ const homeAssistantRoutes = require('./routes/homeassistant');
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/school', require('./routes/school'));
 app.use('/api/weather', require('./routes/weather'));
 app.use('/api/ha', homeAssistantRoutes);
 app.use('/api/music', musicRoutes);

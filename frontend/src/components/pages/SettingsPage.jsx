@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { io } from 'socket.io-client';
 import t from '../../i18n/he.json';
 import useStore, { UPDATE_INITIATOR_KEY } from '../../store/index.js';
@@ -12,6 +12,7 @@ import {
   DEFAULT_TONE,
 } from '../../hooks/reminderTones.js';
 import { fetchApi } from '../../hooks/useApi.js';
+import useSchool from '../../hooks/useSchool.js';
 import WifiPopup from '../WifiPopup.jsx';
 import FolderPickerPopup from '../FolderPickerPopup.jsx';
 import SmbSetupPopup from '../SmbSetupPopup.jsx';
@@ -1165,6 +1166,257 @@ function TasksSection() {
               debouncedSave({ taskCol3: e.target.value });
             }}
             className="flex-1"
+          />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ─── Section: School schedule ────────────────────────────────────────────────
+
+function ArrowIcon({ up = false, className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {up ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
+    </svg>
+  );
+}
+
+/** Ordered text list with add / remove / reorder — used for both subjects and items */
+function EditableList({ list, onChange, placeholder, emptyLabel, removeLabel, reorder = true, datalistId, suggestions }) {
+  const [draft, setDraft] = useState('');
+
+  const add = () => {
+    const v = draft.trim();
+    if (!v || list.includes(v)) { setDraft(''); return; }
+    onChange([...list, v]);
+    setDraft('');
+  };
+  const move = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    const next = [...list];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {list.map((v, i) => (
+        <div key={`${v}-${i}`} className="flex items-center gap-1 ps-4 rounded-xl bg-[var(--s2)] min-h-[56px]">
+          <span className="flex-1 text-base text-[var(--tp)] truncate">{v}</span>
+          {reorder && (
+            <>
+              <button
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                className="min-w-[56px] min-h-[56px] flex items-center justify-center text-[var(--tm)] hover:text-[var(--tp)] disabled:opacity-30"
+                aria-label={t.settings.schoolMoveUp}
+              >
+                <ArrowIcon up />
+              </button>
+              <button
+                onClick={() => move(i, 1)}
+                disabled={i === list.length - 1}
+                className="min-w-[56px] min-h-[56px] flex items-center justify-center text-[var(--tm)] hover:text-[var(--tp)] disabled:opacity-30"
+                aria-label={t.settings.schoolMoveDown}
+              >
+                <ArrowIcon />
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => onChange(list.filter((_, k) => k !== i))}
+            className="min-w-[56px] min-h-[56px] flex items-center justify-center text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
+            aria-label={removeLabel}
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      ))}
+      {list.length === 0 && emptyLabel && (
+        <p className="text-sm text-tm text-center py-2">{emptyLabel}</p>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          list={datalistId}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder={placeholder}
+          className="flex-1 min-h-[56px] px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-base placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
+          dir="rtl"
+        />
+        {datalistId && suggestions && (
+          <datalist id={datalistId}>
+            {suggestions.map((s) => <option key={s} value={s} />)}
+          </datalist>
+        )}
+        <Btn variant="primary" onClick={add} disabled={!draft.trim()}>
+          <PlusIcon className="w-4 h-4" />
+          {t.common.add}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+function SchoolSection() {
+  const { people, schedule, items, setDaySchedule, setSubjectItems } = useSchool();
+  const addToast = useStore((s) => s.addToast);
+  const [personId, setPersonId] = useState(null);
+  const [day, setDay] = useState(String(new Date().getDay()));
+  // Subjects added to the mapping that have no items yet — they'd otherwise
+  // vanish, since the backend only stores subjects with a non-empty list.
+  const [draftSubjects, setDraftSubjects] = useState([]);
+
+  const activePersonId = personId ?? people[0]?.id ?? null;
+  const daySubjects = (schedule[activePersonId]?.[day]) || [];
+
+  const scheduledSubjects = useMemo(() => {
+    const set = new Set();
+    Object.values(schedule).forEach((days) =>
+      Object.values(days).forEach((list) => list.forEach((s) => set.add(s)))
+    );
+    return [...set];
+  }, [schedule]);
+
+  const mappedSubjects = useMemo(() => {
+    const set = new Set([...Object.keys(items).filter((s) => items[s]?.length), ...draftSubjects]);
+    return [...set];
+  }, [items, draftSubjects]);
+
+  const unmappedSuggestions = scheduledSubjects.filter((s) => !mappedSubjects.includes(s));
+
+  const saveDay = async (subjects) => {
+    try {
+      await setDaySchedule(activePersonId, day, subjects);
+    } catch {
+      addToast('error', t.settings.schoolSaveFailed);
+    }
+  };
+
+  const saveItems = async (subject, list) => {
+    try {
+      await setSubjectItems(subject, list);
+    } catch {
+      addToast('error', t.settings.schoolSaveFailed);
+    }
+  };
+
+  const addSubjectMapping = (name) => {
+    if (!mappedSubjects.includes(name)) setDraftSubjects((prev) => [...prev, name]);
+  };
+
+  const removeSubjectMapping = (subject) => {
+    setDraftSubjects((prev) => prev.filter((s) => s !== subject));
+    if (items[subject]?.length) saveItems(subject, []);
+  };
+
+  const chipClass = (active) =>
+    `min-h-[56px] px-4 rounded-xl border text-base font-medium transition-all duration-[var(--dur-fast)] active:scale-95
+     ${active ? 'text-white border-transparent' : 'bg-s2 border-bd text-ts'}`;
+
+  return (
+    <Section title={t.settings.school}>
+      <p className="text-sm text-ts mb-4">{t.settings.schoolDesc}</p>
+
+      {people.length === 0 ? (
+        <p className="text-base text-ts text-center py-3">{t.settings.schoolNoPeople}</p>
+      ) : (
+        <>
+          {/* Person chips */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {people.map((p) => {
+              const active = p.id === activePersonId;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setPersonId(p.id)}
+                  className={chipClass(active)}
+                  style={active ? { backgroundColor: p.color } : undefined}
+                >
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Day chips — Israeli week, Sunday first */}
+          <div className="flex gap-1 mb-4">
+            {t.topBar.days.map((label, i) => {
+              const active = String(i) === day;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setDay(String(i))}
+                  className={`flex-1 min-h-[56px] rounded-xl border text-sm font-medium transition-all duration-[var(--dur-fast)] active:scale-95
+                    ${active ? 'bg-acc text-white border-acc' : 'bg-s2 border-bd text-ts'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-base font-medium text-ts mb-2">{t.settings.schoolSubjects}</p>
+          <EditableList
+            list={daySubjects}
+            onChange={saveDay}
+            placeholder={t.settings.schoolSubjectPlaceholder}
+            emptyLabel={t.settings.schoolNoSubjects}
+            removeLabel={t.settings.schoolRemoveSubject}
+            datalistId="school-subject-suggestions"
+            suggestions={[...new Set([...scheduledSubjects, ...Object.keys(items)])]}
+          />
+        </>
+      )}
+
+      {/* Subject → items mapping */}
+      <div className="mt-6 pt-5 border-t border-bd">
+        <p className="text-base font-medium text-ts">{t.settings.schoolItemsTitle}</p>
+        <p className="text-sm text-tm mb-3">{t.settings.schoolItemsDesc}</p>
+
+        <div className="flex flex-col gap-4">
+          {mappedSubjects.map((subject) => (
+            <div key={subject} className="rounded-xl border border-bd p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="flex-1 text-base font-semibold text-tp truncate">{subject}</span>
+                <button
+                  onClick={() => removeSubjectMapping(subject)}
+                  className="min-w-[56px] min-h-[56px] flex items-center justify-center text-[var(--tm)] hover:text-[var(--coral-d)] transition-colors"
+                  aria-label={t.settings.schoolRemoveSubject}
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+              <EditableList
+                list={items[subject] || []}
+                onChange={(list) => saveItems(subject, list)}
+                placeholder={t.settings.schoolItemPlaceholder}
+                emptyLabel={t.settings.schoolNoItems}
+                removeLabel={t.settings.schoolRemoveItem}
+                reorder={false}
+              />
+            </div>
+          ))}
+          {mappedSubjects.length === 0 && (
+            <p className="text-sm text-tm text-center py-2">{t.settings.schoolNoMappings}</p>
+          )}
+        </div>
+
+        <div className="mt-3">
+          <EditableList
+            list={[]}
+            onChange={(list) => list[0] && addSubjectMapping(list[0])}
+            placeholder={t.settings.schoolNewSubjectPlaceholder}
+            emptyLabel=""
+            removeLabel=""
+            datalistId="school-unmapped-suggestions"
+            suggestions={unmappedSuggestions}
           />
         </div>
       </div>
@@ -2568,6 +2820,7 @@ export default function SettingsPage() {
         <div>
           <FamilySection />
           <TasksSection />
+          <SchoolSection />
           <AlarmsSection />
           <SystemSection />
           <LogViewerSection />

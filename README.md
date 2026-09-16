@@ -179,6 +179,36 @@ Copy `backend/.env.example` to `backend/.env` and fill in your values:
 
 ---
 
+## School schedule API
+
+Family dropdowns reuse `GET /api/tasks/people` (an array containing `id`, `name`,
+`color`, `avatar`, and `tasks`). School data references those same people.
+Migration `010_school_schedule.sql` is discovered and applied automatically at startup.
+
+| Endpoint | Request | Response |
+| --- | --- | --- |
+| `GET /api/school/schedule` | — | `{ schedule: { [personId]: { [dayOfWeek]: string[] } } }` |
+| `PUT /api/school/schedule/:personId/:dayOfWeek` | `{ subjects: string[] }` | `{ ok: true }` |
+| `GET /api/school/items` | — | `{ items: { [subject]: string[] } }` |
+| `PUT /api/school/items/:subject` | `{ items: string[] }` | `{ ok: true }` |
+| `GET /api/school/today?date=YYYY-MM-DD` | Optional local date | `{ date, people: [{ personId, name, color, subjects: [{ subject, items: [{ itemKey, label, checked }] }] }] }` |
+| `POST /api/school/checklist/toggle` | `{ personId, date, itemKey, checked: boolean }` | `{ ok: true }` |
+
+Days run Sunday (`0`) through Saturday (`6`). Schedule responses include every
+person but omit empty days; today's response includes people with no subjects.
+Lists retain their supplied order and exact text; blank/non-string entries are
+rejected. Empty lists clear a day or subject mapping. URL-encode subject path
+parameters once. Dates must be real `YYYY-MM-DD` dates; omitted dates default to
+the server's local today. Item keys are exactly `<subject>::<item>`, and checks
+are independent per person and date. Invalid input returns `400`, unknown
+people return `404`, and errors use `{ error: string }`.
+
+Schedule/equipment writes emit `school:updated` without a payload. Checklist
+writes emit `school:checklist-updated` with `{ personId, date, itemKey, checked }`.
+Deleting a family member cascades to their school schedule and checked rows.
+Run the isolated migration/HTTP regression check with
+`node --test backend/test-school.js`.
+
 ## Project Structure
 
 ```

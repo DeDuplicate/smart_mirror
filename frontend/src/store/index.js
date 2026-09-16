@@ -30,11 +30,12 @@ export const TAB_INDEX = {
   calendar: 0,
   tasks: 1,
   chores: 2,
-  home: 3,
-  music: 4,
-  alarms: 5,
-  news: 6,
-  settings: 7,
+  school: 3,
+  home: 4,
+  music: 5,
+  alarms: 6,
+  news: 7,
+  settings: 8,
 };
 
 const tabSlice = (set) => ({
