@@ -7,6 +7,14 @@
       content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <meta name="theme-color" content="#6b62e0" />
+    <!-- Kiosk display, no user to click "translate" for -- and the Chrome
+         translate bubble kept popping up (over Hebrew content) regardless of
+         --disable-features=Translate,TranslateUI on the command line and a
+         managed policy backstop, both of which stopped working reliably on
+         this Chromium build. This meta tag is read by Chrome's translate
+         service itself, independent of any flag/policy path, so it's the one
+         that actually sticks. -->
+    <meta name="google" content="notranslate" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="description" content="Smart Mirror family dashboard — Hebrew RTL, Home Assistant, chores with celebrations" />
     <meta property="og:title" content="Smart Mirror" />
