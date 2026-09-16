@@ -107,13 +107,15 @@ function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
     <div className="absolute inset-0" style={fade}>
       {!cover && (
         <div
-          className="absolute inset-0"
+          // .photo-backdrop carries the blur, the darkening and a faint noise
+          // dither. The dither is not decoration: blurring a dark photo makes
+          // a gradient too smooth for 8 bits, and this same layer measured 94
+          // distinct colours against 50,000 in the sharp photo beside it.
+          className="absolute inset-0 photo-backdrop"
           style={{
             backgroundImage: image,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            filter: 'blur(40px) brightness(0.6)',
-            transform: 'scale(1.2)',
           }}
         />
       )}
