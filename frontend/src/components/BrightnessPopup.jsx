@@ -219,6 +219,7 @@ export default function BrightnessPopup({ visible, onClose, anchorRef }) {
         {/* Vertical slider */}
         <div
           ref={sliderRef}
+          data-no-swipe="true"
           className="relative w-10 rounded-full bg-s2 border border-bd cursor-pointer select-none touch-none"
           style={{ height: '200px' }}
           onMouseDown={handleSliderStart}

@@ -74,6 +74,7 @@ while true; do
     --kiosk \
     --window-position=0,0 \
     --window-size="${SCREEN_W},${SCREEN_H}" \
+    --disable-pinch \
     `# Low-end tuning. Measured on a Pi 2 (4x ARMv7, 921MB): load average sat` \
     `# above 6 with Xorg alone taking ~78% CPU, so the goal is to remove` \
     `# rendering work rather than to add threads.` \

@@ -248,6 +248,12 @@ html[data-cursor="hidden"] * {
     transition: background-color 0.3s, color 0.3s, border-color 0.3s;
   }
 
+  html,
+  body,
+  #root {
+    touch-action: pan-x pan-y;
+  }
+
   #root {
     width: 1920px;
     height: 1080px;

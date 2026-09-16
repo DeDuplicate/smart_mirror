@@ -278,6 +278,7 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
   return (
     <div
       ref={cardRef}
+      data-no-swipe="true"
       className={`
         bg-surf border border-bd rounded-xl p-4 shadow-card
         cursor-pointer select-none
@@ -303,6 +304,7 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
       <div className="flex items-start gap-3">
         {/* Drag grip handle — INSTANT drag on mousedown/touchstart */}
         <div
+          data-no-swipe="true"
           className="text-tm hover:text-ts mt-0.5 shrink-0 cursor-grab active:cursor-grabbing p-1 -m-1 rounded"
           title="Drag to move"
           onMouseDown={startDrag}

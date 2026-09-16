@@ -192,10 +192,11 @@ function ProgressBar({ progress, duration, onSeek }) {
 
 function VolumeSlider({ volume, onChange }) {
   return (
-    <div className="w-full flex items-center gap-3" dir="rtl">
+    <div className="w-full flex items-center gap-3" dir="rtl" data-no-swipe="true">
       <SpeakerIcon className="w-5 h-5 text-ts shrink-0" volume={volume} />
       <div className="flex-1 relative">
         <input
+          data-no-swipe="true"
           type="range"
           min="0"
           max="100"
