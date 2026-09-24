@@ -108,7 +108,7 @@ TopBar, TabBar, WeatherIcon (animated SVG), WeatherPopup, BrightnessPopup, WifiP
 
 ## Key Integration Details
 
-- **Home Assistant:** `https://homeassistant.local:8123`, token in `.env` (gitignored)
+- **Home Assistant:** `https://somthing.has.org:8123`, token in `.env` (gitignored)
 - **HA Entities:** 383 entities including lights, covers, scripts (AC via IR), media players, remotes, power meter, todo list
 - **AC Control:** 38 `script.aircon_*` entities mapped by temp/mode/speed in ACControlPopup
 - **Weather:** Open-Meteo default, direct IMS toggle in Settings
