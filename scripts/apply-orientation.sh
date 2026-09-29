@@ -15,7 +15,9 @@ MODE=(--auto)
 [[ "${2:-auto}" =~ ^[0-9]+x[0-9]+$ ]] && MODE=(--mode "$2")
 [ -n "$OUT" ] && { xrandr --output "$OUT" "${MODE[@]}" --rotate "$ROT" || xrandr --output "$OUT" --auto --rotate "$ROT"; }
 # Touch panels (not the mouse/keyboard) advertise a Coordinate Transformation Matrix.
-xinput list --name-only 2>/dev/null | while read -r dev; do
+# Skip X's virtual master/XTEST pointers: they are not hardware, and rotating
+# them skews synthetic input (xdotool, remote tools).
+xinput list --name-only 2>/dev/null | grep -v '^Virtual core' | while read -r dev; do
   xinput list-props "$dev" 2>/dev/null | grep -q "Coordinate Transformation Matrix" &&
     xinput set-prop "$dev" "Coordinate Transformation Matrix" $M 2>/dev/null
 done

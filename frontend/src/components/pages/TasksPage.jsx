@@ -1026,7 +1026,7 @@ export default function TasksPage() {
               key={col.key}
               ref={(el) => { columnRefs.current[col.key] = el; }}
               className={`
-                flex-1 min-w-[280px] pt:min-w-[440px] pt:snap-start flex flex-col rounded-2xl
+                flex-1 min-w-[280px] pt:min-w-[300px] pt:snap-start flex flex-col rounded-2xl
                 transition-all duration-[var(--dur-fast)]
                 ${COLUMN_BG[col.key]}
               `}

@@ -1172,7 +1172,7 @@ export default function CalendarPage() {
         {/* ── Single Day Timeline (day view) ── */}
         {view === 'day' && (
           <div
-            className="flex-1 flex flex-col overflow-hidden px-6 py-4 bg-bg"
+            className="flex-1 pt:flex-initial flex flex-col overflow-hidden px-6 py-4 bg-bg"
             onTouchStart={handleCalTouchStart}
             onTouchEnd={handleCalTouchEnd}
             style={{
@@ -1350,7 +1350,7 @@ export default function CalendarPage() {
         {/* ── Day Column Grid (week view) ── */}
         {view === 'week' && (
         <div
-          className="flex-1 flex flex-col overflow-hidden"
+          className="flex-1 pt:flex-initial flex flex-col overflow-hidden"
           onTouchStart={handleCalTouchStart}
           onTouchEnd={handleCalTouchEnd}
           style={{
@@ -1607,7 +1607,7 @@ export default function CalendarPage() {
 
         {/* ── Sidebar: upcoming (week) / selected-day agenda (month) ── */}
         <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden
-                          pt:w-full pt:max-h-[520px] pt:border-s-0 pt:border-t">
+                          pt:w-full pt:flex-1 pt:min-h-[300px] pt:border-s-0 pt:border-t">
           <div className="px-5 py-4 pt:px-6 border-b border-bd shrink-0 flex items-center gap-2 pt:min-h-[80px]">
             <h2 className="text-sm pt:text-lg font-semibold text-tp flex-1">
               {isSingleDayView ? selectedDayLabel : t.calendar.upcoming}
