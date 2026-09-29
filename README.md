@@ -45,6 +45,16 @@ In the cameras style the camera grid replaces the photos, and a camera that repo
   plays; auto-hides 30 seconds after playback stops
 - :speech_balloon: **Daily phrase** — with attribution and a short explanation
 
+### :framed_picture: Photo Frame (Google Photos Frame–style)
+
+The screensaver's photo-slideshow style turns the idle display into a digital photo frame — like a Google Photos smart frame — with three interchangeable photo sources, configured in **Settings → תצוגה**:
+
+- **Local folder** — drop images into `backend/data/photos/` (subfolders up to 3 levels deep supported). No restart needed; see [`backend/data/photos/README.md`](backend/data/photos/README.md).
+- **NAS share (CIFS/SMB)** — mount a Synology/TrueNAS/Windows share read-only so family members drop photos on the NAS and they show up automatically. Set up with `scripts/mount-photos-share.sh`; full guide in [`scripts/README-photo-share.md`](scripts/README-photo-share.md).
+- **Immich server** — point the mirror at an existing [Immich](https://immich.app) instance (URL + API key) and pick a random deck, a specific album, or filter by recognized person/favorites; images are proxied through the backend so the API key never reaches the browser.
+
+Only one source is active at a time — pick the one that fits your setup. If the source is empty or unreachable, the slideshow falls back to the built-in gradients instead of breaking.
+
 ### :speech_balloon: Daily Phrase
 
 - **133 curated Hebrew phrases**, each with a source and a one-line explanation
@@ -113,6 +123,7 @@ Connect DVRs, NVRs and IP cameras in **Settings → Cameras**. The Cameras tab a
 - :alarm_clock: **Alarm clock** with Android clock dial, repeating days, YouTube media, volume escalation & speaker targets
 - :bell: **Event reminders** with chime audio alerts, persistent queue & snooze for calendar events
 - :framed_picture: **Screensaver** (clock / photo slideshow / security cameras) on idle — see [Ambient Screensaver](#framed_picture-ambient-screensaver)
+- :framed_picture: **Photo frame** like a Google Photos frame — local folder, NAS (CIFS/SMB), or Immich server — see [Photo Frame](#framed_picture-photo-frame-google-photos-framestyle)
 - :arrow_down: **Pull-to-refresh** on Calendar, Tasks and News
 - :iphone: **PWA installable** on mobile
 - :desktop_computer: **Any screen** — landscape or portrait, choose the resolution, and scale the whole UI (50–150%) for 4K panels — see [Display & Orientation](#desktop_computer-display--orientation)
