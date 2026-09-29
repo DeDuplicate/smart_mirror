@@ -220,6 +220,8 @@ app.use('/api/system', systemRoutes);
 app.use('/api/quotes', require('./routes/quotes'));
 const alarmsRoutes = require('./routes/alarms');
 app.use('/api/alarms', alarmsRoutes);
+const camerasRoutes = require('./routes/cameras');
+app.use('/api/cameras', camerasRoutes);
 
 // ---------------------------------------------------------------------------
 // 10. HTTP server + Socket.io
@@ -248,6 +250,10 @@ systemRoutes.scheduleUpdateChecks(io, logger, require('node-cron'));
 // Alarm clock scheduler — fires enabled alarms on their minute and emits
 // 'alarm:trigger' to connected clients (the kiosk plays the media).
 alarmsRoutes.startScheduler(io, db, logger);
+
+// Security cameras — starts the go2rtc sidecar (only while an enabled camera
+// exists), the HA motion hook and the Frigate event poller.
+camerasRoutes.start(io, db, logger);
 
 io.on('connection', (socket) => {
   logger.info('Socket.io client connected: %s', socket.id);
@@ -292,6 +298,7 @@ function shutdown(signal) {
   logger.info('Received %s — shutting down gracefully', signal);
 
   homeAssistantRoutes.closeHAWebSocket();
+  camerasRoutes.stop();
 
   server.close(() => {
     logger.info('HTTP server closed');

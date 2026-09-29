@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { fetchApi } from '../hooks/useApi.js';
 import {
   applyTheme,
   nextThemeMode,
@@ -35,7 +36,8 @@ export const TAB_INDEX = {
   music: 5,
   alarms: 6,
   news: 7,
-  settings: 8,
+  cameras: 8, // hidden in TabBar (and skipped by swipe) until a camera is enabled
+  settings: 9,
 };
 
 const tabSlice = (set) => ({
@@ -309,6 +311,55 @@ const connectionSlice = (set) => ({
     })),
 });
 
+// ─── Cameras Slice ───────────────────────────────────────────────────────────
+// `cameras` mirrors GET /api/cameras (reloaded on 'cameras:updated'). Events
+// arrive over the socket; `lastCameraEvent` changes only for LIVE events so
+// the popup/spotlight never fire for history loaded from /events/recent.
+// `cameraFocus` is a camera id the Cameras tab should open fullscreen.
+
+const MAX_CAMERA_EVENTS = 20;
+
+// SQLite booleans can come back as 0/1.
+export const isCameraEnabled = (cam) => cam && cam.enabled !== false && cam.enabled !== 0;
+
+function mergeEvents(current, incoming) {
+  const byId = new Map(current.map((e) => [e.id, e]));
+  for (const e of incoming) if (e?.id) byId.set(e.id, e);
+  return [...byId.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, MAX_CAMERA_EVENTS);
+}
+
+const camerasSlice = (set, get) => ({
+  cameras: [],
+  camerasEngine: null,
+  camerasLoaded: false,
+  cameraEvents: [],
+  lastCameraEvent: null,
+  cameraFocus: null,
+  // Set by App; lets camera tiles under the screensaver stop polling.
+  screensaverActive: false,
+  loadCameras: async () => {
+    try {
+      const data = await fetchApi('/api/cameras');
+      set({
+        cameras: Array.isArray(data?.cameras) ? data.cameras : [],
+        camerasEngine: data?.engine || null,
+      });
+    } catch {
+      // Keep the last list — a backend restart must not blank the camera tab.
+    } finally {
+      set({ camerasLoaded: true });
+    }
+  },
+  pushCameraEvent: (event) =>
+    set((state) => ({ cameraEvents: mergeEvents(state.cameraEvents, [event]), lastCameraEvent: event })),
+  mergeCameraEvents: (events) =>
+    set((state) => ({ cameraEvents: mergeEvents(state.cameraEvents, events) })),
+  setCameraFocus: (id) => set({ cameraFocus: id }),
+  setScreensaverActive: (active) => {
+    if (get().screensaverActive !== active) set({ screensaverActive: active });
+  },
+});
+
 // ─── Combined Store ──────────────────────────────────────────────────────────
 
 const useStore = create((...args) => ({
@@ -320,6 +371,7 @@ const useStore = create((...args) => ({
   ...settingsSlice(...args),
   ...weatherSlice(...args),
   ...connectionSlice(...args),
+  ...camerasSlice(...args),
 }));
 
 export default useStore;

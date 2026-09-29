@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, Suspense, useLayoutEffect } from 'react';
 import { io } from 'socket.io-client';
 import './styles/global.css';
-import useStore, { TAB_INDEX, UPDATE_INITIATOR_KEY } from './store/index.js';
+import useStore, { TAB_INDEX, UPDATE_INITIATOR_KEY, isCameraEnabled } from './store/index.js';
 import t from './i18n/he.json';
 import TopBar from './components/TopBar.jsx';
 import TabBar from './components/TabBar.jsx';
@@ -21,6 +21,7 @@ import ReminderOverlay from './components/ReminderOverlay.jsx';
 import AlarmOverlay from './components/AlarmOverlay.jsx';
 import { stopCast } from './hooks/useMusic.js';
 import Screensaver from './components/Screensaver.jsx';
+import CameraEventOverlay from './components/CameraEventOverlay.jsx';
 import { applyTheme, normalizeThemeMode, resolveIsDark } from './theme.js';
 
 // ─── Lazy-loaded tab pages (code-split per tab) ────────────────────────────
@@ -32,6 +33,7 @@ const HomePage     = React.lazy(() => import('./components/pages/HomePage.jsx'))
 const MusicPage    = React.lazy(() => import('./components/pages/MusicPage.jsx'));
 const AlarmsPage   = React.lazy(() => import('./components/pages/AlarmsPage.jsx'));
 const NewsPage     = React.lazy(() => import('./components/pages/NewsPage.jsx'));
+const CamerasPage  = React.lazy(() => import('./components/pages/CamerasPage.jsx'));
 const SettingsPage = React.lazy(() => import('./components/pages/SettingsPage.jsx'));
 
 // ─── Socket.io singleton ─────────────────────────────────────────────────────
@@ -67,8 +69,14 @@ const PAGES = [
   MusicPage,
   AlarmsPage,
   NewsPage,
+  CamerasPage,
   SettingsPage,
 ];
+
+// Tabs the TabBar hides; swiping steps over them.
+function isTabHidden(index) {
+  return index === TAB_INDEX.cameras && !useStore.getState().cameras.some(isCameraEnabled);
+}
 
 const SWIPE_BLOCK_SELECTOR = [
   '[data-no-swipe]',
@@ -179,14 +187,11 @@ function TabContent() {
       return;
     }
 
-    const current = useStore.getState().activeTab;
-    if (dx < 0 && current < PAGES.length - 1) {
-      // Swipe left -> next tab
-      setActiveTab(current + 1);
-    } else if (dx > 0 && current > 0) {
-      // Swipe right -> previous tab
-      setActiveTab(current - 1);
-    }
+    // Swipe left -> next tab, swipe right -> previous tab
+    const step = dx < 0 ? 1 : -1;
+    let next = useStore.getState().activeTab + step;
+    while (next >= 0 && next < PAGES.length && isTabHidden(next)) next += step;
+    if (next >= 0 && next < PAGES.length) setActiveTab(next);
   }, [setActiveTab]);
 
   const ActivePage = PAGES[displayedTab] || PAGES[0];
@@ -776,6 +781,23 @@ export default function App() {
   // Show screensaver when idle or sleeping (but not during wizard)
   const showScreensaver = !showWizard && (isIdle || isSleeping);
 
+  // Camera tiles and the event popup need to know what the screensaver covers.
+  useEffect(() => {
+    useStore.getState().setScreensaverActive(showScreensaver);
+  }, [showScreensaver]);
+
+  // ── Cameras (loaded on every socket connect, boot included): leave the
+  // tab if its last enabled camera goes away ──
+  const hasCameras = useStore((s) => s.cameras.some(isCameraEnabled));
+  const hadCameras = useRef(false);
+  useEffect(() => {
+    const s = useStore.getState();
+    if (hadCameras.current && !hasCameras && s.activeTab === TAB_INDEX.cameras) {
+      s.setActiveTab(TAB_INDEX.calendar);
+    }
+    hadCameras.current = hasCameras;
+  }, [hasCameras]);
+
   const handleScreensaverDismiss = useCallback(() => {
     resetIdle();
     if (isSleeping) wakeTemporarily();
@@ -840,6 +862,8 @@ export default function App() {
 
     sock.on('connect', () => {
       setConnectionStatus('wifi', 'connected');
+      // Boot load, and a reload after a backend restart.
+      useStore.getState().loadCameras();
       if (reloadOnReconnect) {
         reloadOnReconnect = false;
         window.location.reload();
@@ -896,6 +920,11 @@ export default function App() {
       useStore.getState().setActiveAlarm(alarm);
     });
 
+    sock.on('cameras:updated', () => useStore.getState().loadCameras());
+    sock.on('camera:event', (event) => {
+      if (event && typeof event === 'object') useStore.getState().pushCameraEvent(event);
+    });
+
     return () => {
       sock.off('system:updated');
       sock.off('connect');
@@ -906,6 +935,8 @@ export default function App() {
       sock.off('settings:updated');
       sock.off('toast');
       sock.off('alarm:trigger');
+      sock.off('cameras:updated');
+      sock.off('camera:event');
     };
   }, [setWeather, setConnectionStatus, setAllConnectionStatuses, setSettings, addToast]);
 
@@ -986,6 +1017,9 @@ export default function App() {
             onDismiss={handleScreensaverDismiss}
           />
         )}
+
+        {/* Camera event popup — above the screensaver, below alarms. */}
+        <CameraEventOverlay />
 
         {/* Event alarm — after <Screensaver /> so it paints above it,
             inside MusicProvider so it can duck the player. */}

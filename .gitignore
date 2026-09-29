@@ -45,3 +45,10 @@ backend/data/sounds/reminders/*
 # device, out of git - see backend/data/photos/README.md.
 backend/data/photos/*
 !backend/data/photos/README.md
+
+# go2rtc camera sidecar: downloaded on first need (routes/go2rtc.js), and its
+# generated config holds camera passwords.
+backend/bin/go2rtc
+backend/bin/go2rtc.exe
+backend/bin/go2rtc_*
+backend/data/go2rtc.yaml

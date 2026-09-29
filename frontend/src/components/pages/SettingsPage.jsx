@@ -155,8 +155,10 @@ function Section({ title, children }) {
   );
 }
 
-/** Labelled text / password input */
-function InputRow({ label, type = 'text', placeholder = '', value, onChange, className = '' }) {
+/** Labelled text / password input. Pass `onKeyboard` to drive the app's
+ * OnScreenKeyboard (the kiosk has no physical one): it fires on focus and tap,
+ * and the caller renders the keyboard and routes its keys into `value`. */
+function InputRow({ label, type = 'text', placeholder = '', value, onChange, className = '', dir = 'auto', onKeyboard }) {
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && <label className="text-sm font-medium text-ts">{label}</label>}
@@ -165,10 +167,13 @@ function InputRow({ label, type = 'text', placeholder = '', value, onChange, cla
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        inputMode={onKeyboard ? 'none' : undefined}
+        onFocus={onKeyboard}
+        onClick={onKeyboard}
         className="bg-s2 border border-bd rounded-xl min-h-[56px] px-4 text-tp text-base
                    placeholder:text-tm focus:outline-none focus:border-acc
                    transition-colors duration-[var(--dur-fast)] w-full"
-        dir="auto"
+        dir={dir}
       />
     </div>
   );
@@ -904,6 +909,637 @@ function HomeAssistantSection() {
   );
 }
 
+// ─── Section: Security cameras ───────────────────────────────────────────────
+
+function CameraIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M23 7l-7 5 7 5V7z" />
+      <rect x="1" y="5" width="15" height="14" rx="2" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+const CAMERA_KINDS = ['rtsp', 'hikvision', 'dahua', 'dvrip', 'onvif', 'frigate', 'http'];
+
+// The form fields each kind actually uses ('auth' = username + password).
+// Everything else is hidden and blanked on save, so a DVR form never shows a
+// URL box and a URL camera never asks for a channel. frigateCamera and
+// motionEntity apply to every kind and are always shown.
+const CAMERA_KIND_FIELDS = {
+  rtsp:      ['source'],
+  http:      ['source'],
+  hikvision: ['host', 'port', 'httpPort', 'auth', 'channel'],
+  dahua:     ['host', 'port', 'httpPort', 'auth', 'channel'],
+  dvrip:     ['host', 'port', 'auth', 'channel'],
+  onvif:     ['host', 'port', 'auth'],
+  frigate:   [],
+};
+
+// Placeholder only: an empty port means "backend default" for the kind.
+const CAMERA_DEFAULT_PORT = { hikvision: 554, dahua: 554, dvrip: 34567, onvif: 80 };
+
+const CAMERA_EVENT_TYPES = [
+  { value: 'motion', labelKey: 'eventMotion' },
+  { value: 'object', labelKey: 'eventObject' },
+  { value: 'face',   labelKey: 'eventFace' },
+];
+
+const EMPTY_CAMERA = {
+  name: '', kind: 'rtsp', host: '', port: '', httpPort: '', username: '', password: '',
+  channel: '', source: '', frigateCamera: '', motionEntity: '', enabled: true,
+};
+
+/** Form state from a camera as the API returns it (nulls → '', password never prefilled). */
+function cameraDraft(cam = {}) {
+  const d = { ...EMPTY_CAMERA };
+  for (const k of Object.keys(d)) {
+    if (cam[k] != null) d[k] = typeof d[k] === 'string' ? String(cam[k]) : cam[k];
+  }
+  return { ...d, id: cam.id, passwordSet: !!cam.passwordSet, password: '' };
+}
+
+/** Friendly Hebrew error for the draft, or null when it can be sent. */
+function validateCamera(d, { needName = true } = {}) {
+  const c = t.camerasSettings;
+  const has = (k) => (CAMERA_KIND_FIELDS[d.kind] || []).includes(k);
+  const isPort = (v) => /^\d+$/.test(v) && +v >= 1 && +v <= 65535;
+  if (needName && !d.name.trim()) return c.errName;
+  if (has('host') && !d.host.trim()) return c.errHost;
+  if (has('source')) {
+    const re = d.kind === 'http' ? /^https?:\/\/\S+$/i : /^[a-z][a-z0-9+.-]*:\/\/\S+$/i;
+    if (!re.test(d.source.trim())) return c.errSource;
+  }
+  if (d.kind === 'frigate' && !d.frigateCamera.trim()) return c.errFrigateCamera;
+  for (const k of ['port', 'httpPort']) {
+    const v = String(d[k]).trim();
+    if (has(k) && v && !isPort(v)) return c.errPort;
+  }
+  const ch = String(d.channel).trim();
+  if (has('channel') && ch && !(/^\d+$/.test(ch) && +ch >= 1)) return c.errChannel;
+  return null;
+}
+
+/** Request body per the cameras contract (camelCase). */
+function cameraPayload(d) {
+  const has = (k) => (CAMERA_KIND_FIELDS[d.kind] || []).includes(k);
+  const num = (v) => (String(v).trim() ? Number(v) : null);
+  return {
+    ...(d.id ? { id: d.id } : {}),
+    name: d.name.trim(),
+    kind: d.kind,
+    host: has('host') ? d.host.trim() : '',
+    port: has('port') ? num(d.port) : null,
+    httpPort: has('httpPort') ? num(d.httpPort) : null,
+    username: has('auth') ? d.username.trim() : '',
+    // The backend never sends the password back: leaving it out keeps the stored one.
+    ...(has('auth') && d.password ? { password: d.password } : {}),
+    channel: has('channel') ? (num(d.channel) ?? 1) : 1,
+    // A '***' left in the URL also means "keep the stored password".
+    source: has('source') ? d.source.trim() : '',
+    frigateCamera: d.frigateCamera.trim(),
+    motionEntity: d.motionEntity || '',
+    enabled: d.enabled !== false,
+  };
+}
+
+/** fetchApi errors read `API <status>: <body>`; dig the backend's {error} back out. */
+function apiErrorText(err, fallback) {
+  try {
+    return JSON.parse((err?.message || '').replace(/^API \d+: /, '')).error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** host[:port] of a URL without the URL parser (older Chromium leaves the host
+ * of non-http schemes like rtsp:// and onvif:// empty). */
+function urlHostPort(url) {
+  const m = /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:[^@/]*@)?([^/:?#]+)(?::(\d+))?/i.exec(url || '');
+  return { host: m?.[1] || '', port: m?.[2] || '' };
+}
+
+function cameraHostLabel(cam) {
+  if (cam.host) return cam.port ? `${cam.host}:${cam.port}` : cam.host;
+  const { host, port } = urlHostPort(cam.source);
+  return port ? `${host}:${port}` : host;
+}
+
+/** POST /api/cameras/test answers with a JPEG, so it can't go through fetchApi. */
+async function fetchCameraTest(payload) {
+  const token = localStorage.getItem('auth_token');
+  const res = await fetch('/api/cameras/test', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  }).catch(() => null);
+  if (!res) throw new Error(t.camerasSettings.testFailed);
+  if (!res.ok || !(res.headers.get('content-type') || '').startsWith('image/')) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || t.camerasSettings.testFailed);
+  }
+  return URL.createObjectURL(await res.blob());
+}
+
+function CamerasSection() {
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const addToast = useStore((s) => s.addToast);
+  const showConfirm = useStore((s) => s.showConfirm);
+  const debouncedSave = useDebouncedSave(updateSettings);
+  const c = t.camerasSettings;
+
+  const [cameras, setCameras] = useState(null); // null = loading
+  const [engine, setEngine] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [draft, setDraft] = useState(null);     // camera being added / edited
+  const [saving, setSaving] = useState(false);
+  const [test, setTest] = useState({ running: false, url: null, error: null });
+  const [found, setFound] = useState(null);     // ONVIF discovery results
+  const [discovering, setDiscovering] = useState(false);
+  const [sensors, setSensors] = useState(null); // HA binary_sensors, motion first
+  const [kb, setKb] = useState(null);           // field the on-screen keyboard types into
+  const formRef = useRef(null);
+  const formOpen = draft !== null;
+
+  const load = useCallback(async () => {
+    try {
+      const d = await fetchApi('/api/cameras');
+      setCameras(Array.isArray(d?.cameras) ? d.cameras : []);
+      setEngine(d?.engine || null);
+      setLoadError(false);
+    } catch {
+      setCameras((prev) => prev || []);
+      setLoadError(true);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Free the previous test frame whenever a new one replaces it (and on unmount).
+  useEffect(() => () => { if (test.url) URL.revokeObjectURL(test.url); }, [test.url]);
+
+  // Motion sensor choices, fetched once the form first opens.
+  useEffect(() => {
+    if (!formOpen || sensors) return;
+    fetchApi('/api/ha/states')
+      .then((d) => {
+        const all = (d?.states || []).filter((e) => e.entity_id?.startsWith('binary_sensor.'));
+        const isMotion = (e) => ['motion', 'occupancy'].includes(e.attributes?.device_class);
+        setSensors([...all.filter(isMotion), ...all.filter((e) => !isMotion(e))]);
+      })
+      .catch(() => setSensors([]));
+  }, [formOpen, sensors]);
+
+  const openForm = (cam) => {
+    setDraft(cameraDraft(cam));
+    setTest({ running: false, url: null, error: null });
+    setFound(null);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ block: 'nearest' }));
+  };
+
+  const closeForm = () => {
+    setDraft(null);
+    setKb(null);
+  };
+
+  const openKb = (key) => (e) => {
+    setKb(key);
+    // Keep the field above the keyboard, which covers the bottom 40%.
+    e?.target?.scrollIntoView?.({ block: 'center' });
+  };
+
+  const kbEdit = (fn) => {
+    if (kb === 'frigateUrl') {
+      const v = fn(settings.frigateUrl || '');
+      setSettings({ frigateUrl: v });
+      debouncedSave({ frigateUrl: v });
+    } else if (kb) {
+      setDraft((d) => d && { ...d, [kb]: fn(String(d[kb] ?? '')) });
+    }
+  };
+
+  const save = async () => {
+    const err = validateCamera(draft);
+    if (err) return addToast('warning', err);
+    if ((draft.kind === 'frigate' || draft.frigateCamera.trim()) && !settings.frigateUrl) {
+      addToast('info', c.frigateNeedsUrl);
+    }
+    setSaving(true);
+    try {
+      await fetchApi(draft.id ? `/api/cameras/${encodeURIComponent(draft.id)}` : '/api/cameras', {
+        method: draft.id ? 'PUT' : 'POST',
+        body: JSON.stringify(cameraPayload(draft)),
+      });
+      addToast('success', draft.id ? c.saved : c.added);
+      closeForm();
+    } catch (e) {
+      addToast('error', apiErrorText(e, c.saveFailed));
+    } finally {
+      setSaving(false);
+      load();
+    }
+  };
+
+  const runTest = async () => {
+    const err = validateCamera(draft, { needName: false });
+    if (err) return addToast('warning', err);
+    setTest({ running: true, url: null, error: null });
+    try {
+      setTest({ running: false, url: await fetchCameraTest(cameraPayload(draft)), error: null });
+    } catch (e) {
+      setTest({ running: false, url: null, error: e.message });
+    }
+  };
+
+  const setEnabled = async (cam, enabled) => {
+    setCameras((list) => list.map((x) => (x.id === cam.id ? { ...x, enabled } : x)));
+    try {
+      // Full record back (no password, '***' in source) = everything else unchanged.
+      await fetchApi(`/api/cameras/${encodeURIComponent(cam.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...cam, enabled }),
+      });
+    } catch (e) {
+      addToast('error', apiErrorText(e, c.saveFailed));
+    }
+    load();
+  };
+
+  const move = async (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= cameras.length) return;
+    const next = [...cameras];
+    [next[i], next[j]] = [next[j], next[i]];
+    setCameras(next);
+    try {
+      await fetchApi('/api/cameras/order', {
+        method: 'PUT',
+        body: JSON.stringify({ ids: next.map((x) => x.id) }),
+      });
+    } catch (e) {
+      addToast('error', apiErrorText(e, c.orderFailed));
+    }
+    load();
+  };
+
+  const remove = (cam) =>
+    showConfirm({
+      title: c.deleteTitle,
+      message: c.deleteConfirm.replace('{name}', cam.name),
+      onConfirm: async () => {
+        try {
+          await fetchApi(`/api/cameras/${encodeURIComponent(cam.id)}`, { method: 'DELETE' });
+          addToast('success', c.deleted);
+        } catch (e) {
+          addToast('error', apiErrorText(e, c.deleteFailed));
+        }
+        load();
+      },
+    });
+
+  const discover = async () => {
+    setDiscovering(true);
+    try {
+      const d = await fetchApi('/api/cameras/discover');
+      setFound(Array.isArray(d?.devices) ? d.devices : []);
+    } catch (e) {
+      setFound(null);
+      addToast('error', apiErrorText(e, c.discoverFailed));
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  // go2rtc reports devices as onvif://user:pass@host:port; host/port come from there.
+  const pickFound = (dev) => {
+    const { host, port } = urlHostPort(dev.url || dev.host);
+    openForm({ kind: 'onvif', name: dev.name || host, host: host || dev.host || '', port });
+  };
+
+  // Draft text field wired to the on-screen keyboard. Hosts/URLs read LTR.
+  const field = (key, label, extra = {}) => (
+    <InputRow
+      label={label}
+      value={draft[key]}
+      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+      onKeyboard={openKb(key)}
+      dir="ltr"
+      {...extra}
+    />
+  );
+
+  const has = (k) => draft && (CAMERA_KIND_FIELDS[draft.kind] || []).includes(k);
+
+  const motionOptions = draft
+    ? [
+        { value: '', label: c.motionNone },
+        ...(sensors || []).map((e) => ({
+          value: e.entity_id,
+          label: e.attributes?.friendly_name ? `${e.attributes.friendly_name} · ${e.entity_id}` : e.entity_id,
+        })),
+        // Keep a saved sensor selectable while HA is unreachable.
+        ...(draft.motionEntity && !(sensors || []).some((e) => e.entity_id === draft.motionEntity)
+          ? [{ value: draft.motionEntity, label: draft.motionEntity }]
+          : []),
+      ]
+    : [];
+
+  const iconBtn = 'min-w-[56px] min-h-[56px] flex items-center justify-center rounded-xl text-tm ' +
+    'hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)] disabled:opacity-30';
+
+  return (
+    <Section title={c.title}>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-ts -mt-1">{c.desc}</p>
+
+        {engine && !engine.running && (
+          <div className="flex flex-col gap-0.5 rounded-xl px-4 py-3 bg-coral/10 border border-coral/30" role="status">
+            <span className="text-base font-semibold text-coral-d">{c.engineDown}</span>
+            {engine.error && <span className="text-sm text-ts break-words" dir="auto">{engine.error}</span>}
+          </div>
+        )}
+
+        {draft ? (
+          /* ── Add / edit form ── */
+          <div ref={formRef} className="flex flex-col gap-4 p-4 rounded-xl bg-s2/60 border border-bd pt:p-5">
+            <h3 className="text-lg font-semibold text-tp">{draft.id ? c.editCamera : c.newCamera}</h3>
+
+            {field('name', c.name, { placeholder: c.namePlaceholder, dir: 'auto' })}
+            <SelectRow
+              label={c.kind}
+              value={draft.kind}
+              onChange={(e) => {
+                const kind = e.target.value;
+                setDraft((d) => ({ ...d, kind }));
+                setTest({ running: false, url: null, error: null });
+              }}
+              options={CAMERA_KINDS.map((k) => ({ value: k, label: c.kinds[k] }))}
+            />
+
+            {has('source') && field('source', c.source, {
+              placeholder: draft.kind === 'http' ? c.sourcePlaceholderHttp : c.sourcePlaceholderRtsp,
+            })}
+
+            {has('host') && (
+              <div className="grid grid-cols-3 gap-3">
+                {field('host', c.host, { placeholder: '192.168.1.64', className: 'col-span-2' })}
+                {field('port', c.port, { placeholder: String(CAMERA_DEFAULT_PORT[draft.kind] || '') })}
+              </div>
+            )}
+
+            {has('auth') && (
+              <div className="grid grid-cols-2 gap-3">
+                {field('username', c.username, { placeholder: 'admin' })}
+                {field('password', c.password, {
+                  type: 'password',
+                  placeholder: draft.passwordSet ? c.passwordKept : '',
+                })}
+              </div>
+            )}
+
+            {(has('channel') || has('httpPort')) && (
+              <div className="grid grid-cols-2 gap-3">
+                {has('channel') && field('channel', c.channel, { placeholder: '1' })}
+                {has('httpPort') && field('httpPort', c.httpPort, { placeholder: '80' })}
+              </div>
+            )}
+
+            {field('frigateCamera', draft.kind === 'frigate' ? c.frigateCamera : c.frigateCameraDetections, {
+              placeholder: 'front_door',
+            })}
+
+            <div className="flex flex-col gap-1.5">
+              <SelectRow
+                label={c.motionEntity}
+                value={draft.motionEntity}
+                onChange={(e) => {
+                  const motionEntity = e.target.value;
+                  setDraft((d) => ({ ...d, motionEntity }));
+                }}
+                options={motionOptions}
+              />
+              <p className="text-sm text-tm">{c.motionHint}</p>
+            </div>
+
+            <ToggleRow
+              label={c.enabled}
+              checked={draft.enabled !== false}
+              onChange={(enabled) => setDraft((d) => ({ ...d, enabled }))}
+            />
+
+            {(test.url || test.error) && (
+              test.url ? (
+                <img
+                  src={test.url}
+                  alt={c.testPreview}
+                  className="w-full aspect-video object-contain rounded-xl bg-black"
+                />
+              ) : (
+                <p className="text-sm text-coral-d bg-coral/10 rounded-xl px-3 py-2 break-words" dir="auto">
+                  {test.error}
+                </p>
+              )
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <Btn variant="primary" icon={saving ? <Spinner /> : <SaveIcon />} onClick={save} disabled={saving}>
+                {t.common.save}
+              </Btn>
+              <Btn icon={test.running ? <Spinner /> : <CameraIcon />} onClick={runTest} disabled={test.running}>
+                {test.running ? c.testing : c.test}
+              </Btn>
+              <Btn onClick={closeForm} className="ms-auto">{t.common.cancel}</Btn>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ── Camera list ── */}
+            {cameras === null ? (
+              <div className="flex flex-col gap-2">
+                {[0, 1].map((i) => <div key={i} className="skeleton h-[72px] w-full rounded-xl" />)}
+              </div>
+            ) : loadError && cameras.length === 0 ? (
+              <p className="text-base text-coral-d">{c.loadFailed}</p>
+            ) : cameras.length === 0 ? (
+              <div className="flex flex-col items-center gap-1 py-6 rounded-xl border border-dashed border-bd text-center">
+                <CameraIcon className="w-8 h-8 text-tm mb-1" />
+                <span className="text-base font-medium text-ts">{c.empty}</span>
+                <span className="text-sm text-tm">{c.emptyHint}</span>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-bd bg-s2 divide-y divide-bd overflow-hidden">
+                {cameras.map((cam, i) => {
+                  const on = cam.enabled !== false;
+                  const host = cameraHostLabel(cam);
+                  return (
+                    <div key={cam.id} className="flex items-center gap-1 ps-3 min-h-[72px]">
+                      <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 me-2
+                                        ${on ? 'bg-acc/15 text-acc' : 'bg-bd text-tm'}`}>
+                        <CameraIcon className="w-5 h-5" />
+                      </span>
+                      <div className="flex-1 min-w-0 py-2">
+                        <p className={`text-base font-medium truncate ${on ? 'text-tp' : 'text-tm'}`}>{cam.name}</p>
+                        <p className="text-sm text-ts truncate">
+                          {c.kinds[cam.kind] || cam.kind}
+                          {host && <span dir="ltr">{` · ${host}`}</span>}
+                        </p>
+                      </div>
+                      <ToggleRow
+                        label={<span className="sr-only">{c.enabled}</span>}
+                        checked={on}
+                        onChange={(val) => setEnabled(cam, val)}
+                      />
+                      <button onClick={() => move(i, -1)} disabled={i === 0} className={iconBtn} aria-label={c.moveUp}>
+                        <ArrowIcon up />
+                      </button>
+                      <button
+                        onClick={() => move(i, 1)}
+                        disabled={i === cameras.length - 1}
+                        className={iconBtn}
+                        aria-label={c.moveDown}
+                      >
+                        <ArrowIcon />
+                      </button>
+                      <button onClick={() => openForm(cam)} className={iconBtn} aria-label={c.edit}>
+                        <PencilIcon />
+                      </button>
+                      <button
+                        onClick={() => remove(cam)}
+                        className={`${iconBtn} hover:text-coral-d`}
+                        aria-label={c.remove}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <Btn variant="primary" icon={<PlusIcon />} onClick={() => openForm()}>{c.add}</Btn>
+              <Btn icon={discovering ? <Spinner /> : <SearchIcon />} onClick={discover} disabled={discovering}>
+                {discovering ? c.discovering : c.discover}
+              </Btn>
+            </div>
+
+            {found && (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-ts">{found.length ? c.discoverPick : c.discoverNone}</span>
+                {found.length > 0 && (
+                  <div className="rounded-xl border border-bd bg-s2 divide-y divide-bd overflow-hidden">
+                    {found.map((dev) => (
+                      <button
+                        key={dev.url || dev.host}
+                        onClick={() => pickFound(dev)}
+                        className="w-full flex items-center gap-3 min-h-[56px] px-4 text-start
+                                   hover:bg-bd/50 active:bg-bd transition-colors duration-[var(--dur-fast)]"
+                      >
+                        <CameraIcon className="w-5 h-5 text-acc shrink-0" />
+                        <span className="flex-1 min-w-0 truncate text-base text-tp" dir="auto">{dev.name || dev.host}</span>
+                        <span className="text-sm text-ts shrink-0" dir="ltr">{dev.host}</span>
+                        <PlusIcon className="w-4 h-4 text-tm shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Detection + display (global settings) ── */}
+        <div className="flex flex-col gap-4 border-t border-bd pt-4">
+          <span className="text-base font-semibold text-tp">{c.detection}</span>
+          <div className="flex flex-col gap-1.5">
+            <InputRow
+              label={c.frigateUrl}
+              placeholder={c.frigateUrlPlaceholder}
+              value={settings.frigateUrl || ''}
+              dir="ltr"
+              onChange={(e) => {
+                setSettings({ frigateUrl: e.target.value });
+                debouncedSave({ frigateUrl: e.target.value });
+              }}
+              onKeyboard={openKb('frigateUrl')}
+            />
+            <p className="text-sm text-tm">{c.frigateHint}</p>
+          </div>
+
+          <ToggleRow
+            label={c.eventPopup}
+            checked={settings.cameraEventPopup !== false}
+            onChange={(val) => {
+              setSettings({ cameraEventPopup: val });
+              updateSettings({ cameraEventPopup: val });
+            }}
+          />
+          {settings.cameraEventPopup !== false && (
+            <CheckboxListRow
+              label={c.eventTypes}
+              values={Array.isArray(settings.cameraEventTypes)
+                ? settings.cameraEventTypes
+                : CAMERA_EVENT_TYPES.map((o) => o.value)}
+              onChange={(types) => {
+                setSettings({ cameraEventTypes: types });
+                updateSettings({ cameraEventTypes: types });
+              }}
+              options={CAMERA_EVENT_TYPES.map((o) => ({ value: o.value, label: c[o.labelKey] }))}
+            />
+          )}
+
+          <SliderRow
+            label={c.snapshotSec}
+            min={1} max={10}
+            value={settings.cameraSnapshotSec ?? 3}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              setSettings({ cameraSnapshotSec: val });
+              debouncedSave({ cameraSnapshotSec: val });
+            }}
+            unit={` ${c.snapshotUnit}`}
+          />
+
+          <div className="flex flex-col">
+            <ToggleRow
+              label={c.liveVideo}
+              checked={settings.cameraLiveVideo === true}
+              onChange={(val) => {
+                setSettings({ cameraLiveVideo: val });
+                updateSettings({ cameraLiveVideo: val });
+              }}
+            />
+            <p className="text-sm text-tm -mt-1">{c.liveVideoHint}</p>
+          </div>
+        </div>
+      </div>
+
+      <OnScreenKeyboard
+        visible={kb !== null}
+        onInput={(ch) => kbEdit((v) => v + ch)}
+        onBackspace={() => kbEdit((v) => v.slice(0, -1))}
+        onEnter={() => setKb(null)}
+        onClose={() => setKb(null)}
+      />
+    </Section>
+  );
+}
+
 // ─── Section: News ───────────────────────────────────────────────────────────
 
 function NewsSection() {
@@ -1525,6 +2161,18 @@ function DisplaySection() {
       body: JSON.stringify({ orientation: orientation || 'landscape', resolution: resolution || 'auto' }),
     }).catch(() => {});
 
+  // The cameras screensaver needs something to show, so it is offered only once
+  // a camera exists. Prefer the store's list (kept fresh over the socket) and
+  // fetch our own only if that slice isn't there.
+  const storeCameras = useStore((s) => s.cameras);
+  const [ownCameras, setOwnCameras] = useState([]);
+  useEffect(() => {
+    if (storeCameras !== undefined) return;
+    fetchApi('/api/cameras').then((d) => setOwnCameras(d?.cameras || [])).catch(() => {});
+  }, [storeCameras]);
+  const cameraList = storeCameras ?? ownCameras;
+  const hasCameras = (Array.isArray(cameraList) ? cameraList : cameraList?.cameras || []).length > 0;
+
   const idleMin = settings.idleTimeout || 5;
   const screensaver = settings.screensaverStyle || 'clock';
   const phraseIntervalMin = settings.phraseIntervalMin ?? 10;
@@ -1722,6 +2370,10 @@ function DisplaySection() {
           options={[
             { value: 'clock',     label: t.settings.screensaverClock },
             { value: 'slideshow', label: t.settings.screensaverSlideshow },
+            // Still listed when already chosen, so the select never shows blank.
+            ...(hasCameras || screensaver === 'cameras'
+              ? [{ value: 'cameras', label: t.camerasSettings.screensaverCameras }]
+              : []),
           ]}
         />
 
@@ -2901,6 +3553,7 @@ export default function SettingsPage() {
         {/* Column B (left in RTL) */}
         <div>
           <FamilySection />
+          <CamerasSection />
           <TasksSection />
           <SchoolSection />
           <AlarmsSection />

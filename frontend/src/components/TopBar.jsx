@@ -11,9 +11,8 @@ import useHomeAssistant from '../hooks/useHomeAssistant.js';
 import { useMusicContext } from '../context/MusicContext.jsx';
 import { getHebrewDateParts } from '../utils/hebrewDate.js';
 
-// Index of the Music tab in TABS/PAGES — kept in one place so the mini-player
-// can hide itself while that tab is already showing the full player.
-const MUSIC_TAB_INDEX = 4;
+// The mini-player hides itself while the Music tab already shows the full player.
+const MUSIC_TAB_INDEX = TAB_INDEX.music;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

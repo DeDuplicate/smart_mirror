@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import useStore from '../store/index.js';
+import useStore, { isCameraEnabled } from '../store/index.js';
+import CameraTile, { cameraGridVars, cameraGridStyle } from './CameraTile.jsx';
+import {
+  EventIconBadge,
+  cameraEventTitle,
+  formatEventTime,
+  openCameraFullscreen,
+  shouldPopCameraEvent,
+} from './CameraEventOverlay.jsx';
 import t from '../i18n/he.json';
 import WeatherIcon, { getConditionLabel } from './WeatherIcon.jsx';
 import useHebrewCalendar from '../hooks/useHebrewCalendar.js';
@@ -16,7 +24,8 @@ import {
 } from '../hooks/useIdleDetection.js';
 
 // ─── Screensaver Component ───────────────────────────────────────────────────
-// Two modes: "clock" (full-screen dark clock) or "slideshow" (Ken Burns photos).
+// Three modes: "clock" (full-screen dark clock), "slideshow" (Ken Burns
+// photos) or "cameras" (live camera grid; falls back to clock with none).
 // Fades in on mount. Any touch/click dismisses it via onDismiss callback.
 
 // ─── Photo frame / slideshow backdrop ────────────────────────────────────────
@@ -1280,9 +1289,113 @@ function SlideshowMode() {
   );
 }
 
+// ─── Cameras Mode ────────────────────────────────────────────────────────────
+// The camera grid is the backdrop and the clock/weather ride on top in their
+// photo treatment. A camera event (same switches as the popup, which this
+// mode replaces) spotlights that camera for a while; tapping then opens it.
+
+const SPOTLIGHT_MS = 30000;
+// ponytail: Pi 2 budget — at most 6 polling tiles; a 3x3 wall if it ever copes.
+const MAX_SCREENSAVER_CAMERAS = 6;
+
+function CamerasMode() {
+  const time = useClock();
+  const allCameras = useStore((st) => st.cameras);
+  const snapSec = useStore((st) => st.settings.cameraSnapshotSec) || 3;
+  const lastEvent = useStore((st) => st.lastCameraEvent);
+  const cameras = useMemo(
+    () => allCameras.filter(isCameraEnabled).slice(0, MAX_SCREENSAVER_CAMERAS),
+    [allCameras]
+  );
+  const [spot, setSpot] = useState(null);
+  // An event from before the screensaver came up is not news.
+  const eventAtMount = useRef(lastEvent);
+
+  useEffect(() => {
+    if (!lastEvent || lastEvent === eventAtMount.current) return undefined;
+    if (!shouldPopCameraEvent(lastEvent, useStore.getState().settings)) return undefined;
+    if (!cameras.some((c) => c.id === lastEvent.cameraId)) return undefined;
+    setSpot(lastEvent);
+    const timer = setTimeout(() => setSpot(null), SPOTLIGHT_MS);
+    return () => clearTimeout(timer);
+    // Keyed on the event only; the camera list is read as of its arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastEvent]);
+
+  // The frame's text layer sits above the spotlight, so a tap is caught here:
+  // the touch wakes the screensaver as usual, and its click opens the camera.
+  useEffect(() => {
+    if (!spot) return undefined;
+    const open = (e) => {
+      if (!isScreensaverInteractive(e.target)) openCameraFullscreen(spot.cameraId);
+    };
+    window.addEventListener('click', open);
+    return () => window.removeEventListener('click', open);
+  }, [spot]);
+
+  const n = cameras.length;
+  const background = (
+    <div className="absolute inset-0 [container-type:size]">
+      <div className={`grid h-full place-content-center ${cameraGridVars(n)}`} style={cameraGridStyle(n, 6)}>
+        {cameras.map((cam) => (
+          <CameraTile
+            key={cam.id}
+            cameraId={cam.id}
+            intervalSec={snapSec}
+            // Frozen behind the spotlight: one live tile at a time on the Pi.
+            paused={Boolean(spot)}
+            className="aspect-video rounded-xl"
+          />
+        ))}
+      </div>
+
+      {spot && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/55 animate-fade-in">
+          <div key={spot.id} className="relative w-[72%] pt:w-[92%] animate-popup-in">
+            <CameraTile
+              cameraId={spot.cameraId}
+              initialSrc={spot.snapshotUrl}
+              intervalSec={1}
+              quality="main"
+              className="w-full aspect-video rounded-[32px] shadow-modal"
+            />
+            <div className="absolute bottom-0 inset-x-0 flex items-center gap-4 px-7 pb-6 pt-16 rounded-b-[32px]
+                            bg-gradient-to-t from-black/60 to-transparent">
+              <EventIconBadge type={spot.type} size={56} />
+              <span className="min-w-0 truncate text-white text-3xl font-bold" style={{ textShadow: PHOTO_TEXT_SHADOW }}>
+                {cameraEventTitle(spot)}
+              </span>
+              <span className="ms-auto shrink-0 text-white/85 text-2xl" dir="ltr" style={{ textShadow: PHOTO_TEXT_SHADOW }}>
+                {formatEventTime(spot.ts)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Clock + weather only: the cameras are the content, so no agenda, quote
+  // or ticker laid over them.
+  return (
+    <ScreensaverFrame
+      background={background}
+      topStart={<ScreensaverClock time={time} compact />}
+      topEnd={
+        <>
+          <ScreensaverWeather compact />
+          <ScreensaverShabbat date={time} compact />
+        </>
+      }
+      playerBar={<ScreensaverNowPlaying compact />}
+    />
+  );
+}
+
 // ─── Screensaver Container ───────────────────────────────────────────────────
 
 export default function Screensaver({ style = 'clock', onDismiss }) {
+  const hasCameras = useStore((s) => s.cameras.some(isCameraEnabled));
   const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
 
@@ -1342,7 +1455,13 @@ export default function Screensaver({ style = 'clock', onDismiss }) {
         cursor: 'pointer',
       }}
     >
-      {style === 'slideshow' ? <SlideshowMode /> : <ClockMode />}
+      {style === 'slideshow' ? (
+        <SlideshowMode />
+      ) : style === 'cameras' && hasCameras ? (
+        <CamerasMode />
+      ) : (
+        <ClockMode />
+      )}
     </div>
   );
 }

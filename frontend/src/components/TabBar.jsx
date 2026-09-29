@@ -1,5 +1,6 @@
-import useStore from '../store/index.js';
+import useStore, { TAB_INDEX, isCameraEnabled } from '../store/index.js';
 import t from '../i18n/he.json';
+import { CctvIcon } from './CameraTile.jsx';
 
 // ─── Tab Definitions ────────────────────────────────────────────────────────
 
@@ -89,6 +90,11 @@ const TABS = [
       </svg>
     ),
   },
+  {
+    // TAB_INDEX.cameras — only shown once at least one camera is enabled.
+    label: t.cameras.tab,
+    icon: <CctvIcon className="w-6 h-6" />,
+  },
 ];
 
 // ─── TabBar Component ───────────────────────────────────────────────────────
@@ -96,6 +102,7 @@ const TABS = [
 export default function TabBar() {
   const activeTab = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
+  const hasCameras = useStore((s) => s.cameras.some(isCameraEnabled));
 
   return (
     <nav
@@ -105,6 +112,7 @@ export default function TabBar() {
       aria-label="ניווט ראשי"
     >
       {TABS.map((tab, index) => {
+        if (index === TAB_INDEX.cameras && !hasCameras) return null;
         const isActive = activeTab === index;
         return (
           <button

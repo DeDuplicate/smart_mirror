@@ -1,6 +1,6 @@
 # Smart Mirror Display OS
 
-A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL interface with 7 tabs, dark mode, Home Assistant integration, and gamified chores for kids.
+A beautiful, touch-enabled family dashboard for Raspberry Pi (or any small PC) — Hebrew RTL interface with 8 tabs plus an optional security-cameras tab, landscape **and portrait** layouts, dark mode, Home Assistant integration, and gamified chores for kids.
 
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
@@ -12,17 +12,19 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 ## Features
 
-### 7 Interactive Tabs
+### Interactive Tabs
 
 | Tab | Description |
 |-----|-------------|
 | :calendar: **Calendar** | Day / week / month views (Israeli Sun–Thu week) with Google Calendar ICS sync, local event editor, color-coded events, upcoming-events sidebar with explicit day labels, pull-to-refresh |
 | :white_check_mark: **Tasks** | Kanban board with drag-and-drop, subtasks, priorities, due dates |
 | :star: **Chores** | Per-person columns with progress rings, celebration animations & sounds, family photos |
+| :books: **School** | Weekly timetable per child plus a "what to bring today" checklist — tick off each subject once it's packed |
 | :house: **Smart Home** | Home Assistant tiles, AC control (IR scripts), IR remote, curtain/cover control, power monitor, shopping list |
 | :musical_note: **Music** | YouTube search + IFrame player with queue, plus MP3 casting to Google Nest / Google Home speakers |
 | :alarm_clock: **Alarms** | Multi-room alarm clock with Android-style clock dial, recurring days, YouTube track/playlist alarms, volume escalation, and Google Cast speaker targeting |
 | :newspaper: **News** | Hebrew RSS feeds (Ynet, Channel 14) with full article extraction |
+| :video_camera: **Cameras** | DVR / NVR / IP-camera grid with fullscreen viewer and motion & face alerts — the tab only appears once a camera is configured (see [Security Cameras](#video_camera-security-cameras)) |
 
 > **Note:** **Settings** (:gear:) is always accessible directly from the TopBar header (family management, dark mode, display schedule, backups, OTA updates, and setup wizard).
 
@@ -30,7 +32,8 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi — Hebrew RTL inte
 
 Inspired by [MagicMirror²](https://github.com/MagicMirrorOrg/MagicMirror)'s region layout, the
 screensaver turns the idle display into a glanceable information board rather than a blank screen.
-Both the clock and slideshow styles share one region grid, so every element keeps its position.
+The clock, photo-slideshow and **security-cameras** styles share one region grid, so every element keeps its position.
+In the cameras style the camera grid replaces the photos, and a camera that reports motion is spotlighted for 30 seconds.
 
 - :clock3: **Clock & date** — live time, Gregorian date, and the Hebrew date with gematria year
 - :calendar: **Agenda** — the next events and today's tasks as time-marked rows, with the imminent
@@ -57,12 +60,34 @@ Both the clock and slideshow styles share one region grid, so every element keep
 - :fast_forward: **Auto-advance** through the queue when a track finishes on the speaker
 - :rocket: **Next-song pre-warm** — the upcoming track is pre-converted and cached (disk LRU) so playback starts instantly
 
+### :desktop_computer: Display & Orientation
+
+All in **Settings → Display**:
+
+- **Orientation** — landscape, or portrait for a vertically mounted panel (two portrait directions, depending on which way the frame is turned). On the Pi this rotates the screen *and* remaps the touch frame (`xrandr` + `xinput`), then relaunches Chromium at the new size. Every tab, the screensaver, the setup wizard and the popups have a dedicated portrait layout (a `pt:` Tailwind variant), not a squeezed landscape one.
+- **Resolution** — pick any mode the connected screen reports (read from `xrandr`), or leave it on automatic.
+- **Interface size** — 50–150% zoom, applied live. Use it to make everything larger on a 4K panel, or to fit more on a small one.
+- The canvas scales uniformly and fills any aspect ratio (16:9, 16:10, ultrawide, 4:3) instead of stretching.
+
+### :video_camera: Security Cameras
+
+Connect DVRs, NVRs and IP cameras in **Settings → Cameras**. The Cameras tab appears automatically once at least one camera is enabled.
+
+- **Supported sources** — Hikvision (DVR/NVR/camera), Dahua / Amcrest / Lorex, XMEye cheap DVRs (`dvrip`), ONVIF (with LAN discovery), Frigate restreams, any RTSP URL, or a plain JPEG snapshot URL. DVR/NVR presets only need the address, credentials and channel number.
+- **Test button** shows a snapshot before saving; passwords never leave the backend (the UI only sees that a password is stored).
+- **Snapshots vs live video** — by default tiles refresh JPEG snapshots every few seconds, using the camera's own snapshot endpoint where possible (near-zero CPU). Turn on **Live video** on a PC and every view — the tab, the screensaver and the alerts — streams real video; a camera that can't be played falls back to snapshots.
+- **Motion & face alerts** — a popup (above everything except alarms) with the camera's picture, e.g. "אוריין זוהה/ה ב־כניסה"; tap it to open that camera fullscreen. Choose which alert types to show.
+  - **Motion** — map each camera to a Home Assistant motion `binary_sensor` (the camera/DVR does the detecting, so this works on a Pi).
+  - **People, objects & faces** — point the app at a [Frigate](https://frigate.video) server (face recognition since Frigate 0.16). Frigate needs an amd64/arm64 machine such as an Intel N100 mini PC — it cannot run on a Pi 2.
+- **Raspberry Pi notes** — a Pi 2 cannot decode video smoothly in Chromium, so keep Live video off there. Chromium never plays H.265 on a Pi: set the cameras' sub-streams to **H.264**.
+
 ### System & Data Management
 
 - :floppy_disk: **Backup** the database — creates a server-side snapshot and downloads the `.db` file to your browser
 - :inbox_tray: **Restore** from an uploaded `.db` backup (validated SQLite; API token preserved; a safety backup is taken first)
 - :arrows_counterclockwise: **Factory reset** — wipe and re-initialize the database (safety backup + token preserved)
-- :satellite_antenna: **OTA update** via `git pull` + rebuild, restart app / Raspberry Pi, log viewer, health monitoring
+- :satellite_antenna: **OTA update** from the Settings screen (fetch + reset to `origin/main`, so a rewritten/force-pushed history can't wedge the updater), restart app / Raspberry Pi, log viewer, health monitoring
+  - :package: `frontend/dist` is committed — the Pi only builds when it is missing, because a Vite build exhausts a Pi 2's GPU memory
   - :arrow_left: **Automatic rollback** — if the dependency install or the frontend build fails, the previous commit is restored and reinstalled, so a bad update can't brick a keyboard-less wall display
   - :chart_with_upwards_trend: **Live progress** streamed over Socket.io (pull → install → build → restart), not a blind spinner
   - :alarm_clock: **Nightly update check** (04:30) that only *notifies* — installs stay manual and deliberate
@@ -87,10 +112,11 @@ Both the clock and slideshow styles share one region grid, so every element keep
 - :keyboard: **On-screen keyboard** (Hebrew / English / emoji) for touch input
 - :alarm_clock: **Alarm clock** with Android clock dial, repeating days, YouTube media, volume escalation & speaker targets
 - :bell: **Event reminders** with chime audio alerts, persistent queue & snooze for calendar events
-- :framed_picture: **Screensaver** (clock / photo slideshow) on idle — see [Ambient Screensaver](#framed_picture-ambient-screensaver)
+- :framed_picture: **Screensaver** (clock / photo slideshow / security cameras) on idle — see [Ambient Screensaver](#framed_picture-ambient-screensaver)
 - :arrow_down: **Pull-to-refresh** on Calendar, Tasks and News
 - :iphone: **PWA installable** on mobile
-- :desktop_computer: **Multi-resolution scaling** (auto-adapts to any screen)
+- :desktop_computer: **Any screen** — landscape or portrait, choose the resolution, and scale the whole UI (50–150%) for 4K panels — see [Display & Orientation](#desktop_computer-display--orientation)
+- :video_camera: **Security cameras** with motion / person / face alerts — see [Security Cameras](#video_camera-security-cameras)
 - :rocket: **First-run setup wizard** (name, location, Google, Home Assistant, music, news)
 
 ---
@@ -106,6 +132,7 @@ Both the clock and slideshow styles share one region grid, so every element keep
 | Database | SQLite (WAL mode) |
 | Process | PM2 |
 | Kiosk | Chromium (Raspberry Pi) |
+| Cameras | [go2rtc](https://github.com/AlexxIT/go2rtc) sidecar (auto-downloaded); optional [Frigate](https://frigate.video) for detection |
 
 ---
 
@@ -115,7 +142,8 @@ Both the clock and slideshow styles share one region grid, so every element keep
 
 - **Node.js** 20+
 - **npm**
-- **ffmpeg** and **yt-dlp** — required for casting YouTube audio to Google Nest / Home speakers (auto-installed by `scripts/setup.sh` on Raspberry Pi)
+- **ffmpeg** and **yt-dlp** — required for casting YouTube audio to Google Nest / Home speakers (auto-installed by `scripts/setup.sh` on Raspberry Pi). ffmpeg is also used for camera snapshots from H.264 streams
+- **go2rtc** is downloaded automatically (to `backend/bin/`) the first time a camera is added — nothing to install
 
 ### Development
 
@@ -176,6 +204,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in your values:
 | `YTDLP_PATH` | Path to the `yt-dlp` binary (optional; auto-detected on `PATH`) |
 | `FFMPEG_PATH` | Path to the `ffmpeg` binary (optional; auto-detected on `PATH`) |
 | `STREAM_HOST` | LAN host/IP the speaker uses to reach the MP3 stream (optional; auto-detected, set manually for Docker) |
+| `GO2RTC_URL` | Use an existing go2rtc (e.g. Frigate's, `http://frigate.local:1984`) instead of the bundled one (optional) |
 
 ---
 
@@ -209,6 +238,23 @@ Deleting a family member cascades to their school schedule and checked rows.
 Run the isolated migration/HTTP regression check with
 `node --test backend/test-school.js`.
 
+## Cameras API
+
+Camera config lives in its own table (migration `011_cameras.sql`). go2rtc runs as a backend child process bound to `127.0.0.1:1984`, only while a camera is enabled, and every request goes through the authenticated Express API.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/cameras` | `{ cameras: [...], engine: { running, external, error } }` — passwords masked (`passwordSet`, `***` in URLs) |
+| `POST /api/cameras`, `PUT /api/cameras/:id`, `DELETE /api/cameras/:id` | CRUD (an empty password on update keeps the stored one) |
+| `PUT /api/cameras/order` | `{ ids: [...] }` reorder |
+| `GET /api/cameras/:id/snapshot.jpg?quality=sub` | JPEG snapshot (native camera snapshot first, decoded frame as fallback) |
+| `GET /api/cameras/:id/stream.mp4?quality=main` | Live fMP4 for a plain `<video>` tag (H.264) |
+| `POST /api/cameras/test` | Try a camera config — returns a JPEG or `{ error }` |
+| `GET /api/cameras/discover` | ONVIF LAN discovery |
+| `GET /api/cameras/events/recent` | Last 20 motion / object / face events |
+
+Socket events: `cameras:updated` (config changed) and `camera:event` (`{ cameraId, cameraName, type: 'motion' | 'object' | 'face', label, subLabel, snapshotUrl, ts }`). Run the check with `node backend/test-cameras.js`.
+
 ## Project Structure
 
 ```
@@ -217,23 +263,26 @@ smart_mirror/
 │   ├── public/              # Static assets, PWA manifest, sounds
 │   └── src/
 │       ├── components/
-│       │   ├── pages/       # CalendarPage, TasksPage, ChoresPage, HomePage,
-│       │   │                # MusicPage, AlarmsPage, NewsPage, SettingsPage
+│       │   ├── pages/       # CalendarPage, TasksPage, ChoresPage, SchoolPage, HomePage,
+│       │   │                # MusicPage, AlarmsPage, NewsPage, CamerasPage, SettingsPage
 │       │   ├── TopBar.jsx   # Clock, weather, Hebrew date, dark mode, settings
-│       │   ├── TabBar.jsx   # Bottom navigation tabs
+│       │   ├── TabBar.jsx   # Tab navigation (hides the Cameras tab until one is set up)
+│       │   ├── CameraTile.jsx, CameraEventOverlay.jsx  # Camera views + motion/face popup
 │       │   └── ...          # Shared UI (modals, AlarmOverlay, ReminderOverlay, popups)
 │       ├── hooks/           # useCalendar, useChores, useMusic, useHomeAssistant, ...
 │       ├── store/           # Zustand global store
 │       ├── i18n/            # Hebrew translations
 │       └── styles/          # Design system (CSS custom properties)
 ├── backend/
-│   ├── routes/              # Express API routes
+│   ├── routes/              # Express API routes (cameras.js + go2rtc.js = camera module)
+│   ├── db/migrations/       # Numbered SQL migrations, applied automatically at startup
 │   ├── .env.example         # Environment variable template
 │   └── ...
 ├── scripts/
 │   ├── setup.sh             # Raspberry Pi setup script
 │   ├── sync-to-pi.js        # Auto-sync & deploy to Raspberry Pi
-│   ├── start-kiosk.sh       # Chromium kiosk launcher
+│   ├── start-kiosk.sh       # Chromium kiosk launcher (re-applies rotation/resolution each launch)
+│   ├── apply-orientation.sh # xrandr rotation + resolution + touch-matrix remap
 │   ├── backup.sh            # Database backup utility
 │   ├── set-ha-token.sh      # Home Assistant token configuration script
 │   └── generate-icons.js    # PWA icon generator

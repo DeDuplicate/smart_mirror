@@ -530,6 +530,8 @@ router.post('/remote/:entity_id/command', async (req, res) => {
 // ---------------------------------------------------------------------------
 let haWebSocket = null;
 let haWsReconnectTimer = null;
+// Backend modules that want state_changed too (cameras: motion sensors).
+const stateListeners = [];
 
 function setupHAWebSocketRelay(io, logger, db) {
   configDb = db || configDb;
@@ -585,7 +587,15 @@ function setupHAWebSocketRelay(io, logger, db) {
           haWebSocket.close();
         } else if (msg.type === 'event') {
           // Forward to Socket.io clients
-          io.emit('ha:state_changed', msg.event?.data || msg.event);
+          const data = msg.event?.data || msg.event;
+          io.emit('ha:state_changed', data);
+          for (const fn of stateListeners) {
+            try {
+              fn(data);
+            } catch (err) {
+              logger.warn('HA state listener failed: %s', err.message);
+            }
+          }
         }
       } catch (err) {
         logger.error('HA WebSocket message parse error: %s', err.message);
@@ -608,6 +618,7 @@ function setupHAWebSocketRelay(io, logger, db) {
 // Export the relay setup so server.js can call it after io is ready
 module.exports = router;
 module.exports.setupHAWebSocketRelay = setupHAWebSocketRelay;
+module.exports.onStateChanged = (fn) => stateListeners.push(fn);
 
 // Cleanup helper
 module.exports.closeHAWebSocket = function () {
