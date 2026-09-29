@@ -290,7 +290,8 @@ function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
       style={{ backgroundColor: visible ? 'rgba(0,0,0,0.25)' : 'transparent', transition: 'background-color 200ms' }}>
       <div
         ref={popupRef}
-        className="bg-surf rounded-2xl shadow-popover border border-bd w-[380px] max-h-[520px] overflow-y-auto"
+        className="bg-surf rounded-2xl shadow-popover border border-bd w-[380px] max-h-[520px] overflow-y-auto
+                   pt:w-[640px] pt:max-h-[960px] pt:rounded-3xl"
         style={{
           transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(12px)',
           opacity: visible ? 1 : 0,
@@ -487,6 +488,7 @@ function UpcomingCard({ event, onTap, showDay = false }) {
     <button
       onClick={(e) => onTap(event, e.currentTarget.getBoundingClientRect())}
       className="w-full flex items-start gap-3 p-3.5 rounded-xl bg-bg hover:bg-s2
+                 pt:p-4 pt:rounded-2xl pt:min-h-[88px]
                  active:scale-[0.98] transition-all duration-[var(--dur-fast)] cursor-pointer text-start"
     >
       <div
@@ -494,7 +496,7 @@ function UpcomingCard({ event, onTap, showDay = false }) {
         style={{ backgroundColor: color.dot }}
       />
       <div className="flex-1 min-w-0">
-        <span className="text-sm font-medium text-tp block truncate">{event.title}</span>
+        <span className="text-sm pt:text-base font-medium text-tp block truncate">{event.title}</span>
         {day && (
           <span
             className={`text-xs font-medium block mt-1 truncate ${day.isNear ? 'text-acc2' : 'text-ts'}`}
@@ -1090,24 +1092,24 @@ export default function CalendarPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Navigation Bar ── */}
-      <div className="flex items-center gap-3 px-6 py-3 shrink-0 border-b border-bd bg-surf">
+      <div className="flex items-center gap-3 px-6 py-3 pt:py-4 shrink-0 border-b border-bd bg-surf">
         <button
           onClick={goNext}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
-                     text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
+                     pt:min-w-[56px] pt:min-h-[56px] text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
           aria-label={view === 'month' ? t.calendar.nextMonth : view === 'day' ? t.calendar.nextDay : t.calendar.nextWeek}
         >
           <ChevronRight />
         </button>
 
-        <span className="text-base font-semibold text-tp min-w-[260px] text-center select-none">
+        <span className="text-base pt:text-lg font-semibold text-tp min-w-[260px] pt:min-w-[220px] text-center select-none">
           {monthYearLabel}
         </span>
 
         <button
           onClick={goPrev}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
-                     text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
+                     pt:min-w-[56px] pt:min-h-[56px] text-ts hover:bg-s2 hover:text-tp active:scale-95 transition-all duration-[var(--dur-fast)]"
           aria-label={view === 'month' ? t.calendar.prevMonth : view === 'day' ? t.calendar.prevDay : t.calendar.prevWeek}
         >
           <ChevronLeft />
@@ -1166,7 +1168,7 @@ export default function CalendarPage() {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden pt:flex-col">
         {/* ── Single Day Timeline (day view) ── */}
         {view === 'day' && (
           <div
@@ -1604,16 +1606,17 @@ export default function CalendarPage() {
         )}
 
         {/* ── Sidebar: upcoming (week) / selected-day agenda (month) ── */}
-        <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden">
-          <div className="px-5 py-4 border-b border-bd shrink-0 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-tp flex-1">
+        <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden
+                          pt:w-full pt:max-h-[520px] pt:border-s-0 pt:border-t">
+          <div className="px-5 py-4 pt:px-6 border-b border-bd shrink-0 flex items-center gap-2 pt:min-h-[80px]">
+            <h2 className="text-sm pt:text-lg font-semibold text-tp flex-1">
               {isSingleDayView ? selectedDayLabel : t.calendar.upcoming}
             </h2>
             {isSingleDayView && (
               <button
                 onClick={() => openNewEditor({ date: selectedDate, hour: 9, minute: 0, allDay: false })}
                 className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
-                           bg-acc/10 text-acc hover:bg-acc/20 active:scale-95
+                           pt:min-w-[56px] pt:min-h-[56px] bg-acc/10 text-acc hover:bg-acc/20 active:scale-95
                            transition-all duration-[var(--dur-fast)]"
                 aria-label={t.calendar.addEvent}
               >
@@ -1622,14 +1625,15 @@ export default function CalendarPage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
+          <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2
+                          pt:grid pt:grid-cols-2 pt:content-start pt:gap-3 pt:px-6 pt:py-4">
             {isSingleDayView ? (
               sidebarDayEvents.length > 0 ? (
                 sidebarDayEvents.map((ev) => (
                   <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} />
                 ))
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center px-4">
+                <div className="flex-1 flex flex-col items-center justify-center px-4 pt:col-span-2">
                   <div className="w-full border-2 border-dashed border-bd rounded-2xl
                                   flex items-center justify-center py-10">
                     <span className="text-sm text-tm">{t.calendar.noEventsThisDay}</span>
@@ -1641,7 +1645,7 @@ export default function CalendarPage() {
                 <UpcomingCard key={ev.id} event={ev} onTap={handleEventTap} showDay />
               ))
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center px-4">
+              <div className="flex-1 flex flex-col items-center justify-center px-4 pt:col-span-2">
                 <div className="w-full border-2 border-dashed border-bd rounded-2xl
                                 flex items-center justify-center py-10">
                   <span className="text-sm text-tm">{t.calendar.noUpcoming}</span>

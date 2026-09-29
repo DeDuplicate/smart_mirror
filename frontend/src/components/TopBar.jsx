@@ -117,19 +117,20 @@ function HebrewDateSection() {
   const isFriday = new Date().getDay() === 5;
 
   return (
-    <div className="flex flex-col items-center select-none leading-tight gap-0.5">
-      <span className="text-sm font-medium text-tp">{dateInfo.dayName}</span>
-      <span className="text-xs text-ts">{dateInfo.hebrewDate}</span>
+    <div className="flex flex-col items-center select-none leading-tight gap-0.5
+                    pt:flex-row pt:flex-wrap pt:gap-x-3 pt:gap-y-1">
+      <span className="text-sm pt:text-lg font-medium pt:font-semibold text-tp">{dateInfo.dayName}</span>
+      <span className="text-xs pt:text-base text-ts">{dateInfo.hebrewDate}</span>
       {todayHoliday && (
         <span
-          className="mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold"
+          className="mt-0.5 pt:mt-0 px-2.5 py-0.5 pt:px-3 pt:py-1 rounded-full text-[10px] pt:text-sm font-semibold"
           style={{ background: 'var(--lav-bg)', color: 'var(--lav-d)' }}
         >
           {todayHoliday}
         </span>
       )}
       {isFriday && shabbatCandles && (
-        <span className="font-mono text-[10px] text-ts mt-0.5">
+        <span className="font-mono text-[10px] pt:text-sm text-ts mt-0.5 pt:mt-0">
           {t.holidays.candleLighting} {shabbatCandles}
         </span>
       )}
@@ -148,8 +149,8 @@ function GreetingSection() {
   }, []);
 
   return (
-    <div className="flex flex-col select-none leading-tight">
-      <span className="text-lg font-semibold text-tp">
+    <div className="flex flex-col select-none leading-tight pt:min-w-0">
+      <span className="text-lg pt:text-xl font-semibold text-tp pt:truncate">
         {greeting}
         {userName ? ` ${userName}` : ''}
       </span>
@@ -443,10 +444,10 @@ function MusicMiniPlayer() {
           )}
         </div>
         <div className="flex flex-col items-start min-w-0 leading-tight">
-          <span className="mini-title text-xs font-semibold truncate max-w-[140px]">
+          <span className="mini-title text-xs font-semibold truncate max-w-[140px] pt:max-w-[96px]">
             {currentTrack.title}
           </span>
-          <span className="mini-artist text-[11px] truncate max-w-[140px]">
+          <span className="mini-artist text-[11px] truncate max-w-[140px] pt:max-w-[96px]">
             {currentTrack.artist}
           </span>
         </div>
@@ -515,26 +516,29 @@ function SettingsButton() {
 
 export default function TopBar() {
   return (
+    // Portrait (1080 wide): two rows. Row 1 = clock/weather + utility buttons,
+    // row 2 = Hebrew date + greeting (moved via order-last).
     <header
-      className="flex items-center justify-between px-6 bg-surf border-b border-bd shrink-0"
-      style={{ height: '72px' }}
+      className="flex items-center justify-between px-6 bg-surf border-b border-bd shrink-0 h-[72px]
+                 pt:h-auto pt:flex-wrap pt:px-4 pt:pt-2"
     >
       {/* Right side in RTL: Clock + Weather */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 pt:gap-3 pt:min-h-[72px]">
         <LiveClock />
         <div className="w-px h-8 bg-bd" />
         <WeatherSection />
       </div>
 
       {/* Center: Hebrew date + Greeting */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-6 pt:order-last pt:w-full pt:justify-between
+                      pt:border-t pt:border-bd pt:mt-2 pt:py-3 pt:px-2">
         <HebrewDateSection />
-        <div className="w-px h-8 bg-bd" />
+        <div className="w-px h-8 bg-bd pt:hidden" />
         <GreetingSection />
       </div>
 
       {/* Left side in RTL: Utility buttons */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 pt:gap-0.5 pt:min-h-[72px]">
         <MusicMiniPlayer />
         <ShoppingListButton />
         <DarkModeToggle />

@@ -451,8 +451,8 @@ function PersonColumn({
   return (
     <div
       ref={columnRef}
-      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden"
-      style={{ minWidth: 220, flex: '1 1 0%' }}
+      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden flex-[1_1_0%] min-w-[220px] pt:min-w-[460px] pt:snap-start"
+      
     >
       {/* Clap burst overlay — full column */}
       {showClap && <ClapBurst onDone={() => setShowClap(false)} />}
@@ -882,7 +882,7 @@ export default function TasksPage() {
 
       {/* Person columns */}
       <div
-        className="flex-1 flex gap-4 overflow-x-auto pb-1"
+        className="flex-1 flex gap-4 overflow-x-auto pb-1 pt:snap-x pt:snap-mandatory pt:gap-6"
         style={{ minHeight: 0 }}
       >
         {peopleWithPhotos.map((person) => (

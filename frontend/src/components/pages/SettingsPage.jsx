@@ -148,8 +148,8 @@ function UploadIcon({ className = 'w-4 h-4' }) {
 /** Section card wrapper */
 function Section({ title, children }) {
   return (
-    <div className="bg-surf border border-bd rounded-2xl p-6 mb-4">
-      <h2 className="text-xl font-semibold text-tp mb-4">{title}</h2>
+    <div className="bg-surf border border-bd rounded-2xl p-6 mb-4 pt:rounded-3xl pt:p-8 pt:mb-6">
+      <h2 className="text-xl font-semibold text-tp mb-4 pt:text-2xl pt:mb-5">{title}</h2>
       {children}
     </div>
   );
@@ -208,7 +208,7 @@ function CheckboxListRow({ label, values, onChange, options, emptyLabel }) {
       {options.length === 0 ? (
         <span className="text-sm text-tm">{emptyLabel}</span>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 pt:grid-cols-3">
           {options.map((o) => {
             const checked = values.includes(o.value);
             return (
@@ -1513,6 +1513,18 @@ function DisplaySection() {
 
   const debouncedSave = useDebouncedSave(updateSettings);
 
+  // Physical panel modes, straight from xrandr (empty off the Pi's X11 session).
+  const [display, setDisplay] = useState({ modes: [], current: null });
+  useEffect(() => {
+    fetchApi('/api/system/display').then((d) => setDisplay({ modes: d?.modes || [], current: d?.current })).catch(() => {});
+  }, []);
+  const applyDisplay = (orientation, resolution) =>
+    fetch('/api/system/display', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orientation: orientation || 'landscape', resolution: resolution || 'auto' }),
+    }).catch(() => {});
+
   const idleMin = settings.idleTimeout || 5;
   const screensaver = settings.screensaverStyle || 'clock';
   const phraseIntervalMin = settings.phraseIntervalMin ?? 10;
@@ -2055,6 +2067,59 @@ function DisplaySection() {
               updateSettings({ showWeekend: val });
             }}
           />
+          {display.modes.length > 0 && (
+            <SelectRow
+              label={`${t.settings.resolution}${display.current ? ` (${display.current})` : ''}`}
+              value={settings.resolution || 'auto'}
+              onChange={(e) => {
+                const resolution = e.target.value;
+                setSettings({ resolution });
+                updateSettings({ resolution });
+                applyDisplay(settings.orientation, resolution);
+              }}
+              options={[{ value: 'auto', label: t.settings.resolutionAuto }, ...display.modes.map((m) => ({ value: m, label: m }))]}
+            />
+          )}
+          <SliderRow
+            label={t.settings.uiZoom}
+            min={50} max={150} step={5}
+            value={settings.uiZoom || 100}
+            onChange={(e) => {
+              const uiZoom = Number(e.target.value);
+              setSettings({ uiZoom });
+              debouncedSave({ uiZoom });
+            }}
+            unit="%"
+          />
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-base text-tp">{t.settings.orientation}</span>
+              <span className="text-sm text-ts">{t.settings.orientationHint}</span>
+            </div>
+            <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
+              {[
+                { value: 'landscape', label: t.settings.orientationLandscape },
+                { value: 'portrait-left', label: t.settings.orientationPortraitLeft },
+                { value: 'portrait-right', label: t.settings.orientationPortraitRight },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setSettings({ orientation: opt.value });
+                    updateSettings({ orientation: opt.value });
+                    applyDisplay(opt.value, settings.resolution);
+                  }}
+                  className={`px-4 min-h-[56px] rounded-xl text-lg font-semibold transition-all
+                               duration-[var(--dur-fast)] active:scale-95
+                               ${(settings.orientation || 'landscape') === opt.value
+                                 ? 'bg-acc text-white shadow-card'
+                                 : 'text-ts hover:text-tp'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center justify-between py-2.5">
             <div className="flex flex-col gap-0.5">
               <span className="text-base text-tp">{t.settings.themeCycle}</span>
@@ -2695,7 +2760,7 @@ function LogViewerSection() {
         <textarea
           readOnly
           value={logs.length > 0 ? logs.map(formatEntry).join('\n') : t.logs.noLogs}
-          className="w-full h-[240px] bg-s2 border border-bd rounded-xl p-3 text-sm text-tp
+          className="w-full h-[240px] pt:h-[520px] bg-s2 border border-bd rounded-xl p-3 text-sm text-tp
                      font-mono resize-none focus:outline-none"
           style={{ fontFamily: "'DM Mono', monospace", direction: 'ltr' }}
         />
@@ -2815,13 +2880,13 @@ function AboutSection() {
 export default function SettingsPage() {
   return (
     <div
-      className="h-full overflow-y-auto px-8 py-6"
+      className="h-full overflow-y-auto px-8 py-6 pt:px-6 pt:py-8"
       style={{ scrollbarWidth: 'thin' }}
     >
-      <h1 className="text-3xl font-bold text-tp mb-6">{t.tabs.settings}</h1>
+      <h1 className="text-3xl font-bold text-tp mb-6 pt:text-4xl pt:mb-8 pt:px-2">{t.tabs.settings}</h1>
 
-      {/* Two-column masonry-style grid */}
-      <div className="grid grid-cols-2 gap-x-6 items-start max-w-[1600px] mx-auto">
+      {/* Two-column masonry-style grid; single column in portrait */}
+      <div className="grid grid-cols-2 gap-x-6 items-start max-w-[1600px] mx-auto pt:grid-cols-1 pt:max-w-none">
         {/* Column A (right in RTL — rendered first) */}
         <div>
           <ProfileSection />

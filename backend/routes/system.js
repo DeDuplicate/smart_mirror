@@ -156,6 +156,50 @@ router.get('/version', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// /api/system/display - panel rotation + resolution (X11 only)
+// The UI persists the choice via PUT /api/settings; these only touch X.
+// Chromium is killed after applying so start-kiosk.sh's watchdog relaunches it
+// at the new window size.
+// ---------------------------------------------------------------------------
+const ORIENTATIONS = ['landscape', 'portrait-left', 'portrait-right'];
+
+router.get('/display', async (req, res) => {
+  if (!IS_LINUX) return res.json({ ok: true, mock: true, output: 'mock', current: '1920x1080', modes: ['3840x2160', '2560x1440', '1920x1080', '1600x900', '1280x720'] });
+  const result = await run('xrandr', ['--query'], 5000, xEnv());
+  if (!result.ok) return res.status(502).json({ ok: false, error: result.stderr || 'xrandr failed' });
+  let output = null;
+  let current = null;
+  const modes = [];
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const head = line.match(/^(\S+) (connected|disconnected)/);
+    if (head) {
+      if (output) break; // first connected output only
+      if (head[2] === 'connected') output = head[1];
+      continue;
+    }
+    const mode = output && line.match(/^\s+(\d+x\d+)\s/);
+    if (!mode) continue;
+    if (!modes.includes(mode[1])) modes.push(mode[1]);
+    if (/\*/.test(line) && !current) current = mode[1];
+  }
+  res.json({ ok: true, output, current, modes });
+});
+
+router.post('/display', (req, res) => {
+  const { orientation = 'landscape', resolution = 'auto' } = req.body;
+  if (!ORIENTATIONS.includes(orientation) || !(resolution === 'auto' || /^\d{3,5}x\d{3,5}$/.test(resolution))) {
+    return res.status(400).json({ error: 'invalid orientation or resolution' });
+  }
+  if (!IS_LINUX) return res.json({ ok: true, orientation, resolution, mock: true });
+  const script = path.join(__dirname, '..', '..', 'scripts', 'apply-orientation.sh');
+  execFile('bash', [script, orientation, resolution], xEnv(), (err) => {
+    if (err) req.app.locals.logger.warn('Display apply failed: %s', err.message);
+    execFile('pkill', ['-f', 'chromium'], () => {});
+  });
+  res.json({ ok: true, orientation, resolution });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/system/brightness - set brightness { value: 0-100 }
 // ---------------------------------------------------------------------------
 router.post('/brightness', async (req, res) => {

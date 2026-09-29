@@ -99,7 +99,8 @@ export default function TabBar() {
 
   return (
     <nav
-      className="flex items-center bg-surf border-t border-bd h-14 shrink-0 px-4 gap-1"
+      className="flex items-center bg-surf border-t border-bd h-14 shrink-0 px-4 gap-1
+                 pt:h-auto pt:px-3 pt:py-2 pt:gap-1.5 pt:border-t-0 pt:border-b"
       role="tablist"
       aria-label="ניווט ראשי"
     >
@@ -115,8 +116,9 @@ export default function TabBar() {
             className={`
               ripple flex items-center justify-center gap-2
               min-w-[56px] min-h-[56px] px-5 py-2
+              pt:flex-1 pt:basis-0 pt:min-w-0 pt:flex-col pt:gap-1 pt:px-1 pt:min-h-[76px] pt:rounded-2xl
               rounded-xl transition-all duration-[var(--dur-normal)]
-              text-sm select-none
+              text-sm pt:text-[13px] pt:leading-tight select-none
               ${isActive
                 ? 'bg-lav text-acc font-bold shadow-card'
                 : 'text-ts font-medium hover:bg-s2 hover:text-tp active:scale-95'
@@ -124,7 +126,7 @@ export default function TabBar() {
             `}
           >
             <span className="shrink-0">{tab.icon}</span>
-            <span>{tab.label}</span>
+            <span className="pt:max-w-full pt:truncate">{tab.label}</span>
           </button>
         );
       })}

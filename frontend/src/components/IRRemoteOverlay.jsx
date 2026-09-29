@@ -40,9 +40,9 @@ function RemoteButton({ label, command, entityId, size = 'md', variant = 'defaul
   // Every remote key is a primary touch target on the IR frame, so each size
   // keeps a >=56x56px hit area regardless of how small its glyph/label is.
   const sizeClasses = {
-    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs',
-    md: 'min-w-[56px] min-h-[56px] w-16 text-sm',
-    lg: 'min-w-[56px] min-h-[56px] w-20 text-base',
+    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs pt:w-full pt:min-h-[80px] pt:rounded-2xl pt:text-lg',
+    md: 'min-w-[56px] min-h-[56px] w-16 text-sm pt:w-24 pt:min-h-[96px] pt:rounded-2xl pt:text-xl',
+    lg: 'min-w-[56px] min-h-[56px] w-20 text-base pt:min-h-[88px] pt:rounded-2xl pt:text-xl',
     round: 'min-w-[56px] min-h-[56px] w-16 h-16 rounded-full text-xs',
   };
 
@@ -50,7 +50,7 @@ function RemoteButton({ label, command, entityId, size = 'md', variant = 'defaul
     default: 'bg-s2 text-tp hover:bg-bd border border-bd',
     accent: 'bg-acc text-white hover:bg-acc/90',
     danger: 'bg-coral-bg text-coral-d hover:opacity-80',
-    center: 'bg-acc2 text-white hover:bg-acc2/90 rounded-full w-16 h-16 text-sm font-bold',
+    center: 'bg-acc2 text-white hover:bg-acc2/90 rounded-full w-16 h-16 text-sm font-bold pt:w-28 pt:h-28 pt:rounded-full pt:text-xl',
   };
 
   return (
@@ -72,7 +72,7 @@ function RemoteButton({ label, command, entityId, size = 'md', variant = 'defaul
 
 function ArrowPad({ entityId }) {
   return (
-    <div className="grid grid-cols-3 grid-rows-3 gap-1.5 place-items-center w-fit mx-auto">
+    <div className="grid grid-cols-3 grid-rows-3 gap-1.5 pt:gap-4 place-items-center w-fit mx-auto">
       {/* Row 1: blank / Up / blank */}
       <div />
       <RemoteButton label="&#9650;" command="up" entityId={entityId} size="md" />
@@ -101,13 +101,13 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-surf border border-bd rounded-2xl shadow-modal p-6 w-[380px] max-h-[90vh] overflow-y-auto"
+        className="bg-surf border border-bd rounded-2xl shadow-modal p-6 w-[380px] pt:w-[680px] pt:p-10 pt:rounded-3xl max-h-[90vh] overflow-y-auto"
         style={{ animation: 'popupIn 250ms var(--ease) forwards' }}
         dir="rtl"
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-tp">
+        <div className="flex items-center justify-between mb-5 pt:mb-8">
+          <h3 className="text-lg pt:text-2xl font-bold text-tp">
             {t.home.irRemote} - {roomName}
           </h3>
           <button
@@ -121,7 +121,7 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
         </div>
 
         {/* Power row */}
-        <div className="flex justify-center mb-4">
+        <div className="flex justify-center mb-4 pt:mb-8">
           <RemoteButton
             label={t.home.power}
             command="power"
@@ -133,7 +133,7 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
         </div>
 
         {/* Volume / Channel row */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-4 pt:gap-4 pt:mb-10">
           <RemoteButton label={t.home.volUp} command="volume_up" entityId={entityId} size="sm" />
           <RemoteButton label={t.home.mute} command="mute" entityId={entityId} size="sm" />
           <RemoteButton label={t.home.chUp} command="channel_up" entityId={entityId} size="sm" />
@@ -143,12 +143,12 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
         </div>
 
         {/* Arrow pad */}
-        <div className="mb-4">
+        <div className="mb-4 pt:mb-10">
           <ArrowPad entityId={entityId} />
         </div>
 
         {/* Bottom row: Back, Home, Menu */}
-        <div className="flex justify-center gap-3">
+        <div className="flex justify-center gap-3 pt:gap-6">
           <RemoteButton label={t.home.backBtn} command="back" entityId={entityId} size="md" />
           <RemoteButton label={t.home.homeBtn} command="home" entityId={entityId} size="md" variant="accent" />
           <RemoteButton label={t.home.menuBtn} command="menu" entityId={entityId} size="md" />

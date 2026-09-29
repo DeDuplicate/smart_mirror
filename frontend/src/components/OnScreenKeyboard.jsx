@@ -54,8 +54,8 @@ function Key({ label, onPress, flex = 1, variant = 'default', icon, ariaLabel })
         ${variants[variant]}
         border rounded-xl
         flex items-center justify-center
-        min-w-[56px] h-[56px] touch-none
-        font-heebo font-medium text-base
+        min-w-[56px] h-[56px] pt:h-[72px] touch-none
+        font-heebo font-medium text-base pt:text-xl
         select-none transition-transform
         active:brightness-90
       `}
@@ -134,7 +134,7 @@ function BackspaceKey({ onBackspace }) {
       className="
         bg-s2 border border-bd text-ts rounded-xl
         flex items-center justify-center
-        min-w-[56px] h-[56px] touch-none
+        min-w-[56px] h-[56px] pt:h-[72px] touch-none
         select-none transition-transform
         active:brightness-90
       "
@@ -236,14 +236,14 @@ export default function OnScreenKeyboard({
 
       {/* Keyboard panel */}
       <div
-        className="relative bg-s2 border-t border-bd px-3 pb-4 pt-3"
+        className="relative bg-s2 border-t border-bd px-3 pb-4 pt-3 h-[40%]
+                   pt:h-auto pt:px-4 pt:pt-5 pt:pb-8 pt:rounded-t-3xl pt:shadow-modal"
         style={{
-          height: '40%',
           animation: 'keyboardSlideUp var(--dur-normal) var(--ease-out) forwards',
         }}
       >
         {/* Key rows */}
-        <div className="flex flex-col gap-2 h-full justify-center max-w-[900px] mx-auto">
+        <div className="flex flex-col gap-2 pt:gap-2.5 h-full justify-center max-w-[900px] pt:max-w-none mx-auto">
           {/* Character rows */}
           {rows.map((row, rowIndex) => (
             <div key={rowIndex} className="flex gap-1.5 justify-center">

@@ -193,22 +193,22 @@ function ReadNode({ unread, className = 'w-3 h-3' }) {
 
 const STORY_VARIANTS = {
   lead: {
-    shell: 'flex-col',
+    shell: 'flex-col pt:flex-1 pt:min-h-0',
     plate: 'flex-1 min-h-0 w-full',
     plateLabel: 'text-[34px]',
     // The body takes its natural height so the banner absorbs every spare
     // pixel — a hero photo earns the leftover space, dead air does not.
-    body: 'shrink-0 p-7 gap-3',
-    title: 'text-[40px] leading-[1.15] line-clamp-2',
+    body: 'shrink-0 p-7 pt:p-6 gap-3',
+    title: 'text-[40px] pt:text-[34px] leading-[1.15] line-clamp-2',
     meta: 'text-[16px]',
     chipSize: 'lg',
   },
   second: {
     shell: 'flex-row',
-    plate: 'w-[220px] h-full shrink-0',
+    plate: 'w-[220px] pt:w-[140px] h-full shrink-0',
     plateLabel: 'text-[20px]',
     body: 'flex-1 p-5 gap-2',
-    title: 'text-[23px] leading-[1.3] line-clamp-3',
+    title: 'text-[23px] pt:text-[21px] leading-[1.3] line-clamp-3',
     meta: 'text-[15px]',
     chipSize: 'sm',
   },
@@ -476,7 +476,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
   const heroImage = heroFailed ? null : fullArticle?.image || article.image || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-12">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-12 pt:p-6">
       <div
         className="absolute inset-0 bg-black/50 transition-opacity"
         style={{ opacity: visible ? 1 : 0, transitionDuration: 'var(--dur-normal)' }}
@@ -487,7 +487,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
         role="dialog"
         aria-modal="true"
         aria-labelledby={ARTICLE_TITLE_ID}
-        className="relative w-full max-w-[1240px] h-full flex flex-col overflow-hidden
+        className="relative w-full max-w-[1240px] pt:max-w-full h-full flex flex-col overflow-hidden
                    rounded-2xl bg-surf text-tp shadow-modal transition-[opacity,transform]"
         style={{
           opacity: visible ? 1 : 0,
@@ -665,9 +665,9 @@ export default function NewsPage() {
           />
         )}
 
-        <div className="flex-1 min-h-0 flex gap-6 p-6">
+        <div className="flex-1 min-h-0 flex gap-6 p-6 pt:flex-col">
           {/* Front page */}
-          <div className="flex-1 min-w-0 flex flex-col gap-6">
+          <div className="flex-1 min-w-0 flex flex-col gap-6 pt:flex-[0_0_55%] pt:min-h-0 pt:gap-4">
             <StoryCard
               article={lead}
               unread={!isRead(lead.id)}
@@ -676,7 +676,7 @@ export default function NewsPage() {
             />
 
             {seconds.length > 0 && (
-              <div className="h-[280px] shrink-0 flex gap-6">
+              <div className="h-[280px] shrink-0 flex gap-6 pt:h-[200px] pt:gap-4">
                 {seconds.map((article) => (
                   <div key={article.id} className="flex-1 min-w-0 flex">
                     <StoryCard
@@ -694,7 +694,7 @@ export default function NewsPage() {
           {/* Timeline rail */}
           {rail.length > 0 && (
             <section
-              className="w-[620px] shrink-0 flex flex-col overflow-hidden
+              className="w-[620px] pt:w-full pt:flex-1 pt:min-h-0 shrink-0 pt:shrink flex flex-col overflow-hidden
                          rounded-2xl bg-s2 border border-bd"
             >
               <header className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-bd">

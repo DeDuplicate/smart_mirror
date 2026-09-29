@@ -187,15 +187,15 @@ export default function ACControlPopup({ visible, onClose, callService }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div
         ref={popupRef}
-        className="bg-surf border border-bd rounded-2xl shadow-modal w-[420px] max-h-[90vh] overflow-hidden
+        className="bg-surf border border-bd rounded-2xl shadow-modal w-[420px] pt:w-[760px] pt:rounded-3xl max-h-[90vh] overflow-hidden
                    animate-popup-in"
         dir="rtl"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center justify-between px-5 pt-4 pb-2 pt:px-8 pt:pt-6">
           <div className="flex items-center gap-2">
-            <ModeDisplayIcon className="w-6 h-6 text-acc2" />
-            <span className="text-base font-semibold text-tp">{t.home.acControl}</span>
+            <ModeDisplayIcon className="w-6 h-6 pt:w-8 pt:h-8 text-acc2" />
+            <span className="text-base pt:text-2xl font-semibold text-tp">{t.home.acControl}</span>
           </div>
           <button
             onClick={onClose}
@@ -208,8 +208,8 @@ export default function ACControlPopup({ visible, onClose, callService }) {
         </div>
 
         {/* Status bar */}
-        <div className="px-5 pb-3">
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
+        <div className="px-5 pb-3 pt:px-8 pt:pb-5">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs pt:text-base pt:px-4 pt:py-1.5 font-medium
             ${isOn ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}>
             <span className={`w-2 h-2 rounded-full ${isOn ? 'bg-acc2' : 'bg-tm'}`} />
             {isOn ? `${t.home.acOn} - ${temp}°C ${mode === 'heat' ? t.home.acHeat : t.home.acCool}` : t.home.acOff}
@@ -217,11 +217,11 @@ export default function ACControlPopup({ visible, onClose, callService }) {
         </div>
 
         {/* On/Off toggle */}
-        <div className="px-5 pb-4">
+        <div className="px-5 pb-4 pt:px-8 pt:pb-6">
           <button
             onClick={handleToggle}
             disabled={sending}
-            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium text-sm
+            className={`w-full flex items-center justify-center gap-2 py-3 pt:min-h-[88px] pt:rounded-2xl pt:text-xl rounded-xl font-medium text-sm
               transition-all duration-[var(--dur-fast)] active:scale-[0.98]
               ${isOn
                 ? 'bg-coral/20 text-coral-d hover:bg-coral/30'
@@ -235,11 +235,11 @@ export default function ACControlPopup({ visible, onClose, callService }) {
         </div>
 
         {/* Temperature selector (horizontal scroll) */}
-        <div className="px-5 pb-4">
-          <span className="text-xs font-semibold text-ts block mb-2">{t.home.acTemp}</span>
+        <div className="px-5 pb-4 pt:px-8 pt:pb-6">
+          <span className="text-xs pt:text-base font-semibold text-ts block mb-2 pt:mb-3">{t.home.acTemp}</span>
           <div
             ref={tempScrollRef}
-            className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide"
+            className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide pt:grid pt:grid-cols-7 pt:gap-3 pt:overflow-visible pt:pb-0"
             style={{ scrollbarWidth: 'none' }}
           >
             {TEMPS.map((t_val) => (
@@ -248,7 +248,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                 data-selected={temp === t_val}
                 onClick={() => setTemp(t_val)}
                 disabled={!isOn}
-                className={`shrink-0 w-14 h-14 rounded-xl text-sm font-bold
+                className={`shrink-0 w-14 h-14 pt:w-full pt:h-20 pt:rounded-2xl pt:text-xl rounded-xl text-sm font-bold
                   transition-all duration-[var(--dur-fast)] active:scale-95
                   ${temp === t_val
                     ? 'bg-acc2 text-white shadow-card'
@@ -263,9 +263,9 @@ export default function ACControlPopup({ visible, onClose, callService }) {
         </div>
 
         {/* Mode toggle */}
-        <div className="px-5 pb-4">
-          <span className="text-xs font-semibold text-ts block mb-2">{t.home.acMode}</span>
-          <div className="flex gap-2">
+        <div className="px-5 pb-4 pt:px-8 pt:pb-6">
+          <span className="text-xs pt:text-base font-semibold text-ts block mb-2 pt:mb-3">{t.home.acMode}</span>
+          <div className="flex gap-2 pt:gap-3">
             {MODES.map((m) => {
               const Icon = m.icon;
               return (
@@ -273,7 +273,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                   key={m.key}
                   onClick={() => setMode(m.key)}
                   disabled={!isOn}
-                  className={`flex-1 flex items-center justify-center gap-2 min-h-[56px] rounded-xl text-sm font-medium
+                  className={`flex-1 flex items-center justify-center gap-2 min-h-[56px] pt:min-h-[88px] pt:rounded-2xl pt:text-lg rounded-xl text-sm font-medium
                     transition-all duration-[var(--dur-fast)] active:scale-95
                     ${mode === m.key
                       ? 'bg-acc2 text-white shadow-card'
@@ -281,7 +281,7 @@ export default function ACControlPopup({ visible, onClose, callService }) {
                     }
                     disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-4 h-4 pt:w-6 pt:h-6" />
                   {m.label}
                 </button>
               );
@@ -290,15 +290,15 @@ export default function ACControlPopup({ visible, onClose, callService }) {
         </div>
 
         {/* Fan speed */}
-        <div className="px-5 pb-5">
-          <span className="text-xs font-semibold text-ts block mb-2">{t.home.acFanSpeed}</span>
-          <div className="flex gap-2">
+        <div className="px-5 pb-5 pt:px-8 pt:pb-8">
+          <span className="text-xs pt:text-base font-semibold text-ts block mb-2 pt:mb-3">{t.home.acFanSpeed}</span>
+          <div className="flex gap-2 pt:gap-3">
             {SPEEDS.map((s) => (
               <button
                 key={s.key}
                 onClick={() => setSpeed(s.key)}
                 disabled={!isOn}
-                className={`flex-1 min-h-[56px] rounded-xl text-sm font-medium
+                className={`flex-1 min-h-[56px] pt:min-h-[88px] pt:rounded-2xl pt:text-lg rounded-xl text-sm font-medium
                   transition-all duration-[var(--dur-fast)] active:scale-95
                   ${speed === s.key
                     ? 'bg-acc text-white shadow-card'

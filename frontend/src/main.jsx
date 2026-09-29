@@ -5,6 +5,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { applyTheme, resolveIsDark } from './theme.js';
 
 applyTheme(resolveIsDark({ themeMode: 'auto' }));
+// Size the canvas for the last-used orientation before React (and settings) load.
+try { document.documentElement.dataset.orientation = localStorage.getItem('orientation') || 'landscape'; } catch { /* private mode */ }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

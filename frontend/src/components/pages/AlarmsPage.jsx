@@ -242,14 +242,14 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
   return (
     // Two fixed columns sized to fit 1080p without scrolling — touch scrolling
     // a form on the kiosk is uncomfortable, so everything stays on screen.
-    <div className="flex flex-col gap-4 rounded-3xl bg-s1 border border-bd p-5 flex-1 min-h-0 overflow-hidden">
+    <div className="flex flex-col gap-4 rounded-3xl bg-s1 border border-bd p-5 flex-1 min-h-0 overflow-hidden pt:p-8">
       <div className="flex items-center justify-between shrink-0">
         <span className="text-2xl font-bold text-tp">{draft.id ? t.alarms.edit : t.alarms.add}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-5 flex-1 min-h-0">
+      <div className="grid grid-cols-2 gap-5 flex-1 min-h-0 pt:grid-cols-1 pt:gap-8 pt:overflow-y-auto">
         {/* column 1: time + days + label */}
-        <div className="flex flex-col gap-3 min-h-0">
+        <div className="flex flex-col gap-3 min-h-0 pt:shrink-0">
           <div className="flex flex-col gap-1.5 items-center">
             <span className="text-lg text-ts self-start">{t.alarms.time}</span>
             <ClockDial
@@ -290,10 +290,10 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
         </div>
 
         {/* column 2: speakers + media */}
-        <div className="flex flex-col gap-3 min-h-0">
+        <div className="flex flex-col gap-3 min-h-0 pt:shrink-0">
           <div className="flex flex-col gap-1.5">
             <span className="text-lg text-ts">{t.alarms.speakers}</span>
-            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5 max-h-28 pt:max-h-48 overflow-y-auto">
               {[{ id: 'local', name: t.alarms.thisScreen }, ...speakers].map((s) => (
                 <button
                   key={s.id}
@@ -307,7 +307,7 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 flex-1 min-h-0">
+          <div className="flex flex-col gap-1.5 flex-1 min-h-0 pt:flex-none">
             <span className="text-lg text-ts">{t.alarms.media}</span>
             <div className="flex gap-2">
               <input
@@ -337,7 +337,7 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
             )}
 
             {searching && <span className="text-lg text-tm">{t.common.loading}</span>}
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5 pt:flex-none pt:max-h-[520px]">
               {[...results.playlists.map((p) => ({ ...p, type: 'playlist' })),
                 ...results.tracks.map((tr) => ({ ...tr, type: 'track' }))].map((item) => (
                 <button

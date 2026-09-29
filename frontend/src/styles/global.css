@@ -254,9 +254,14 @@ html[data-cursor="hidden"] * {
     touch-action: pan-x pan-y;
   }
 
+  html[data-orientation="portrait"] {
+    --app-w: 1080px;
+    --app-h: 1920px;
+  }
+
   #root {
-    width: 1920px;
-    height: 1080px;
+    width: var(--app-w, 1920px);
+    height: var(--app-h, 1080px);
     overflow: hidden;
     position: fixed;
     top: 0;

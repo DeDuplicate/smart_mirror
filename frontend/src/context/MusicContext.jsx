@@ -3,7 +3,7 @@ import useMusic from '../hooks/useMusic.js';
 
 // Persistent iframe host. Never reparent or shrink the player — YouTube
 // pauses when the iframe is moved or becomes 1–2px. Dock by CSS only,
-// in #root's unscaled 1920×1080 space (not viewport coords).
+// in #root's unscaled canvas space (not viewport coords).
 
 const MusicContext = createContext(null);
 const STAGE = 400;
@@ -13,8 +13,8 @@ function measureInRoot(el) {
   if (!el || !root) return null;
   const box = el.getBoundingClientRect();
   const rootBox = root.getBoundingClientRect();
-  const sx = rootBox.width / 1920 || 1;
-  const sy = rootBox.height / 1080 || 1;
+  const sx = rootBox.width / root.offsetWidth || 1;
+  const sy = rootBox.height / root.offsetHeight || 1;
   return {
     top: (box.top - rootBox.top) / sy,
     left: (box.left - rootBox.left) / sx,

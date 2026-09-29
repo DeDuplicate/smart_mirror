@@ -1006,7 +1006,7 @@ export default function TasksPage() {
       )}
 
       {/* Kanban columns */}
-      <div className="flex flex-1 gap-5 p-6 overflow-x-auto" {...pullBind}>
+      <div className="flex flex-1 gap-5 p-6 overflow-x-auto pt:snap-x pt:snap-mandatory pt:p-8 pt:gap-6" {...pullBind}>
         {columnDefs.map((col) => {
           const items = columns[col.key] || [];
           const isDone = col.key === 'done';
@@ -1026,7 +1026,7 @@ export default function TasksPage() {
               key={col.key}
               ref={(el) => { columnRefs.current[col.key] = el; }}
               className={`
-                flex-1 min-w-[280px] flex flex-col rounded-2xl
+                flex-1 min-w-[280px] pt:min-w-[440px] pt:snap-start flex flex-col rounded-2xl
                 transition-all duration-[var(--dur-fast)]
                 ${COLUMN_BG[col.key]}
               `}

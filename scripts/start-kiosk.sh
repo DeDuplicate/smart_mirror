@@ -55,7 +55,21 @@ xset -dpms          # disable Display Power Management Signaling
 # also fixes keyboard input as a side effect: with no WM, X focus is
 # PointerRoot, so keystrokes go to whatever is under the pointer — reliable
 # only once the window actually covers the screen.
-SCREEN=$(xrandr --current 2>/dev/null | awk '/\*/ {print $1; exit}')
+
+# ---------------------------------------------------------------------------
+# Watchdog loop — relaunch Chromium whenever it exits
+# ---------------------------------------------------------------------------
+echo "[kiosk] Entering watchdog loop. Press Ctrl-C to stop."
+while true; do
+# Apply the orientation saved in Settings before measuring the screen, so the
+# window is sized for the rotated output.
+SETTINGS=$(curl -s --max-time 3 http://localhost:3001/api/settings 2>/dev/null || true)
+ORIENTATION=$(echo "$SETTINGS" | grep -o '"orientation":"[a-z-]*"' | cut -d'"' -f4 || true)
+RESOLUTION=$(echo "$SETTINGS" | grep -o '"resolution":"[0-9a-z]*"' | cut -d'"' -f4 || true)
+"$(dirname "$0")/apply-orientation.sh" "${ORIENTATION:-landscape}" "${RESOLUTION:-auto}"
+# "current W x H" on the Screen line reflects rotation; the mode line (e.g.
+# 1920x1080*) does not, and would size the window sideways in portrait.
+SCREEN=$(xrandr --current 2>/dev/null | sed -n 's/.*current \([0-9]*\) x \([0-9]*\).*/\1x\2/p' | head -1)
 if [ -z "${SCREEN}" ] && [ -r /sys/class/graphics/fb0/virtual_size ]; then
   SCREEN=$(tr ',' 'x' < /sys/class/graphics/fb0/virtual_size)
 fi
@@ -63,12 +77,7 @@ SCREEN="${SCREEN:-1920x1080}"
 SCREEN_W="${SCREEN%x*}"
 SCREEN_H="${SCREEN#*x}"
 echo "[kiosk] Screen ${SCREEN_W}x${SCREEN_H}"
-
-# ---------------------------------------------------------------------------
-# Watchdog loop — relaunch Chromium whenever it exits
-# ---------------------------------------------------------------------------
-echo "[kiosk] Entering watchdog loop. Press Ctrl-C to stop."
-while true; do
+  # (re-measured every launch: the backend kills Chromium to apply a rotation)
   echo "[kiosk] Launching Chromium..."
   chromium-browser \
     --kiosk \

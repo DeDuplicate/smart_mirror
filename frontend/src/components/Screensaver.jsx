@@ -188,7 +188,7 @@ function ScreensaverWeather({ compact = false }) {
   const shadow = compact ? PHOTO_TEXT_SHADOW : 'none';
 
   return (
-    <div className="flex flex-col items-end select-none" dir="rtl">
+    <div className="flex flex-col items-end pt:items-start select-none" dir="rtl">
       <div className="flex items-center gap-4">
         {weather.temp != null && (
           <span
@@ -248,7 +248,7 @@ function ScreensaverForecast({ compact = false }) {
   const todayKey = toLocalDateKey(new Date());
 
   return (
-    <div className="flex flex-col items-stretch w-full select-none" dir="rtl" style={{ maxWidth: compact ? 380 : 460 }}>
+    <div className={`flex flex-col items-stretch w-full select-none pt:max-w-none ${compact ? 'max-w-[380px]' : 'max-w-[460px]'}`} dir="rtl">
       <SectionHeading label={t.weather.forecast} photo={compact} />
       <div className="flex flex-col mt-3">
         {days.map((day) => {
@@ -632,7 +632,7 @@ function ScreensaverNowPlaying({ compact = false }) {
       dir="rtl"
       {...{ [SCREENSAVER_INTERACTIVE_ATTR]: '' }}
       className={`flex items-center gap-5 rounded-3xl border border-white/10 bg-white/[0.08]
-                  ${compact ? 'p-4 max-w-[620px]' : 'p-5 w-[720px]'}`}
+                  ${compact ? 'p-4 max-w-[620px]' : 'p-5 w-[720px]'} pt:w-full pt:max-w-none`}
       style={{
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
@@ -951,8 +951,7 @@ function ScreensaverAgenda({ now, compact = false }) {
   return (
     <div
       dir="rtl"
-      className="w-full select-none"
-      style={{ maxWidth: compact ? 520 : 660 }}
+      className={`w-full select-none pt:max-w-none ${compact ? 'max-w-[520px]' : 'max-w-[660px]'}`}
     >
       <SectionHeading label={t.screensaver.upNext} photo={compact} />
       <div
@@ -1077,37 +1076,28 @@ function ScreensaverFrame({ background, topStart, topEnd, center, playerBar, bot
   return (
     <div dir="rtl" className="relative w-full h-full overflow-hidden select-none">
       {background}
+      {/* Portrait: one column, top-to-bottom — clock + agenda, then weather +
+          forecast, then the quote taking the free height, player, news. */}
       <div
-        className="relative w-full h-full"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-          gridTemplateRows: 'auto minmax(0, 1fr) auto auto',
-          columnGap: 56,
-          rowGap: 28,
-          padding: '48px 56px',
-          zIndex: 2,
-        }}
+        className="relative z-[2] w-full h-full grid
+                   grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]
+                   gap-x-14 gap-y-7 px-14 py-12
+                   pt:grid-cols-[minmax(0,1fr)] pt:grid-rows-[auto_auto_minmax(0,1fr)_auto_auto]
+                   pt:gap-y-12 pt:pt-20 pt:pb-14"
       >
-        <div className="flex flex-col items-start gap-5 min-w-0" style={{ gridColumn: 1, gridRow: 1 }}>
+        <div className="flex flex-col items-start gap-5 pt:gap-10 min-w-0 col-start-1 row-start-1">
           {topStart}
         </div>
-        <div className="flex flex-col items-end gap-4 min-w-0" style={{ gridColumn: 2, gridRow: 1 }}>
+        <div className="flex flex-col items-end gap-4 pt:gap-8 pt:items-stretch min-w-0 col-start-2 row-start-1 pt:col-start-1 pt:row-start-2">
           {topEnd}
         </div>
-        <div
-          className="flex flex-col items-center justify-center min-w-0 min-h-0 overflow-hidden"
-          style={{ gridColumn: '1 / 3', gridRow: 2 }}
-        >
+        <div className="flex flex-col items-center justify-center min-w-0 min-h-0 overflow-hidden col-start-1 col-span-2 row-start-2 pt:col-span-1 pt:row-start-3">
           {center}
         </div>
-        <div
-          className="flex items-end justify-center min-w-0"
-          style={{ gridColumn: '1 / 3', gridRow: 3 }}
-        >
+        <div className="flex items-end justify-center min-w-0 col-start-1 col-span-2 row-start-3 pt:col-span-1 pt:row-start-4">
           {playerBar}
         </div>
-        <div className="min-w-0" style={{ gridColumn: '1 / 3', gridRow: 4 }}>
+        <div className="min-w-0 col-start-1 col-span-2 row-start-4 pt:col-span-1 pt:row-start-5">
           {bottomBar}
         </div>
       </div>
@@ -1126,10 +1116,9 @@ function ScreensaverClock({ time, compact = false }) {
   return (
     <div className="flex flex-col items-start" dir="rtl">
       <div
-        className={compact ? '' : 'screensaver-clock-breathing'}
+        className={compact ? 'text-[64px] pt:text-[96px]' : 'screensaver-clock-breathing text-[120px] pt:text-[168px]'}
         style={{
           fontFamily: "'DM Mono', monospace",
-          fontSize: compact ? 64 : 120,
           fontWeight: 300,
           color: '#ffffff',
           letterSpacing: '0.05em',
@@ -1141,13 +1130,13 @@ function ScreensaverClock({ time, compact = false }) {
         <span style={{ opacity: compact ? 1 : 0.6, color: compact ? 'rgba(255,255,255,0.85)' : undefined }}>:</span>
         <span>{mm}</span>
         {!compact && (
-          <span style={{ fontSize: 60, opacity: 0.4, marginInlineStart: 24 }}>{ss}</span>
+          <span style={{ fontSize: '0.5em', opacity: 0.4, marginInlineStart: 24 }}>{ss}</span>
         )}
       </div>
 
       <p
-        className={`${compact ? 'text-white/85' : 'text-white/55'} font-light`}
-        style={{ fontSize: compact ? 16 : 22, marginTop: compact ? 10 : 16, textShadow: shadow }}
+        className={`${compact ? 'text-white/85 text-[16px] pt:text-[22px]' : 'text-white/55 text-[22px] pt:text-[28px]'} font-light`}
+        style={{ marginTop: compact ? 10 : 16, textShadow: shadow }}
       >
         {gregorian}
       </p>
@@ -1155,8 +1144,8 @@ function ScreensaverClock({ time, compact = false }) {
       {/* Hebrew calendar date + year, subordinate to the Gregorian line */}
       {hebrew && (
         <p
-          className={`${compact ? 'text-white/70' : 'text-white/35'} font-light`}
-          style={{ fontSize: compact ? 14 : 19, marginTop: 4, textShadow: shadow }}
+          className={`${compact ? 'text-white/70 text-[14px] pt:text-[19px]' : 'text-white/35 text-[19px] pt:text-[24px]'} font-light`}
+          style={{ marginTop: 4, textShadow: shadow }}
         >
           {hebrew}
         </p>

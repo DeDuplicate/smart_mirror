@@ -444,7 +444,7 @@ function DeviceTile({ entity, onToggle, onLongPress, offline }) {
 
   return (
     <div
-      className={`relative card flex flex-col items-center justify-center gap-2.5
+      className={`relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
                    cursor-pointer select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]
@@ -471,14 +471,14 @@ function DeviceTile({ entity, onToggle, onLongPress, offline }) {
 
       {/* Icon */}
       <div
-        className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
+        className={`w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
           ${on ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}
       >
         {getEntityIcon(entity)}
       </div>
 
       {/* Label */}
-      <span className="text-sm font-medium text-tp text-center leading-tight px-2 line-clamp-1">
+      <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2 line-clamp-1">
         {entity.attributes?.friendly_name || entity.entity_id}
       </span>
 
@@ -825,6 +825,7 @@ function SceneButton({ config, onActivate }) {
     <button
       onClick={handleClick}
       className={`ripple flex-1 flex items-center justify-center gap-3 min-h-[56px]
+                  pt:min-h-[88px] pt:rounded-2xl pt:text-lg
                   rounded-xl bg-surf border border-bd text-sm font-medium text-tp
                   hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                   ${pulsing ? 'animate-scene-pulse' : ''}`}
@@ -854,13 +855,13 @@ function ElectricityTile({ allStates }) {
 
   return (
     <div
-      className={`relative card flex flex-col items-center justify-center gap-2.5
+      className={`relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
                    select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]`}
       style={{ minHeight: '140px', minWidth: '180px' }}
     >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${color}`}
+      <div className={`w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center ${color}`}
         style={{ backgroundColor: isValid && watts >= 500 ? (watts > 2000 ? 'rgba(201,84,84,0.15)' : 'color-mix(in srgb, var(--amber) 15%, transparent)') : 'rgba(42,181,138,0.15)' }}
       >
         <LightningBoltIcon />
@@ -938,7 +939,7 @@ function CurtainTile({ allStates, ha, onLongPress }) {
 
   return (
     <div
-      className={`relative card flex flex-col items-center justify-center gap-2.5
+      className={`relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
                    cursor-pointer select-none overflow-hidden
                    border-2 ${borderColor}
                    transition-all duration-[var(--dur-fast)]
@@ -951,11 +952,11 @@ function CurtainTile({ allStates, ha, onLongPress }) {
       onPointerCancel={handlePressCancel}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
+      <div className={`w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
         ${isOpen ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}>
         <CurtainIcon />
       </div>
-      <span className="text-sm font-medium text-tp text-center leading-tight px-2 line-clamp-1">
+      <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2 line-clamp-1">
         {t.home.curtain}
       </span>
       <span className={`text-xs font-medium ${isOpen ? 'text-acc2' : 'text-tm'}`}>
@@ -1062,17 +1063,17 @@ function CurtainPopup({ entity, anchorRect, onClose, ha }) {
 function IRRemoteTile({ entityId, label, onTap }) {
   return (
     <div
-      className="relative card flex flex-col items-center justify-center gap-2.5
+      className="relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
                  cursor-pointer select-none overflow-hidden
                  border-2 border-bd hover:shadow-raised
                  transition-all duration-[var(--dur-fast)] active:scale-[0.98]"
       style={{ minHeight: '140px', minWidth: '180px' }}
       onClick={() => onTap(entityId)}
     >
-      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-lav-bg/50 text-lav-d">
+      <div className="w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center bg-lav-bg/50 text-lav-d">
         <RemoteControlIcon />
       </div>
-      <span className="text-sm font-medium text-tp text-center leading-tight px-2 line-clamp-1">
+      <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2 line-clamp-1">
         {label}
       </span>
       <span className="text-xs font-medium text-ts">{t.home.irRemote}</span>
@@ -1182,7 +1183,7 @@ export default function HomePage() {
   // ── Main content ──────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-hidden p-6 gap-5" dir="rtl">
+    <div className="flex flex-col h-full overflow-hidden p-6 gap-5 pt:p-8 pt:gap-6" dir="rtl">
       {haStatus === 'degraded' && (
         <ConnectionBanner
           integration={t.connection.degraded}
@@ -1192,10 +1193,11 @@ export default function HomePage() {
       )}
 
       {/* Device tiles grid */}
-      <div className="flex-1 grid grid-cols-5 grid-rows-2 gap-4 overflow-y-auto">
-        {/* AC Control tile — spans 2 columns */}
+      <div className="flex-1 grid grid-cols-5 grid-rows-2 gap-4 overflow-y-auto
+                      pt:grid-cols-2 pt:grid-rows-5 pt:gap-5">
+        {/* AC Control tile — spans 2 columns (full width row in portrait) */}
         <div
-          className="col-span-2 card flex flex-col items-center justify-center gap-2.5
+          className="col-span-2 card flex flex-col items-center justify-center gap-2.5 pt:gap-4 pt:rounded-3xl
                      cursor-pointer select-none overflow-hidden
                      border-2 border-bd hover:shadow-raised
                      transition-all duration-[var(--dur-fast)]
@@ -1203,10 +1205,10 @@ export default function HomePage() {
           style={{ minHeight: '140px' }}
           onClick={() => setAcPopupOpen(true)}
         >
-          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-s2 text-tm">
+          <div className="w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center bg-s2 text-tm">
             <SnowflakeIcon />
           </div>
-          <span className="text-sm font-medium text-tp text-center leading-tight px-2">
+          <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2">
             {t.home.ac}
           </span>
           <span className="text-xs font-medium text-tm">
@@ -1254,7 +1256,7 @@ export default function HomePage() {
               key={`empty-${i}`}
               className="card flex flex-col items-center justify-center gap-2
                          border-2 border-dashed border-bd
-                         min-h-[140px] min-w-[180px] opacity-30"
+                         min-h-[140px] min-w-[180px] opacity-30 pt:rounded-3xl"
             >
               <div className="w-10 h-10 rounded-full bg-s2 flex items-center justify-center">
                 <span className="text-tm text-lg">+</span>
@@ -1264,7 +1266,7 @@ export default function HomePage() {
       </div>
 
       {/* Scene buttons */}
-      <div className="flex gap-4 shrink-0">
+      <div className="flex gap-4 shrink-0 pt:grid pt:grid-cols-2">
         {SCENE_CONFIG.map((scene) => (
           <SceneButton
             key={scene.key}

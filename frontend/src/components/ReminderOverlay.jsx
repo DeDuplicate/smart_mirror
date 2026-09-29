@@ -98,7 +98,8 @@ function ReminderCard({ reminder, onApprove, onSnooze }) {
     >
       <div
         className="mx-6 w-full max-w-[640px] rounded-3xl bg-[var(--s1)] border border-[var(--bd)]
-                   shadow-2xl p-8 flex flex-col gap-6 text-center animate-[pulse_2s_ease-in-out_infinite]"
+                   shadow-2xl p-8 flex flex-col gap-6 text-center animate-[pulse_2s_ease-in-out_infinite]
+                   pt:max-w-[880px] pt:p-12 pt:gap-10 pt:rounded-[40px]"
         style={{ animationIterationCount: exhausted ? 0 : 'infinite' }}
       >
         <div className="flex flex-col gap-2">

@@ -31,7 +31,7 @@ function MonthEventChip({ event, onTap }) {
         e.stopPropagation();
         onTap(event);
       }}
-      className="w-full rounded-full px-2 py-0.5 text-[11px] font-medium truncate cursor-pointer
+      className="w-full rounded-full px-2 py-0.5 text-[11px] pt:py-1 pt:text-xs font-medium truncate cursor-pointer
                  hover:brightness-95 active:scale-95 transition-all duration-[var(--dur-fast)] text-start"
       style={{
         direction: 'rtl', /* Chip text is RTL inside the LTR grid */
@@ -81,7 +81,7 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
       <div className="cal-grid shrink-0 grid grid-cols-7 border-b-2"
            style={{ borderColor: 'var(--cal-line)' }}>
         {t.topBar.days.map((name, i) => (
-          <div key={i} className="bg-surf py-2 flex items-center justify-center">
+          <div key={i} className="bg-surf py-2 pt:py-3 flex items-center justify-center">
             <span className="text-xs font-semibold text-ts">{name}</span>
           </div>
         ))}
@@ -108,14 +108,14 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
               tabIndex={0}
               onClick={() => onSelectDay(date)}
               onKeyDown={(e) => { if (e.key === 'Enter') onSelectDay(date); }}
-              className={`flex flex-col items-stretch gap-1 p-1.5 min-h-0 overflow-hidden cursor-pointer
+              className={`flex flex-col items-stretch gap-1 p-1.5 pt:p-2 pt:gap-1.5 min-h-0 overflow-hidden cursor-pointer
                           active:scale-[0.98] transition-all duration-[var(--dur-fast)]
                           ${today ? 'bg-acc/[0.06]' : 'bg-bg'}
                           ${selected ? 'shadow-[inset_0_0_0_2px_var(--acc)]' : ''}`}
             >
               {/* Day number */}
               <span
-                className={`self-start text-sm font-bold leading-none w-7 h-7 flex items-center justify-center
+                className={`self-start text-sm font-bold leading-none w-7 h-7 pt:w-9 pt:h-9 pt:text-base flex items-center justify-center
                   ${today
                     ? 'bg-acc text-white rounded-full'
                     : inMonth

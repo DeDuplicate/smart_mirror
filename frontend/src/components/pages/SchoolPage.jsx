@@ -155,8 +155,8 @@ function PersonColumn({ person, avatar, onToggleItem }) {
   return (
     <div
       ref={columnRef}
-      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden"
-      style={{ minWidth: 220, flex: '1 1 0%' }}
+      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden flex-[1_1_0%] min-w-[220px] pt:min-w-[460px] pt:snap-start"
+      
     >
       {celebrating && (
         <CelebrationAnimation
@@ -295,7 +295,7 @@ export default function SchoolPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex gap-4 overflow-x-auto pb-1" style={{ minHeight: 0 }}>
+        <div className="flex-1 flex gap-4 overflow-x-auto pb-1 pt:snap-x pt:snap-mandatory pt:gap-6" style={{ minHeight: 0 }}>
           {todayPeople.map((person) => (
             <PersonColumn
               key={person.personId}

@@ -647,11 +647,10 @@ export default function MusicPage() {
         )}
       </div>
 
-      <div className="flex flex-1 overflow-hidden p-6 pt-3 gap-8">
-        <div className="flex flex-col items-center gap-4 flex-[6] min-w-0">
+      <div className="flex flex-1 overflow-hidden p-6 pt-3 gap-8 pt:flex-col pt:gap-6 pt:px-8">
+        <div className="flex flex-col items-center gap-4 flex-[6] min-w-0 pt:flex-none pt:gap-5">
           <div
-            className="rounded-3xl overflow-hidden shadow-raised bg-s2 relative"
-            style={{ width: 400, height: 400 }}
+            className="rounded-3xl overflow-hidden shadow-raised bg-s2 relative w-[400px] h-[400px] pt:w-[560px] pt:h-[560px]"
           >
             {currentTrack?.imageUrl && (
               <img
@@ -673,11 +672,11 @@ export default function MusicPage() {
             )}
           </div>
 
-          <div className="w-[400px]">
+          <div className="w-[400px] pt:w-[560px]">
             <ProgressBar progress={position} duration={duration} onSeek={seek} />
           </div>
 
-          <div className="text-center w-[400px]">
+          <div className="text-center w-[400px] pt:w-[560px]">
             <h2 className="text-xl font-semibold text-tp truncate">{track.title}</h2>
             <p className="text-lg text-ts mt-0.5 truncate">{track.artist}</p>
             {outputId !== 'local' && (
@@ -715,12 +714,12 @@ export default function MusicPage() {
             </ControlButton>
           </div>
 
-          <div className="w-[360px] mt-1">
+          <div className="w-[360px] mt-1 pt:w-[560px]">
             <VolumeSlider volume={volume} onChange={setVolume} />
           </div>
         </div>
 
-        <div className="flex flex-col flex-[4] min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-[4] min-w-0 overflow-hidden pt:min-h-0">
           <div className="flex items-center gap-2 mb-3 shrink-0">
             {[
               ['recommended', t.music.recommended],
@@ -864,7 +863,7 @@ export default function MusicPage() {
       {speakerOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setSpeakerOpen(false)} />
-          <div className="relative w-full max-w-[640px] max-h-[78%] bg-surf border border-bd rounded-t-3xl p-5 overflow-hidden flex flex-col">
+          <div className="relative w-full max-w-[640px] pt:max-w-full max-h-[78%] bg-surf border border-bd rounded-t-3xl p-5 overflow-hidden flex flex-col">
             <div className="w-12 h-1.5 rounded-full bg-bd mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-tp mb-4 text-right">{t.music.chooseSpeaker}</h3>
             <div className="overflow-y-auto flex-1 -mx-1 px-1">

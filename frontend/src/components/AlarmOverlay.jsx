@@ -199,17 +199,18 @@ export default function AlarmOverlay() {
           low-end GPU. The alarm is attention-grabbing by being loud instead. */}
       <div
         className="mx-6 w-full max-w-[640px] rounded-3xl bg-[var(--s1)] border border-[var(--bd)]
-                   shadow-2xl p-8 flex flex-col gap-6 text-center items-center"
+                   shadow-2xl p-8 flex flex-col gap-6 text-center items-center
+                   pt:max-w-[880px] pt:p-12 pt:gap-10 pt:rounded-[40px]"
       >
         <MediaThumb
           videoId={alarm.media_type === 'track' ? alarm.media_id : null}
           imageUrl={alarm.media_image}
-          className="w-32 h-32 rounded-2xl shadow-lg"
+          className="w-32 h-32 pt:w-48 pt:h-48 rounded-2xl shadow-lg"
           iconClassName="w-12 h-12"
         />
         <div className="flex flex-col gap-2">
           <span className="text-2xl text-ts">{alarm.label || t.alarms.title}</span>
-          <span className="text-6xl font-bold text-[var(--tp)]" dir="ltr">{alarm.time}</span>
+          <span className="text-6xl pt:text-8xl font-bold text-[var(--tp)]" dir="ltr">{alarm.time}</span>
           <span className="text-2xl text-acc font-semibold break-words">{alarm.media_title}</span>
           <span className="text-lg text-tm">
             {playbackError ? t.music.castError : t.alarms.ringing}

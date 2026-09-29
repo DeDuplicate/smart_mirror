@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
+import React, { useEffect, useRef, useState, useCallback, Suspense, useLayoutEffect } from 'react';
 import { io } from 'socket.io-client';
 import './styles/global.css';
 import useStore, { TAB_INDEX, UPDATE_INITIATOR_KEY } from './store/index.js';
@@ -288,13 +288,14 @@ function SetupWizard({ onComplete }) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-bg flex items-center justify-center">
-      <div className="bg-surf rounded-2xl shadow-modal p-10 w-[600px] min-h-[400px] flex flex-col">
+      <div className="bg-surf rounded-2xl shadow-modal p-10 w-[600px] min-h-[400px] flex flex-col
+                      pt:w-[920px] pt:min-h-[1100px] pt:p-14 pt:rounded-[32px]">
         {/* Progress */}
-        <div className="flex gap-1.5 mb-8">
+        <div className="flex gap-1.5 mb-8 pt:gap-2 pt:mb-12">
           {steps.map((_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 rounded-full transition-colors duration-[var(--dur-normal)] ${
+              className={`h-1 pt:h-1.5 flex-1 rounded-full transition-colors duration-[var(--dur-normal)] ${
                 i <= step ? 'bg-acc' : 'bg-bd'
               }`}
             />
@@ -305,10 +306,10 @@ function SetupWizard({ onComplete }) {
         <div className="flex-1 flex flex-col justify-center">
           {step === 0 && (
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-tp mb-3">
+              <h1 className="text-4xl pt:text-5xl font-bold text-tp mb-3 pt:mb-5">
                 {t.setup.welcome}
               </h1>
-              <p className="text-ts text-lg">{t.setup.welcomeSubtitle}</p>
+              <p className="text-ts text-lg pt:text-xl">{t.setup.welcomeSubtitle}</p>
             </div>
           )}
 
@@ -463,7 +464,7 @@ function SetupWizard({ onComplete }) {
                     <p className="text-sm text-ts mb-2 font-medium" dir="rtl">
                       {haEntityCount} entities
                     </p>
-                    <div className="bg-s2 border border-bd rounded-xl p-3 max-h-[160px] overflow-y-auto
+                    <div className="bg-s2 border border-bd rounded-xl p-3 max-h-[160px] pt:max-h-[360px] overflow-y-auto
                                     flex flex-wrap gap-2">
                       {Object.entries(haEntities).map(([domain, entities]) => (
                         <span
@@ -514,7 +515,7 @@ function SetupWizard({ onComplete }) {
               </h2>
               <p className="text-ts mb-6">{t.setup.newsSourcesDesc}</p>
 
-              <div className="flex flex-col divide-y divide-bd bg-s2 border border-bd rounded-xl overflow-hidden max-h-[280px] overflow-y-auto">
+              <div className="flex flex-col divide-y divide-bd bg-s2 border border-bd rounded-xl overflow-hidden max-h-[280px] pt:max-h-[720px] overflow-y-auto">
                 {sourceCatalog.length === 0 && (
                   <div className="px-5 py-4 text-sm text-ts">{t.common.loading}</div>
                 )}
@@ -557,11 +558,11 @@ function SetupWizard({ onComplete }) {
         </div>
 
         {/* Navigation */}
-        <div className="flex items-center justify-between mt-8 pt-6 border-t border-bd">
+        <div className="flex items-center justify-between mt-8 pt-6 border-t border-bd pt:mt-12 pt:pt-8">
           <button
             onClick={handleBack}
             disabled={step === 0}
-            className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-[var(--dur-fast)]
+            className={`px-5 py-2.5 pt:px-8 pt:min-h-[64px] pt:text-lg rounded-xl font-medium transition-all duration-[var(--dur-fast)]
               ${step === 0
                 ? 'text-tm cursor-not-allowed'
                 : 'text-ts hover:bg-s2 active:scale-95'
@@ -575,7 +576,7 @@ function SetupWizard({ onComplete }) {
             {step > 2 && step < 6 && (
               <button
                 onClick={handleNext}
-                className="px-5 py-2.5 text-ts hover:bg-s2 rounded-xl font-medium
+                className="px-5 py-2.5 pt:px-8 pt:min-h-[64px] pt:text-lg text-ts hover:bg-s2 rounded-xl font-medium
                            active:scale-95 transition-all duration-[var(--dur-fast)]"
               >
                 {t.setup.skip}
@@ -583,7 +584,7 @@ function SetupWizard({ onComplete }) {
             )}
             <button
               onClick={handleNext}
-              className="px-6 py-2.5 bg-acc text-white rounded-xl font-medium
+              className="px-6 py-2.5 pt:px-10 pt:min-h-[64px] pt:text-lg bg-acc text-white rounded-xl font-medium
                          hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
             >
               {step === steps.length - 1 ? t.setup.letsStart : t.common.next}
@@ -667,18 +668,45 @@ export default function App() {
     };
   }, []);
 
+  // ── Orientation: <html data-orientation> drives the canvas size + `pt:` styles ──
+  const orientation = useStore((s) => (s.settings.orientation ? (String(s.settings.orientation).startsWith('portrait') ? 'portrait' : 'landscape') : null));
+  useLayoutEffect(() => {
+    // null = settings not loaded yet: keep the localStorage value main.jsx applied
+    if (!orientation) return;
+    document.documentElement.dataset.orientation = orientation;
+    try { localStorage.setItem('orientation', orientation); } catch { /* private mode */ }
+  }, [orientation]);
+
   // ── Multi-resolution scale ──
+  // Uniform scale that fits the 1920x1080 (or 1080x1920) design box, times the
+  // user's zoom. The canvas is then stretched to fill the viewport, so other
+  // aspect ratios get extra room instead of a squashed layout.
+  const uiZoom = useStore((s) => Math.min(150, Math.max(50, Number(s.settings.uiZoom) || 100)) / 100);
   useEffect(() => {
     function updateScale() {
       const root = document.getElementById('root');
       if (!root) return;
-      root.style.setProperty('--app-scale-x', String(window.innerWidth / 1920));
-      root.style.setProperty('--app-scale-y', String(window.innerHeight / 1080));
+      const portrait = document.documentElement.dataset.orientation === 'portrait';
+      const [bw, bh] = portrait ? [1080, 1920] : [1920, 1080];
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const fit = Math.min(vw / bw, vh / bh);
+      const scale = fit * uiZoom;
+      // Viewport shaped the other way (portrait chosen on a landscape monitor,
+      // e.g. before the Pi rotates or in a desktop browser): don't stretch a
+      // portrait layout wide — show the true design box, centered.
+      const mismatch = portrait !== vh > vw;
+      root.style.width = `${mismatch ? bw / uiZoom : vw / scale}px`;
+      root.style.height = `${mismatch ? bh / uiZoom : vh / scale}px`;
+      root.style.left = mismatch ? `${(vw - bw * fit) / 2}px` : '0px';
+      root.style.top = mismatch ? `${(vh - bh * fit) / 2}px` : '0px';
+      root.style.setProperty('--app-scale-x', String(scale));
+      root.style.setProperty('--app-scale-y', String(scale));
     }
     updateScale();
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
-  }, []);
+  }, [orientation, uiZoom]);
 
   // ── Global error handlers — surface unhandled errors as toasts ──
   useEffect(() => {
@@ -918,14 +946,14 @@ export default function App() {
   // Show nothing until settings are loaded
   if (!settingsLoaded && !showWizard) {
     return (
-      <div className="w-[1920px] h-[1080px] flex items-center justify-center bg-bg">
+      <div className="w-full h-full flex items-center justify-center bg-bg">
         <div className="skeleton w-32 h-8" />
       </div>
     );
   }
 
   return (
-    <div className="w-[1920px] h-[1080px] flex flex-col bg-bg overflow-hidden relative">
+    <div className="w-full h-full flex flex-col bg-bg overflow-hidden relative">
       {/* Setup Wizard overlay */}
       {showWizard && <SetupWizard onComplete={handleWizardComplete} />}
 
