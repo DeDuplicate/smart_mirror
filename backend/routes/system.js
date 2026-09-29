@@ -810,7 +810,12 @@ router.post('/update', async (req, res) => {
   logger.info('Starting update from %s', previousCommit);
 
   const stages = [
-    { name: 'pull',          cmd: 'git', args: ['pull', 'origin', 'main'], cwd: PROJECT_ROOT },
+    // Fetch + hard reset, not `git pull`: the mirror is a deploy-only checkout
+    // (the dirty-tree guard above has already ruled out local edits), and a
+    // force-pushed/rewritten origin made `pull` fail with "divergent branches"
+    // on every update, forever, with no way to recover from the screen.
+    { name: 'pull',          cmd: 'git', args: ['fetch', 'origin', 'main'], cwd: PROJECT_ROOT },
+    { name: 'pull',          cmd: 'git', args: ['reset', '--hard', 'FETCH_HEAD'], cwd: PROJECT_ROOT },
     { name: 'backend-deps',  cmd: 'npm', args: NPM_INSTALL_ARGS, cwd: path.join(PROJECT_ROOT, 'backend') },
     // vite preview serves dist, so the frontend deps are a runtime need here,
     // not just a build-time one.
