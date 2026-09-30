@@ -15,6 +15,7 @@ import { fetchApi } from '../../hooks/useApi.js';
 import useSchool from '../../hooks/useSchool.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import WifiPopup from '../WifiPopup.jsx';
+import BluetoothPopup from '../BluetoothPopup.jsx';
 import FolderPickerPopup from '../FolderPickerPopup.jsx';
 import SmbSetupPopup from '../SmbSetupPopup.jsx';
 
@@ -76,6 +77,15 @@ function WifiIcon({ className = 'w-4 h-4' }) {
       <path d="M1.42 9a16 16 0 0 1 21.16 0" />
       <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
       <line x1="12" y1="20" x2="12.01" y2="20" />
+    </svg>
+  );
+}
+
+function BluetoothIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5" />
     </svg>
   );
 }
@@ -3445,6 +3455,98 @@ function WifiSection() {
   );
 }
 
+// ─── Section: Bluetooth speakers ─────────────────────────────────────────────
+
+function BluetoothSection() {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+
+  return (
+    <Section title={t.bluetooth.title}>
+      <div className="relative">
+        <div ref={btnRef}>
+          <Btn icon={<BluetoothIcon />} onClick={() => setOpen(true)}>
+            {t.settings.openBluetooth}
+          </Btn>
+        </div>
+        <BluetoothPopup
+          visible={open}
+          onClose={() => setOpen(false)}
+          anchorRef={btnRef}
+        />
+      </div>
+    </Section>
+  );
+}
+
+// ─── Section: Sonos speakers ─────────────────────────────────────────────────
+
+function SonosSection() {
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
+  const addToast = useStore((s) => s.addToast);
+  const debouncedSave = useDebouncedSave(updateSettings);
+  const [info, setInfo] = useState(null);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    fetchApi('/api/sonos/status').then(setInfo).catch(() => {});
+  }, []);
+
+  const handleSearch = useCallback(async () => {
+    setSearching(true);
+    try {
+      // The scan reads the saved address, so flush it first (the field saves
+      // on a debounce and the button can be pressed before that fires).
+      await updateSettings({ sonosHosts: settings.sonosHosts || '' });
+      const result = await fetchApi('/api/sonos/scan', { method: 'POST' });
+      setInfo(result);
+      if (!result.rooms.length) addToast('error', t.sonos.noneFound);
+    } catch {
+      addToast('error', t.sonos.noneFound);
+    } finally {
+      setSearching(false);
+    }
+  }, [settings.sonosHosts, updateSettings, addToast]);
+
+  return (
+    <Section title={t.sonos.title}>
+      <div className="flex flex-col gap-4">
+        <InputRow
+          label={t.sonos.hostsLabel}
+          placeholder="192.168.1.50"
+          dir="ltr"
+          value={settings.sonosHosts || ''}
+          onChange={(e) => {
+            setSettings({ sonosHosts: e.target.value });
+            debouncedSave({ sonosHosts: e.target.value });
+          }}
+        />
+        <p className="text-sm text-tm -mt-2">{t.sonos.hostsHint}</p>
+
+        <Btn icon={searching ? <Spinner /> : <RefreshIcon />} onClick={handleSearch} disabled={searching}>
+          {searching ? t.sonos.searching : t.sonos.search}
+        </Btn>
+
+        {info && info.rooms.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {info.rooms.map((room) => (
+              <div key={room.id} className="flex items-center justify-between px-4 min-h-[56px] rounded-xl bg-s2">
+                <span className="text-base text-tp">{room.name}</span>
+                {room.groupSize > 1 && (
+                  <span className="text-sm text-ts">
+                    {t.sonos.grouped.replace('{n}', String(room.groupSize - 1))}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 // ─── Section: About ──────────────────────────────────────────────────────────
 
 function formatUptime(seconds) {
@@ -3547,6 +3649,8 @@ export default function SettingsPage() {
           <NewsSection />
           <DisplaySection />
           <WifiSection />
+          <BluetoothSection />
+          <SonosSection />
           <IcsCalendarSection />
         </div>
 

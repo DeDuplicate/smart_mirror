@@ -8,6 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@svrooij/sonos": "^2.5.0",
     "better-sqlite3": "^11.7.0",
     "cheerio": "^1.2.0",
     "cors": "^2.8.5",

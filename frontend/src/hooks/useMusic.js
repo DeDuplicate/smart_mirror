@@ -98,7 +98,7 @@ async function haService(domain, service, body) {
  * off, which is far more than the user asked for.
  */
 async function stopCast(entityId, speaker = null) {
-  if (!entityId || entityId === 'local') return;
+  if (!entityId || entityId === 'local' || entityId.startsWith('bt:')) return;
   try {
     await haService('media_player', 'media_stop', { entity_id: entityId });
   } catch {
@@ -221,7 +221,9 @@ async function castTrack(track, speaker, onWaiting) {
       await castViaStream(track, entityId, onWaiting);
       return;
     } catch (streamErr) {
-      // Fall back to the Google Assistant voice command below.
+      // Only Google speakers have an Assistant to fall back on. For Sonos it
+      // would burn ~20s on voice commands that target nothing it controls.
+      if (String(entityId).startsWith('sonos:')) throw streamErr;
     }
 
     let lastErr;

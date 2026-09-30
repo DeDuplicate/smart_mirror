@@ -197,4 +197,12 @@ assert.equal(isCastDevice(), false);
 assert.equal(isCastDevice({ manufacturer: 'Unknown manufacturer', model: 'MIBOX4' }), false);
 
 
+// Sonos rooms come from the backend adapter (routes/sonos.js) reporting
+// model 'Sonos' - that is the whole contract for them landing in "speakers"
+// with the plain-audio path, and never getting Cast's turn_off.
+assert.equal(classifyKind({ entityId: 'sonos:RINCON_X', name: 'Living Room', model: 'Sonos' }), 'speaker');
+assert.equal(prefersAudioStream('speaker'), true);
+assert.equal(isCastDevice({ manufacturer: 'Sonos', model: 'Sonos' }), false);
+
+
 console.log('speakerStatus: all assertions passed');

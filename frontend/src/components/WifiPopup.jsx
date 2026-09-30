@@ -37,7 +37,7 @@ function LockIcon({ className = 'w-3.5 h-3.5' }) {
 
 // ─── Refresh icon ──────────────────────────────────────────────────────────
 
-function RefreshIcon({ className = 'w-4 h-4', spinning = false }) {
+export function RefreshIcon({ className = 'w-4 h-4', spinning = false }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round"
@@ -61,7 +61,7 @@ function CheckIcon({ className = 'w-4 h-4' }) {
 
 // ─── Spinner ───────────────────────────────────────────────────────────────
 
-function Spinner({ className = 'w-4 h-4' }) {
+export function Spinner({ className = 'w-4 h-4' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={`${className} animate-spin`}>
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />

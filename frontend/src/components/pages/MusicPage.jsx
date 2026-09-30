@@ -4,6 +4,8 @@ import MediaThumb from '../MediaThumb.jsx';
 import { useMusicContext } from '../../context/MusicContext.jsx';
 import { speakerStatus, nowPlayingLine } from '../../hooks/speakerStatus.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
+import useBluetooth from '../../hooks/useBluetooth.js';
+import useStore from '../../store/index.js';
 
 function formatTime(seconds) {
   if (!seconds || seconds < 0) return '0:00';
@@ -461,6 +463,16 @@ export default function MusicPage() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [panel, setPanel] = useState('recommended');
   const [speakerOpen, setSpeakerOpen] = useState(false);
+  // Bluetooth speakers paired in Settings. Playing "on" one is not a separate
+  // output: the mirror keeps playing locally and its audio is routed to the
+  // speaker, so it composes with everything that already targets 'local'.
+  const bt = useBluetooth();
+  const addToast = useStore((s) => s.addToast);
+  const [btBusy, setBtBusy] = useState(null);
+  const btNames = bt.audio === 'ready'
+    ? bt.saved.filter((d) => bt.route.includes(d.mac)).map((d) => d.name)
+    : [];
+  const btActive = btNames.length > 0;
   // Unreachable outputs are collapsed by default - a real HA install
   // reports a couple of dozen of them.
   const [showGone, setShowGone] = useState(false);
@@ -574,7 +586,28 @@ export default function MusicPage() {
   const handleOpenSpeakers = useCallback(() => {
     setSpeakerOpen(true);
     loadSpeakers();
-  }, [loadSpeakers]);
+    bt.refresh();
+  }, [loadSpeakers, bt.refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chooseLocal = useCallback(async () => {
+    // Moving the stream back to HDMI happens in place; only restart playback
+    // when the output really changes (leaving a cast speaker).
+    if (btActive) await bt.routeTo(['local']);
+    if (!(btActive && outputId === 'local')) setOutputId('local');
+    setSpeakerOpen(false);
+  }, [btActive, bt.routeTo, outputId, setOutputId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chooseBluetooth = useCallback(async (device) => {
+    setBtBusy(device.mac);
+    const r = await bt.routeTo([device.mac]); // connects first if the speaker is idle
+    setBtBusy(null);
+    if (!r.ok) {
+      addToast('error', t.bluetooth.routeFailed);
+      return;
+    }
+    if (outputId !== 'local') setOutputId('local'); // leave a cast speaker
+    setSpeakerOpen(false);
+  }, [bt.routeTo, outputId, setOutputId, addToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the statuses honest while the sheet is on screen: a device can start
   // or stop playing after it opened, and a row claiming "playing" for an idle
@@ -622,7 +655,7 @@ export default function MusicPage() {
             }}
             title={t.music.chooseSpeaker}
             className={`w-12 h-12 flex items-center justify-center rounded-xl shrink-0
-                        ${outputId !== 'local' ? 'text-acc bg-acc/10' : 'text-ts hover:bg-s2'}`}
+                        ${outputId !== 'local' || btActive ? 'text-acc bg-acc/10' : 'text-ts hover:bg-s2'}`}
           >
             <SpeakerIconBtn />
           </button>
@@ -683,6 +716,11 @@ export default function MusicPage() {
               <p className="text-xs text-acc mt-1 truncate">
                 {t.music.castingTo}{' '}
                 {speakers.find((s) => s.id === outputId)?.name || outputId}
+              </p>
+            )}
+            {outputId === 'local' && btActive && (
+              <p className="text-xs text-acc mt-1 truncate">
+                {t.music.castingTo} {btNames.join(', ')}
               </p>
             )}
           </div>
@@ -872,12 +910,34 @@ export default function MusicPage() {
                   first
                   last
                   kind="local"
-                  selected={outputId === 'local'}
+                  selected={outputId === 'local' && !btActive}
                   title={t.music.thisScreen}
                   status={{ key: 'thisScreen', tone: 'ready', selectable: true }}
-                  onClick={() => { setOutputId('local'); setSpeakerOpen(false); }}
+                  onClick={chooseLocal}
                 />
               </OutputGroup>
+
+              {bt.audio === 'ready' && bt.saved.length > 0 && (
+                <OutputGroup label={t.bluetooth.group}>
+                  {bt.saved.map((d, i, arr) => (
+                    <OutputRow
+                      key={d.mac}
+                      first={i === 0}
+                      last={i === arr.length - 1}
+                      kind="speaker"
+                      selected={outputId === 'local' && bt.route.includes(d.mac)}
+                      title={d.name}
+                      status={{
+                        key: d.connected ? 'btConnected' : 'btSaved',
+                        tone: d.connected ? 'ready' : 'asleep',
+                        selectable: btBusy === null,
+                      }}
+                      detail={btBusy === d.mac ? t.wifi.connecting : ''}
+                      onClick={() => chooseBluetooth(d)}
+                    />
+                  ))}
+                </OutputGroup>
+              )}
 
               {(() => {
                 const live = (s) => speakerStatus(s).selectable;

@@ -385,6 +385,7 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
 export default function AlarmsPage() {
   const [alarms, setAlarms] = useState([]);
   const [speakers, setSpeakers] = useState([]);
+  const [btSpeakers, setBtSpeakers] = useState([]);
   const [draft, setDraft] = useState(null); // null = list view
   const addToast = useStore((s) => s.addToast);
 
@@ -406,6 +407,17 @@ export default function AlarmsPage() {
         })).filter((s) => s.id && s.name)
       ))
       .catch(() => setSpeakers([]));
+  }, []);
+
+  // Paired Bluetooth speakers (only usable once the audio server is installed).
+  useEffect(() => {
+    fetchApi('/api/bluetooth/status')
+      .then((s) => setBtSpeakers(
+        s.audio === 'ready'
+          ? s.devices.filter((d) => d.paired).map((d) => ({ id: `bt:${d.mac}`, name: d.name }))
+          : []
+      ))
+      .catch(() => setBtSpeakers([]));
   }, []);
 
   const save = async (d) => {
@@ -483,7 +495,7 @@ export default function AlarmsPage() {
         <AlarmEditor
           draft={draft}
           setDraft={setDraft}
-          speakers={speakers}
+          speakers={[...btSpeakers, ...speakers]}
           onSave={save}
           onCancel={() => setDraft(null)}
         />

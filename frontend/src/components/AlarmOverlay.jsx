@@ -44,6 +44,15 @@ export default function AlarmOverlay() {
   // no overlay left on screen to stop it. Which is the one moment a person
   // reliably hits the button: the second the alarm goes off.
   const planRef = useRef({ cancelled: true });
+  // Where the mirror's audio was going before the alarm borrowed it.
+  const prevRouteRef = useRef(null);
+
+  const restoreRoute = () => {
+    const prev = prevRouteRef.current;
+    prevRouteRef.current = null;
+    if (!prev) return;
+    fetchApi('/api/bluetooth/route', { method: 'POST', body: JSON.stringify({ targets: prev }) }).catch(() => {});
+  };
 
   // Each press of the button is worth one more multiple of the base, and the
   // count comes back on the alarm itself, so the label says what this press
@@ -51,8 +60,11 @@ export default function AlarmOverlay() {
   const nextSnoozeMin = Math.min(MAX_SNOOZE_MIN, snoozeBase * ((alarm?.snooze_count || 0) + 1));
 
   const speakers = alarm?.speakers || [];
-  const useLocal = speakers.includes('local');
-  const targets = speakers.filter((s) => s !== 'local');
+  // A Bluetooth speaker ('bt:<MAC>') is the mirror's own audio routed
+  // elsewhere, so it plays through the local player, not a Home Assistant cast.
+  const btTargets = speakers.filter((s) => s.startsWith('bt:')).map((s) => s.slice(3));
+  const useLocal = speakers.includes('local') || btTargets.length > 0;
+  const targets = speakers.filter((s) => s !== 'local' && !s.startsWith('bt:'));
   const steps = ladderFor(alarm);
   const currentStepVolume = () => steps[Math.min(stepRef.current, steps.length - 1)];
 
@@ -109,6 +121,17 @@ export default function AlarmOverlay() {
           if (plan.cancelled) return;
           music.setOutputId('local', { stopPrev: false });
         }
+        if (btTargets.length) {
+          const r = await fetchApi('/api/bluetooth/route', {
+            method: 'POST',
+            body: JSON.stringify({ targets: [...(speakers.includes('local') ? ['local'] : []), ...btTargets] }),
+          }).catch(() => ({ ok: false }));
+          if (r.ok) prevRouteRef.current = r.previous || null;
+          if (plan.cancelled) { restoreRoute(); return; }
+          // A speaker that is off must not silence the alarm: it then rings
+          // on the screen instead, which is the lesser failure.
+          if (!r.ok) addToast('error', t.bluetooth.routeFailed);
+        }
         prevVolumeRef.current = music.volume;
         music.playTrack(track, playlistRest);
         // persist:false — an unanswered alarm must not become the saved
@@ -164,6 +187,7 @@ export default function AlarmOverlay() {
       if (prevVolumeRef.current != null) {
         music.setVolume(prevVolumeRef.current, { persist: false });
       }
+      restoreRoute();
     }
     firedFor.current = null;
   };

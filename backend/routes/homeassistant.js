@@ -1,6 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
+const sonos = require('./sonos');
 const router = Router();
 
 // ---------------------------------------------------------------------------
@@ -131,8 +132,12 @@ async function fetchDeviceMeta(logger) {
 }
 
 router.get('/media-players', async (req, res) => {
-  if (!ensureConfigured(res)) return;
   const logger = req.app.locals.logger;
+
+  // Sonos rooms are controlled directly, so they are listed even when Home
+  // Assistant is unconfigured or down.
+  const sonosPlayers = await sonos.players().catch(() => []);
+  if (!getHAConfig().token) return res.json({ players: sonosPlayers });
 
   try {
     const { host } = getHAConfig();
@@ -154,14 +159,18 @@ router.get('/media-players', async (req, res) => {
     }
 
     res.json({
-      players: states.map((e) => ({
-        ...e,
-        model: meta[e.entity_id]?.model || '',
-        manufacturer: meta[e.entity_id]?.manufacturer || '',
-      })),
+      players: [
+        ...states.map((e) => ({
+          ...e,
+          model: meta[e.entity_id]?.model || '',
+          manufacturer: meta[e.entity_id]?.manufacturer || '',
+        })),
+        ...sonosPlayers,
+      ],
     });
   } catch (err) {
     logger.error('HA media-players error: %s', err.message);
+    if (sonosPlayers.length) return res.json({ players: sonosPlayers });
     res.status(502).json({ error: err.message });
   }
 });
@@ -211,10 +220,20 @@ router.get('/entities', async (req, res) => {
 // POST /api/ha/services/:domain/:service — call HA service
 // ---------------------------------------------------------------------------
 router.post('/services/:domain/:service', async (req, res) => {
-  if (!ensureConfigured(res)) return;
   const logger = req.app.locals.logger;
-
   const { domain, service } = req.params;
+
+  if (domain === 'media_player' && sonos.owns(req.body?.entity_id)) {
+    try {
+      await sonos.act(service, req.body);
+      return res.json({ result: [] });
+    } catch (err) {
+      logger.error('Sonos %s error: %s', service, err.message);
+      return res.status(502).json({ error: err.message });
+    }
+  }
+
+  if (!ensureConfigured(res)) return;
 
   try {
     const { host } = getHAConfig();
@@ -431,9 +450,15 @@ router.post('/todo/:entity_id/remove', async (req, res) => {
 // ~383 entity states each tick).
 // ---------------------------------------------------------------------------
 router.get('/state/:entity_id', async (req, res) => {
-  if (!ensureConfigured(res)) return;
   const logger = req.app.locals.logger;
   const entityId = req.params.entity_id;
+
+  if (sonos.owns(entityId)) {
+    const st = await sonos.state(entityId);
+    return st ? res.json({ state: st }) : res.status(404).json({ error: 'unknown Sonos speaker' });
+  }
+
+  if (!ensureConfigured(res)) return;
 
   try {
     const { host } = getHAConfig();
