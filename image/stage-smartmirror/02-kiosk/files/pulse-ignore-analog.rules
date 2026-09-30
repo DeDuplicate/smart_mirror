@@ -1,0 +1,7 @@
+# Keep the 3.5mm jack out of PulseAudio.
+#
+# With it present PulseAudio picks the jack as the DEFAULT output (highest
+# priority), so a mirror with only HDMI wired plays its music into an empty
+# socket - the same trap /etc/asound.conf avoids for plain ALSA. HDMI and
+# Bluetooth sinks are unaffected.
+SUBSYSTEM=="sound", KERNEL=="card*", ATTR{id}=="Headphones", ENV{PULSE_IGNORE}="1"

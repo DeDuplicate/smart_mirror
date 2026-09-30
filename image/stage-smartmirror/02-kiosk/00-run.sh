@@ -25,6 +25,11 @@ install -m 644 files/keyboard "${ROOTFS_DIR}/etc/default/keyboard"
 # through its "hdmi:" plug device (not a bare "hw:") or playback fails outright.
 install -m 644 files/asound.conf "${ROOTFS_DIR}/etc/asound.conf"
 
+# Bluetooth speakers need a sound server (PulseAudio, installed by
+# 00-packages/00-packages-nr). Left alone it would make the analog jack the
+# default output, undoing the HDMI default above, so hide the jack from it.
+install -m 644 files/pulse-ignore-analog.rules   "${ROOTFS_DIR}/etc/udev/rules.d/91-smart-mirror-pulse-ignore-analog.rules"
+
 # Enterprise policy backstop for the Chromium "Translate this page?" bubble.
 # start-kiosk.sh already passes --disable-features=Translate,TranslateUI, but
 # Chromium switches are one flag rename away from silently stopping to work

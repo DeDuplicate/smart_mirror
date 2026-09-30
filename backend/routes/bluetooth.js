@@ -14,6 +14,7 @@ const { Router } = require('express');
 const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const router = Router();
 
 const IS_LINUX = os.platform() === 'linux';
@@ -21,10 +22,18 @@ const MAC_RE = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i;
 const AUDIO_PKGS = ['pulseaudio', 'pulseaudio-module-bluetooth', 'pulseaudio-utils'];
 const COMBINED = 'mirror_out'; // module-combine-sink name, used when >1 target
 // The backend runs as a systemd *system* service, so it has no XDG_RUNTIME_DIR;
-// without it pactl cannot find the user's PulseAudio socket.
+// without it pactl cannot find the user's PulseAudio socket. The session bus
+// address is for `systemctl --user`, which needs it to reach the user manager.
 const PA_ENV = IS_LINUX
-  ? { ...process.env, XDG_RUNTIME_DIR: `/run/user/${process.getuid()}` }
+  ? {
+    ...process.env,
+    XDG_RUNTIME_DIR: `/run/user/${process.getuid()}`,
+    DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${process.getuid()}/bus`,
+  }
   : process.env;
+// Shipped by the image and setup.sh too; see the file for why it exists.
+const PULSE_RULE_SRC = path.join(__dirname, '..', '..', 'image', 'stage-smartmirror', '02-kiosk', 'files', 'pulse-ignore-analog.rules');
+const PULSE_RULE_DST = '/etc/udev/rules.d/91-smart-mirror-pulse-ignore-analog.rules';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -426,7 +435,16 @@ router.post('/install-audio', (req, res) => {
         return;
       }
       logger.info('Bluetooth audio packages installed');
-      await pactl(['info']); // socket-activates the user's PulseAudio
+      // Hide the analog jack BEFORE PulseAudio first starts, or it becomes the
+      // default output and the mirror goes silent on HDMI.
+      await run('sudo', ['-n', 'install', '-m', '644', PULSE_RULE_SRC, PULSE_RULE_DST]);
+      await run('sudo', ['-n', 'udevadm', 'control', '--reload']);
+      await run('sudo', ['-n', 'udevadm', 'trigger', '--subsystem-match=sound', '--action=change']);
+      // The running user session predates the install, so it has not loaded
+      // the new PulseAudio units ("Connection refused" until it does).
+      await run('systemctl', ['--user', 'daemon-reload'], 15000, PA_ENV);
+      await run('systemctl', ['--user', 'start', 'pulseaudio.socket'], 15000, PA_ENV);
+      await pactl(['info']);
       // Chromium chooses ALSA vs PulseAudio once, at startup. The kiosk
       // watchdog relaunches it (same as a display change).
       execFile('pkill', ['-f', 'chromium'], () => {});

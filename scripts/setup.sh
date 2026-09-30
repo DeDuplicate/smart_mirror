@@ -167,6 +167,23 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 9b. Bluetooth speaker audio (PulseAudio)
+# ---------------------------------------------------------------------------
+# Needed to route the mirror's sound to a Bluetooth speaker. No recommends: the
+# default set drags in ImageMagick and Ghostscript. The udev rule hides the
+# analog jack so PulseAudio defaults to HDMI, matching /etc/asound.conf above.
+info "Installing Bluetooth audio support (PulseAudio)..."
+sudo apt-get install -y --no-install-recommends bluez pulseaudio pulseaudio-module-bluetooth pulseaudio-utils
+PULSE_RULE_SRC="${PROJECT_DIR}/image/stage-smartmirror/02-kiosk/files/pulse-ignore-analog.rules"
+if [ -f "${PULSE_RULE_SRC}" ]; then
+  sudo install -m 644 "${PULSE_RULE_SRC}" /etc/udev/rules.d/91-smart-mirror-pulse-ignore-analog.rules
+  sudo udevadm control --reload
+  success "Bluetooth audio configured (analog jack hidden from PulseAudio)."
+else
+  error "pulse-ignore-analog.rules not found in the repo - PulseAudio may default to the analog jack."
+fi
+
+# ---------------------------------------------------------------------------
 # 10. Summary
 # ---------------------------------------------------------------------------
 LOCAL_IP="$(hostname -I | awk '{print $1}')"
