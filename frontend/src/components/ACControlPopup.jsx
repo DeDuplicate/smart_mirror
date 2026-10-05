@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import useStore from '../store/index.js';
+import {
+  acModes, acTemps, acFans, findAcPreset, acDefaultSelection, acSelectMode, acStepTemp,
+} from '../hooks/homeModel.js';
 import t from '../i18n/he.json';
+
+// The popup offers exactly the presets Home Assistant has for this room (see
+// GET /api/ha/ac-presets): the modes, the temperatures each mode has and the fan
+// speeds for that combination. It used to guess script names from a temperature
+// dial, so nearly every press called a script that did not exist.
 
 // ─── Icons ─────────────────────────────────────────────────────────────────
 
 function SnowflakeIcon({ className = 'w-5 h-5' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <line x1="12" y1="2" x2="12" y2="22" />
       <path d="M20 12H4" />
       <path d="m6 6 12 12" />
@@ -22,7 +31,7 @@ function SnowflakeIcon({ className = 'w-5 h-5' }) {
 function FlameIcon({ className = 'w-5 h-5' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M12 22c4-3.5 7-7.5 7-11a7 7 0 0 0-14 0c0 3.5 3 7.5 7 11z" />
       <path d="M12 22c-1.5-1.3-2.5-3-2.5-5a2.5 2.5 0 0 1 5 0c0 2-1 3.7-2.5 5z" />
     </svg>
@@ -32,7 +41,7 @@ function FlameIcon({ className = 'w-5 h-5' }) {
 function CloseIcon({ className = 'w-5 h-5' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
@@ -42,275 +51,267 @@ function CloseIcon({ className = 'w-5 h-5' }) {
 function PowerIcon({ className = 'w-5 h-5' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64" />
       <line x1="12" y1="2" x2="12" y2="12" />
     </svg>
   );
 }
 
-// ─── Temperature Range ─────────────────────────────────────────────────────
+function StepIcon({ up, className = 'w-6 h-6' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      {up && <line x1="12" y1="5" x2="12" y2="19" />}
+    </svg>
+  );
+}
 
-const TEMPS = [];
-for (let i = 18; i <= 30; i++) TEMPS.push(i);
+// ─── Labels ────────────────────────────────────────────────────────────────
 
-const MODES = [
-  { key: 'cool', label: t.home.acCool, icon: SnowflakeIcon },
-  { key: 'heat', label: t.home.acHeat, icon: FlameIcon },
-];
+const MODE_LABEL = { cold: t.home.acCool, heat: t.home.acHeat };
+const MODE_ICON = { cold: SnowflakeIcon, heat: FlameIcon };
+const FAN_LABEL = { low: t.home.acFanLow, mid: t.home.acFanMid, high: t.home.acFanHigh, auto: t.home.auto };
+const MONO = { fontFamily: "'DM Mono', monospace" };
 
-const SPEEDS = [
-  { key: 'low', label: t.home.acFanLow },
-  { key: 'mid', label: t.home.acFanMid },
-  { key: 'high', label: t.home.acFanHigh },
-];
+const modeLabel = (mode) => MODE_LABEL[mode] || mode;
+const fanLabel = (fan) => FAN_LABEL[fan] || fan;
+const describe = (sel) => `${modeLabel(sel.mode)} ${sel.temp}° · ${fanLabel(sel.fan)}`;
+
+// What was last sent from this screen. IR is one-way, so this is a memory of the
+// press, not a reading of the air conditioner - the popup says so by wording it
+// "last sent" and never "is on".
+const lastKey = (remote) => `smartMirror.ac.last.${remote}`;
+function readLast(remote) {
+  try { return localStorage.getItem(lastKey(remote)) || ''; } catch { return ''; }
+}
+function writeLast(remote, text) {
+  try { localStorage.setItem(lastKey(remote), text); } catch { /* private mode */ }
+}
+
+// ─── Segmented control ─────────────────────────────────────────────────────
+
+function Segmented({ label, options, value, onChange }) {
+  return (
+    <div>
+      <span className="block text-sm pt:text-base font-semibold text-ts mb-2 pt:mb-3">{label}</span>
+      <div className="flex gap-2 pt:gap-3" role="radiogroup" aria-label={label}>
+        {options.map((o) => {
+          const selected = o.value === value;
+          const Icon = o.icon;
+          return (
+            <button
+              key={o.value}
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(o.value)}
+              className={`ripple flex-1 flex items-center justify-center gap-2 min-h-[56px] pt:min-h-[80px]
+                          rounded-xl border text-base pt:text-xl font-medium
+                          active:scale-95 transition-all duration-[var(--dur-fast)]
+                          ${selected ? 'bg-acc text-white border-transparent' : 'bg-s2 text-tp border-bd hover:bg-bd'}`}
+            >
+              {Icon && <Icon className="w-5 h-5" />}
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ─── ACControlPopup ───────────────────────────────────────────────────────
 
-export default function ACControlPopup({ visible, onClose, callService }) {
+/**
+ * `room` = { name, remote }; `presets` = that blaster's entry from
+ * /api/ha/ac-presets: { off: 'script.x' | null, on: [{ mode, temp, fan, script }] }.
+ */
+export default function ACControlPopup({ visible, room, presets, onClose, callService }) {
+  const addToast = useStore((s) => s.addToast);
   const popupRef = useRef(null);
-  const tempScrollRef = useRef(null);
+  const sentTimerRef = useRef(null);
 
-  const [isOn, setIsOn] = useState(false);
-  const [mode, setMode] = useState('cool');
-  const [temp, setTemp] = useState(24);
-  const [speed, setSpeed] = useState('low');
+  const [sel, setSel] = useState(null);
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(null); // 'on' | 'off' for a moment after a press
+  const [last, setLast] = useState('');
 
-  // Close on click outside
+  // Start from the first preset HA has, and re-read what was last sent for this room.
   useEffect(() => {
-    if (!visible) return;
-    function handleClickOutside(e) {
-      if (popupRef.current && !popupRef.current.contains(e.target)) {
-        onClose();
-      }
-    }
-    const timer = setTimeout(() => {
-      document.addEventListener('pointerdown', handleClickOutside);
-    }, 50);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('pointerdown', handleClickOutside);
-    };
+    if (!visible || !room) return;
+    setSel(acDefaultSelection(presets));
+    setLast(readLast(room.remote));
+    setSent(null);
+  }, [visible, room, presets]);
+
+  useEffect(() => () => clearTimeout(sentTimerRef.current), []);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [visible, onClose]);
 
-  // Close on Escape
-  useEffect(() => {
-    if (!visible) return;
-    function handleKey(e) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [visible, onClose]);
-
-  // Scroll to selected temp on open
-  useEffect(() => {
-    if (visible && tempScrollRef.current) {
-      const selected = tempScrollRef.current.querySelector('[data-selected="true"]');
-      if (selected) {
-        selected.scrollIntoView({ inline: 'center', behavior: 'smooth' });
-      }
-    }
-  }, [visible]);
-
-  // Build script entity_id and call it
-  const sendCommand = useCallback(async () => {
-    if (!callService) return;
+  const send = useCallback(async (kind) => {
+    const preset = kind === 'off' ? { script: presets?.off } : findAcPreset(presets, sel || {});
+    if (!preset?.script || !callService) return;
     setSending(true);
     try {
-      if (!isOn) {
-        // Turn off: call script.aircon_off if exists, or a generic off script
-        await callService('script', 'turn_on', { entity_id: 'script.aircon_off' });
-      } else {
-        // Pattern: script.aircon_{mode}_{temp}_{speed} for cool
-        // or script.aircon_heat_{temp}_{speed} for heat
-        let entityId;
-        if (mode === 'heat') {
-          entityId = `script.aircon_heat_${temp}_${speed}`;
-        } else {
-          entityId = `script.aircon_${temp}_${speed}_on`;
-        }
-        await callService('script', 'turn_on', { entity_id: entityId });
-      }
-    } catch (err) {
-      console.error('AC command failed:', err);
+      await callService('script', 'turn_on', { entity_id: preset.script });
+      const text = kind === 'off' ? t.home.acOff : describe(sel);
+      writeLast(room.remote, text);
+      setLast(text);
+      setSent(kind);
+      clearTimeout(sentTimerRef.current);
+      sentTimerRef.current = setTimeout(() => setSent(null), 1200);
+    } catch {
+      addToast('error', t.home.acSendFailed);
     } finally {
       setSending(false);
     }
-  }, [callService, isOn, mode, temp, speed]);
+  }, [presets, sel, callService, room, addToast]);
 
-  // Auto-send when toggling on/off
-  const handleToggle = useCallback(() => {
-    const next = !isOn;
-    setIsOn(next);
-    // Defer command to next tick so state is updated
-    setTimeout(async () => {
-      if (!callService) return;
-      setSending(true);
-      try {
-        if (!next) {
-          await callService('script', 'turn_on', { entity_id: 'script.aircon_off' });
-        } else {
-          let entityId;
-          if (mode === 'heat') {
-            entityId = `script.aircon_heat_${temp}_${speed}`;
-          } else {
-            entityId = `script.aircon_${temp}_${speed}_on`;
-          }
-          await callService('script', 'turn_on', { entity_id: entityId });
-        }
-      } catch (err) {
-        console.error('AC command failed:', err);
-      } finally {
-        setSending(false);
-      }
-    }, 0);
-  }, [isOn, callService, mode, temp, speed]);
+  if (!visible || !room) return null;
 
-  // Send command when changing settings while AC is on
-  useEffect(() => {
-    if (isOn && !sending) {
-      const timer = setTimeout(() => {
-        sendCommand();
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [mode, temp, speed]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!visible) return null;
-
-  const modeIcon = mode === 'heat' ? FlameIcon : SnowflakeIcon;
-  const ModeDisplayIcon = modeIcon;
+  const modes = acModes(presets);
+  const temps = sel ? acTemps(presets, sel.mode) : [];
+  const fans = sel ? acFans(presets, sel.mode, sel.temp) : [];
+  const hasPresets = Boolean(sel);
+  const hasOff = Boolean(presets?.off);
+  const canStep = temps.length > 1;
+  const idx = sel ? temps.indexOf(sel.temp) : -1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div
         ref={popupRef}
-        className="bg-surf border border-bd rounded-2xl shadow-modal w-[420px] pt:w-[760px] pt:rounded-3xl max-h-[90vh] overflow-hidden
-                   animate-popup-in"
+        className="bg-surf border border-bd rounded-2xl shadow-modal w-[440px] pt:w-[760px] max-h-[92vh] overflow-y-auto
+                   p-6 pt:p-10 flex flex-col gap-5 pt:gap-8 animate-popup-in"
         dir="rtl"
+        role="dialog"
+        aria-label={t.home.acRoomTitle.replace('{room}', room.name)}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-4 pb-2 pt:px-8 pt:pt-6">
-          <div className="flex items-center gap-2">
-            <ModeDisplayIcon className="w-6 h-6 pt:w-8 pt:h-8 text-acc2" />
-            <span className="text-base pt:text-2xl font-semibold text-tp">{t.home.acControl}</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {sel && (() => { const Icon = MODE_ICON[sel.mode] || SnowflakeIcon; return <Icon className="w-7 h-7 pt:w-9 pt:h-9 text-lav-d" />; })()}
+            <h3 className="text-xl pt:text-3xl font-bold text-tp">{t.home.acRoomTitle.replace('{room}', room.name)}</h3>
           </div>
           <button
             onClick={onClose}
             aria-label={t.common.close}
-            className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm hover:bg-s2
-                       transition-colors active:scale-95"
+            className="min-w-[56px] min-h-[56px] rounded-full flex items-center justify-center text-tm
+                       hover:bg-s2 transition-colors active:scale-95"
           >
-            <CloseIcon className="w-4 h-4" />
+            <CloseIcon className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Status bar */}
-        <div className="px-5 pb-3 pt:px-8 pt:pb-5">
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs pt:text-base pt:px-4 pt:py-1.5 font-medium
-            ${isOn ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}>
-            <span className={`w-2 h-2 rounded-full ${isOn ? 'bg-acc2' : 'bg-tm'}`} />
-            {isOn ? `${t.home.acOn} - ${temp}°C ${mode === 'heat' ? t.home.acHeat : t.home.acCool}` : t.home.acOff}
-          </div>
+        {!hasPresets && (
+          <p className="text-base pt:text-xl text-ts leading-relaxed">{t.home.acNoPresets}</p>
+        )}
+
+        {hasPresets && (
+          <>
+            {modes.length > 1 && (
+              <Segmented
+                label={t.home.acMode}
+                value={sel.mode}
+                onChange={(mode) => setSel(acSelectMode(presets, sel, mode))}
+                options={modes.map((m) => ({ value: m, label: modeLabel(m), icon: MODE_ICON[m] }))}
+              />
+            )}
+
+            {/* Temperature: a stepper only when this mode really has more than one */}
+            <div>
+              <span className="block text-sm pt:text-base font-semibold text-ts mb-2 pt:mb-3">{t.home.acTemp}</span>
+              {/* dir=ltr: a stepper is a number line, colder on the left, like the gauges. */}
+              <div dir="ltr" className="flex items-center justify-center gap-4 pt:gap-8">
+                {canStep && (
+                  <button
+                    onClick={() => setSel(acStepTemp(presets, sel, -1))}
+                    disabled={idx <= 0}
+                    aria-label={t.home.acTempDown}
+                    className="ripple min-w-[56px] min-h-[56px] pt:min-w-[88px] pt:min-h-[88px] rounded-full bg-s2 border border-bd
+                               flex items-center justify-center text-tp active:scale-95 disabled:opacity-40
+                               disabled:active:scale-100 transition-all duration-[var(--dur-fast)]"
+                  >
+                    <StepIcon />
+                  </button>
+                )}
+                <div className="flex items-baseline tabular-nums text-tp" dir="ltr" style={MONO} aria-live="polite">
+                  <span className="text-7xl pt:text-8xl font-medium leading-none">{sel.temp}</span>
+                  <span className="text-3xl pt:text-5xl text-ts ms-1">°C</span>
+                </div>
+                {canStep && (
+                  <button
+                    onClick={() => setSel(acStepTemp(presets, sel, +1))}
+                    disabled={idx >= temps.length - 1}
+                    aria-label={t.home.acTempUp}
+                    className="ripple min-w-[56px] min-h-[56px] pt:min-w-[88px] pt:min-h-[88px] rounded-full bg-s2 border border-bd
+                               flex items-center justify-center text-tp active:scale-95 disabled:opacity-40
+                               disabled:active:scale-100 transition-all duration-[var(--dur-fast)]"
+                  >
+                    <StepIcon up />
+                  </button>
+                )}
+              </div>
+              {!canStep && (
+                <p className="text-xs pt:text-base text-tm text-center mt-2">{t.home.acOnlyTemp}</p>
+              )}
+            </div>
+
+            {fans.length > 0 && (
+              <Segmented
+                label={t.home.acFanSpeed}
+                value={sel.fan}
+                onChange={(fan) => setSel({ ...sel, fan })}
+                options={fans.map((f) => ({ value: f, label: fanLabel(f) }))}
+              />
+            )}
+          </>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3 pt:gap-4">
+          {hasPresets && (
+            <button
+              onClick={() => send('on')}
+              disabled={sending}
+              className={`ripple flex-1 flex items-center justify-center gap-2 min-h-[56px] pt:min-h-[88px] rounded-xl
+                          text-base pt:text-xl font-semibold active:scale-95 disabled:opacity-50 disabled:active:scale-100
+                          transition-colors duration-[var(--dur-fast)]
+                          ${sent === 'on' ? 'bg-acc2 text-white' : 'bg-acc text-white hover:bg-acc/90'}`}
+            >
+              <PowerIcon />
+              {sent === 'on' ? t.home.acSent : (sending ? t.home.acSending : t.home.acTurnOn)}
+            </button>
+          )}
+          {hasOff && (
+            <button
+              onClick={() => send('off')}
+              disabled={sending}
+              className={`ripple flex-1 flex items-center justify-center gap-2 min-h-[56px] pt:min-h-[88px] rounded-xl
+                          border text-base pt:text-xl font-semibold active:scale-95 disabled:opacity-50 disabled:active:scale-100
+                          transition-colors duration-[var(--dur-fast)]
+                          ${sent === 'off' ? 'bg-acc2 text-white border-transparent' : 'bg-coral-bg text-coral-d border-coral-d/50 hover:opacity-80'}`}
+            >
+              <PowerIcon />
+              {sent === 'off' ? t.home.acSent : t.home.acTurnOff}
+            </button>
+          )}
         </div>
 
-        {/* On/Off toggle */}
-        <div className="px-5 pb-4 pt:px-8 pt:pb-6">
-          <button
-            onClick={handleToggle}
-            disabled={sending}
-            className={`w-full flex items-center justify-center gap-2 py-3 pt:min-h-[88px] pt:rounded-2xl pt:text-xl rounded-xl font-medium text-sm
-              transition-all duration-[var(--dur-fast)] active:scale-[0.98]
-              ${isOn
-                ? 'bg-coral/20 text-coral-d hover:bg-coral/30'
-                : 'bg-acc2/15 text-acc2 hover:bg-acc2/25'
-              }
-              disabled:opacity-50`}
-          >
-            <PowerIcon className="w-5 h-5" />
-            {sending ? t.home.acSending : (isOn ? t.home.acTurnOff : t.home.acTurnOn)}
-          </button>
-        </div>
-
-        {/* Temperature selector (horizontal scroll) */}
-        <div className="px-5 pb-4 pt:px-8 pt:pb-6">
-          <span className="text-xs pt:text-base font-semibold text-ts block mb-2 pt:mb-3">{t.home.acTemp}</span>
-          <div
-            ref={tempScrollRef}
-            className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide pt:grid pt:grid-cols-7 pt:gap-3 pt:overflow-visible pt:pb-0"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {TEMPS.map((t_val) => (
-              <button
-                key={t_val}
-                data-selected={temp === t_val}
-                onClick={() => setTemp(t_val)}
-                disabled={!isOn}
-                className={`shrink-0 w-14 h-14 pt:w-full pt:h-20 pt:rounded-2xl pt:text-xl rounded-xl text-sm font-bold
-                  transition-all duration-[var(--dur-fast)] active:scale-95
-                  ${temp === t_val
-                    ? 'bg-acc2 text-white shadow-card'
-                    : 'bg-s2 text-ts hover:bg-bd'
-                  }
-                  disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {t_val}°
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Mode toggle */}
-        <div className="px-5 pb-4 pt:px-8 pt:pb-6">
-          <span className="text-xs pt:text-base font-semibold text-ts block mb-2 pt:mb-3">{t.home.acMode}</span>
-          <div className="flex gap-2 pt:gap-3">
-            {MODES.map((m) => {
-              const Icon = m.icon;
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => setMode(m.key)}
-                  disabled={!isOn}
-                  className={`flex-1 flex items-center justify-center gap-2 min-h-[56px] pt:min-h-[88px] pt:rounded-2xl pt:text-lg rounded-xl text-sm font-medium
-                    transition-all duration-[var(--dur-fast)] active:scale-95
-                    ${mode === m.key
-                      ? 'bg-acc2 text-white shadow-card'
-                      : 'bg-s2 text-ts hover:bg-bd'
-                    }
-                    disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  <Icon className="w-4 h-4 pt:w-6 pt:h-6" />
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Fan speed */}
-        <div className="px-5 pb-5 pt:px-8 pt:pb-8">
-          <span className="text-xs pt:text-base font-semibold text-ts block mb-2 pt:mb-3">{t.home.acFanSpeed}</span>
-          <div className="flex gap-2 pt:gap-3">
-            {SPEEDS.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setSpeed(s.key)}
-                disabled={!isOn}
-                className={`flex-1 min-h-[56px] pt:min-h-[88px] pt:rounded-2xl pt:text-lg rounded-xl text-sm font-medium
-                  transition-all duration-[var(--dur-fast)] active:scale-95
-                  ${speed === s.key
-                    ? 'bg-acc text-white shadow-card'
-                    : 'bg-s2 text-ts hover:bg-bd'
-                  }
-                  disabled:opacity-40 disabled:cursor-not-allowed`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        {last && (
+          <p className="text-sm pt:text-lg text-ts text-center -mt-1">
+            {t.home.acLastSent.replace('{what}', last)}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -509,6 +509,182 @@ router.get('/weather/:entity_id', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/ha/script-health?ids=script.a,script.b
+//
+// The living-room TV remote is a face over HA scripts. Several of them send
+// their IR code through a blaster entity that no longer exists in HA, and HA
+// answers a call to such a script with a happy 200 and then logs the failure
+// where nobody on the mirror will see it - the button just does nothing. This
+// reads each script's definition and reports whether everything it targets is
+// there, so the remote can say so instead of staying silent.
+//
+// Scripts HA will not show us (YAML-defined) report ok: unknown, not broken.
+// ---------------------------------------------------------------------------
+const SCRIPT_HEALTH_TTL_MS = 60 * 1000;
+let scriptHealthCache = { at: 0, key: '', body: null };
+
+/** Entity ids a script's top-level actions aim at. */
+function scriptTargets(config) {
+  const out = new Set();
+  for (const step of (config && config.sequence) || []) {
+    const ids = [].concat((step && step.target && step.target.entity_id) || (step && step.entity_id) || []);
+    ids.filter((id) => typeof id === 'string').forEach((id) => out.add(id));
+  }
+  return [...out];
+}
+
+router.get('/script-health', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  const ids = [...new Set(String(req.query.ids || '').split(',').map((s) => s.trim()))]
+    .filter((id) => /^script\.[a-z0-9_]+$/.test(id))
+    .slice(0, 40);
+  const key = ids.slice().sort().join(',');
+
+  if (scriptHealthCache.key === key && Date.now() - scriptHealthCache.at < SCRIPT_HEALTH_TTL_MS) {
+    return res.json(scriptHealthCache.body);
+  }
+
+  try {
+    const { host } = getHAConfig();
+    const statesRes = await fetch(`${host}/api/states`, { headers: haHeaders() });
+    if (!statesRes.ok) throw new Error(`HA API ${statesRes.status}`);
+    const live = new Set((await statesRes.json()).map((s) => s.entity_id));
+
+    const scripts = {};
+    await Promise.all(ids.map(async (id) => {
+      const r = await fetch(`${host}/api/config/script/config/${id.slice('script.'.length)}`, { headers: haHeaders() });
+      if (!r.ok) { scripts[id] = { ok: true, unknown: true }; return; }
+      const missing = scriptTargets(await r.json()).filter((target) => !live.has(target));
+      scripts[id] = { ok: missing.length === 0, missing };
+    }));
+
+    const body = { scripts };
+    scriptHealthCache = { at: Date.now(), key, body };
+    res.json(body);
+  } catch (err) {
+    logger.error('HA script-health error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ha/ac-presets
+//
+// The air conditioners are driven by learned IR commands that live in HA
+// scripts ("Power On Cold 24 Low", "AirCon Power OFF"). The AC popup used to
+// guess script names from a temperature/fan pattern (`script.aircon_26_low_on`)
+// that matches almost nothing HA has - HA has presets (cool 24, heat 30, three
+// fan speeds, off), and the popup offered a 13-temperature dial on top of them,
+// so almost every press called a script that does not exist.
+//
+// This reads the scripts that HA really has and reports, per IR blaster, which
+// (mode, temperature, fan) presets exist and which script performs each, so the
+// popup can offer exactly those. Add a script (or later a generated code) and
+// the popup grows with no code change.
+// ---------------------------------------------------------------------------
+
+const AC_ON = /^power on (cold|heat|dry|fan|auto) (\d{2}) (low|mid|high|auto)$/i;
+const AC_OFF = /^aircon power off$/i;
+const FAN_RANK = { low: 0, mid: 1, high: 2, auto: 3 };
+
+/** "Power On Cold 24 Low" -> { kind:'on', mode:'cold', temp:24, fan:'low' }; "AirCon Power OFF" -> { kind:'off' }. */
+function parseAcCommand(command) {
+  const text = String(command || '').trim();
+  const on = AC_ON.exec(text);
+  if (on) return { kind: 'on', mode: on[1].toLowerCase(), temp: Number(on[2]), fan: on[3].toLowerCase() };
+  if (AC_OFF.test(text)) return { kind: 'off' };
+  return null;
+}
+
+/**
+ * items: [{ script, blaster, command }] -> { [blaster]: { off, on: [{ mode, temp, fan, script }] } }
+ * Two scripts that send the same thing to the same blaster are one preset (the
+ * kids' room has a stray duplicate); the alphabetically first script wins so
+ * the answer does not change between runs.
+ */
+function buildAcCatalog(items) {
+  const catalog = {};
+  for (const item of [...items].sort((a, b) => a.script.localeCompare(b.script))) {
+    const parsed = parseAcCommand(item.command);
+    if (!parsed || !item.blaster) continue;
+    const room = (catalog[item.blaster] = catalog[item.blaster] || { off: null, on: [] });
+    if (parsed.kind === 'off') {
+      if (!room.off) room.off = item.script;
+    } else if (!room.on.some((p) => p.mode === parsed.mode && p.temp === parsed.temp && p.fan === parsed.fan)) {
+      room.on.push({ mode: parsed.mode, temp: parsed.temp, fan: parsed.fan, script: item.script });
+    }
+  }
+  for (const room of Object.values(catalog)) {
+    room.on.sort((a, b) => a.mode.localeCompare(b.mode) || a.temp - b.temp || FAN_RANK[a.fan] - FAN_RANK[b.fan]);
+  }
+  return catalog;
+}
+
+const AC_CACHE_TTL_MS = 5 * 60 * 1000;
+let acCache = { at: 0, body: null };
+
+router.get('/ac-presets', async (req, res) => {
+  if (!ensureConfigured(res)) return;
+  const logger = req.app.locals.logger;
+  if (acCache.body && Date.now() - acCache.at < AC_CACHE_TTL_MS) return res.json(acCache.body);
+
+  try {
+    const { host } = getHAConfig();
+    const statesRes = await fetch(`${host}/api/states`, { headers: haHeaders() });
+    if (!statesRes.ok) throw new Error(`HA API ${statesRes.status}`);
+    const scriptIds = (await statesRes.json())
+      .map((s) => s.entity_id)
+      .filter((id) => /^script\.[a-z0-9_]+$/.test(id));
+
+    // Read every script's definition, a few at a time (HA may be a WAN hop away).
+    const found = [];
+    for (let i = 0; i < scriptIds.length; i += 8) {
+      await Promise.all(scriptIds.slice(i, i + 8).map(async (id) => {
+        const r = await fetch(`${host}/api/config/script/config/${id.slice('script.'.length)}`, { headers: haHeaders() });
+        if (!r.ok) return;
+        for (const step of (await r.json()).sequence || []) {
+          if ((step.action || step.service) !== 'remote.send_command' || typeof step.data?.command !== 'string') continue;
+          if (!parseAcCommand(step.data.command)) continue;
+          found.push({
+            script: id,
+            command: step.data.command,
+            entity: [].concat(step.target?.entity_id || step.entity_id || [])[0] || null,
+            device: [].concat(step.target?.device_id || [])[0] || null,
+          });
+        }
+      }));
+    }
+
+    // A script may name its blaster by device instead of entity; resolve those
+    // devices to their remote entity in one template call.
+    const devices = [...new Set(found.map((f) => f.device).filter((d) => d && /^[a-f0-9]{32}$/.test(d)))];
+    const blasterOf = {};
+    if (devices.length) {
+      const template = `{%- set out = namespace(rows=[]) -%}
+{%- for d in ${JSON.stringify(devices)} -%}
+  {%- set e = device_entities(d) | select('match', 'remote\\\\.') | list -%}
+  {%- set out.rows = out.rows + [[d, e[0] if e else '']] -%}
+{%- endfor -%}
+{{ out.rows | tojson }}`;
+      const tr = await fetch(`${host}/api/template`, { method: 'POST', headers: haHeaders(), body: JSON.stringify({ template }) });
+      if (tr.ok) for (const [d, e] of JSON.parse(await tr.text())) blasterOf[d] = e;
+    }
+
+    const body = {
+      presets: buildAcCatalog(found.map((f) => ({ script: f.script, command: f.command, blaster: f.entity || blasterOf[f.device] || null }))),
+    };
+    acCache = { at: Date.now(), body };
+    res.json(body);
+  } catch (err) {
+    logger.error('HA ac-presets error: %s', err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+router._test = { parseAcCommand, buildAcCatalog };
+
+// ---------------------------------------------------------------------------
 // POST /api/ha/remote/:entity_id/command — send IR remote command
 // ---------------------------------------------------------------------------
 router.post('/remote/:entity_id/command', async (req, res) => {

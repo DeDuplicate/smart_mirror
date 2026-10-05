@@ -135,28 +135,26 @@ export function TasksSkeleton() {
 
 export function HomeSkeleton() {
   return (
-    <div className="flex flex-col h-full p-6 gap-5">
-      {/* Device tiles grid: 5x2 */}
-      <div className="flex-1 grid grid-cols-5 grid-rows-2 gap-4">
-        {Array.from({ length: 10 }).map((_, i) => (
-          <SkeletonBlock
-            key={i}
-            width="100%"
-            height="100%"
-            borderRadius="16px"
-          />
+    <div className="flex flex-col h-full p-6 gap-6 pt:p-8">
+      {/* Title + summary */}
+      <div className="flex flex-col gap-2 shrink-0">
+        <SkeletonBlock width="110px" height="30px" borderRadius="8px" />
+        <SkeletonBlock width="150px" height="16px" borderRadius="6px" />
+      </div>
+      {/* Room panels */}
+      <div className="grid grid-cols-3 gap-4 pt:grid-cols-1 shrink-0">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonBlock key={i} width="100%" height="330px" borderRadius="16px" />
         ))}
       </div>
-      {/* Scene buttons row */}
-      <div className="flex gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <SkeletonBlock
-            key={i}
-            width="100%"
-            height="56px"
-            borderRadius="12px"
-          />
-        ))}
+      {/* Devices beside the energy card */}
+      <div className="flex-1 grid grid-cols-3 gap-4 pt:grid-cols-1 min-h-0">
+        <div className="col-span-2 pt:col-span-1 grid grid-cols-4 gap-4 pt:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonBlock key={i} width="100%" height="100%" borderRadius="16px" />
+          ))}
+        </div>
+        <SkeletonBlock width="100%" height="100%" borderRadius="16px" />
       </div>
     </div>
   );

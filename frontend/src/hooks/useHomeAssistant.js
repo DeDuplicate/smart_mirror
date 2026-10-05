@@ -252,6 +252,19 @@ export default function useHomeAssistant() {
     function handleStateChanged(data) {
       if (!data?.entity_id) return;
 
+      // allStates holds the sensors (room temperature, the power meter). Only
+      // touch entities it already knows, and hand back the SAME array when the
+      // reading did not change: HA reports every state change in the house, and
+      // re-rendering the page for a NAS temperature would be wasted work on a Pi.
+      setAllStates((prev) => {
+        const i = prev.findIndex((e) => e.entity_id === data.entity_id);
+        const next = data.new_state;
+        if (i === -1 || !next || prev[i].state === next.state) return prev;
+        const copy = prev.slice();
+        copy[i] = { ...prev[i], state: next.state, attributes: { ...prev[i].attributes, ...(next.attributes || {}) } };
+        return copy;
+      });
+
       setEntities((prev) =>
         prev.map((e) =>
           e.entity_id === data.entity_id

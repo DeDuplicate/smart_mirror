@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchApi } from '../hooks/useApi.js';
+import useStore from '../store/index.js';
 import t from '../i18n/he.json';
 
 // ─── SVG Icons ──────────────────────────────────────────────────────────────
@@ -25,67 +26,69 @@ const COMMAND_LABELS = {
   right: t.home.arrowRight,
 };
 
-function RemoteButton({ label, command, entityId, size = 'md', variant = 'default', className = '', ariaLabel }) {
-  const handlePress = useCallback(async () => {
-    try {
-      await fetchApi(`/api/ha/remote/${encodeURIComponent(entityId)}/command`, {
-        method: 'POST',
-        body: JSON.stringify({ command }),
-      });
-    } catch (err) {
-      console.error('IR command failed:', err);
-    }
-  }, [entityId, command]);
-
+/**
+ * One key. `onPress(command)` decides what pressing means (see IRRemoteOverlay),
+ * so the same key serves a plain IR blaster and a script-driven remote.
+ * `broken` dims the key and puts a dot on it: it is still pressable, because
+ * the press is what explains why it does nothing.
+ */
+function RemoteButton({ label, command, onPress, size = 'md', variant = 'default', className = '', ariaLabel, broken = false }) {
   // Every remote key is a primary touch target on the IR frame, so each size
   // keeps a >=56x56px hit area regardless of how small its glyph/label is.
   const sizeClasses = {
-    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs pt:w-full pt:min-h-[80px] pt:rounded-2xl pt:text-lg',
-    md: 'min-w-[56px] min-h-[56px] w-16 text-sm pt:w-24 pt:min-h-[96px] pt:rounded-2xl pt:text-xl',
-    lg: 'min-w-[56px] min-h-[56px] w-20 text-base pt:min-h-[88px] pt:rounded-2xl pt:text-xl',
-    round: 'min-w-[56px] min-h-[56px] w-16 h-16 rounded-full text-xs',
+    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs pt:w-full pt:min-h-[80px] pt:text-lg',
+    md: 'min-w-[56px] min-h-[56px] w-16 text-sm pt:w-24 pt:min-h-[96px] pt:text-xl',
+    lg: 'min-w-[56px] min-h-[56px] w-20 text-base pt:min-h-[88px] pt:text-xl',
   };
 
   const variantClasses = {
     default: 'bg-s2 text-tp hover:bg-bd border border-bd',
     accent: 'bg-acc text-white hover:bg-acc/90',
-    danger: 'bg-coral-bg text-coral-d hover:opacity-80',
-    center: 'bg-acc2 text-white hover:bg-acc2/90 rounded-full w-16 h-16 text-sm font-bold pt:w-28 pt:h-28 pt:rounded-full pt:text-xl',
+    // The border matters: coral-bg is a dark wash in the dark theme and the key
+    // would otherwise read as loose red text.
+    danger: 'bg-coral-bg text-coral-d border border-coral-d/50 hover:opacity-80',
+    center: 'bg-acc2 text-white hover:bg-acc2/90 rounded-full w-16 h-16 text-sm font-bold pt:w-28 pt:h-28 pt:text-xl',
   };
 
   return (
     <button
-      onClick={handlePress}
+      onClick={() => onPress(command)}
       aria-label={ariaLabel || COMMAND_LABELS[command] || (typeof label === 'string' ? label : command)}
-      className={`flex items-center justify-center rounded-xl font-medium
+      className={`relative flex items-center justify-center rounded-xl font-medium
                   transition-all duration-[var(--dur-fast)] active:scale-95 select-none
                   ${sizeClasses[size] || sizeClasses.md}
                   ${variantClasses[variant] || variantClasses.default}
+                  ${broken ? 'opacity-50' : ''}
                   ${className}`}
     >
       {label}
+      {broken && (
+        <span aria-hidden="true" className="absolute top-1.5 end-1.5 w-2 h-2 rounded-full bg-coral-d" />
+      )}
     </button>
   );
 }
 
 // ─── Arrow Pad ──────────────────────────────────────────────────────────────
 
-function ArrowPad({ entityId }) {
+function ArrowPad({ press, isBroken }) {
+  const key = (command, label, extra = {}) => (
+    <RemoteButton label={label} command={command} onPress={press} broken={isBroken(command)} {...extra} />
+  );
   return (
-    <div className="grid grid-cols-3 grid-rows-3 gap-1.5 pt:gap-4 place-items-center w-fit mx-auto">
-      {/* Row 1: blank / Up / blank */}
+    // dir=ltr: the page is RTL, which would put the "left" key on the right of OK.
+    // A direction pad is physical, not a line of text.
+    <div dir="ltr" className="grid grid-cols-3 grid-rows-3 gap-1.5 pt:gap-4 place-items-center w-fit mx-auto">
       <div />
-      <RemoteButton label="&#9650;" command="up" entityId={entityId} size="md" />
+      {key('up', '▲')}
       <div />
 
-      {/* Row 2: Left / OK / Right */}
-      <RemoteButton label="&#9664;" command="left" entityId={entityId} size="md" />
-      <RemoteButton label={t.home.ok} command="ok" entityId={entityId} variant="center" />
-      <RemoteButton label="&#9654;" command="right" entityId={entityId} size="md" />
+      {key('left', '◀')}
+      {key('ok', t.home.ok, { variant: 'center' })}
+      {key('right', '▶')}
 
-      {/* Row 3: blank / Down / blank */}
       <div />
-      <RemoteButton label="&#9660;" command="down" entityId={entityId} size="md" />
+      {key('down', '▼')}
       <div />
     </div>
   );
@@ -93,7 +96,66 @@ function ArrowPad({ entityId }) {
 
 // ─── IR Remote Overlay ──────────────────────────────────────────────────────
 
-export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
+/**
+ * `scripts` (optional) maps a key to the HA script that performs it - used by
+ * the living-room TV, whose commands live in scripts that carry the device name
+ * and repeat timing. Without it, keys are sent as plain commands to the blaster.
+ */
+export default function IRRemoteOverlay({ entityId, roomName, scripts, onClose }) {
+  const addToast = useStore((s) => s.addToast);
+  // script id -> { ok, missing } for scripts whose definition HA lets us read.
+  const [health, setHealth] = useState({});
+
+  useEffect(() => {
+    if (!scripts) return undefined;
+    let cancelled = false;
+    fetchApi(`/api/ha/script-health?ids=${encodeURIComponent(Object.values(scripts).join(','))}`)
+      .then((res) => { if (!cancelled) setHealth(res?.scripts || {}); })
+      .catch(() => { /* no health info: keys just work or fail like any other */ });
+    return () => { cancelled = true; };
+  }, [scripts]);
+
+  const scriptFor = (command) => (scripts ? scripts[command] : null);
+  const isBroken = (command) => {
+    const id = scriptFor(command);
+    return Boolean(id && health[id] && health[id].ok === false);
+  };
+
+  const press = useCallback(async (command) => {
+    try {
+      if (scripts) {
+        const id = scripts[command];
+        if (!id) return;
+        const h = health[id];
+        if (h && h.ok === false) {
+          // HA would answer 200 and fail silently; say what is actually wrong.
+          addToast('error', t.home.remoteBroken.replace('{entity}', h.missing?.[0] || ''));
+          return;
+        }
+        // turn_on returns at once; calling the script as a service would block
+        // for as long as its repeats and delays take.
+        await fetchApi('/api/ha/services/script/turn_on', {
+          method: 'POST',
+          body: JSON.stringify({ entity_id: id }),
+        });
+        return;
+      }
+      await fetchApi(`/api/ha/remote/${encodeURIComponent(entityId)}/command`, {
+        method: 'POST',
+        body: JSON.stringify({ command }),
+      });
+    } catch (err) {
+      console.error('Remote command failed:', err);
+    }
+  }, [scripts, health, entityId, addToast]);
+
+  // Which keys exist: every key for a plain blaster, only the mapped ones for a
+  // script remote (an unmapped key would be a button that can never work).
+  const has = (command) => !scripts || Boolean(scripts[command]);
+  const key = (command, label, props = {}) => (has(command) ? (
+    <RemoteButton label={label} command={command} onPress={press} broken={isBroken(command)} {...props} />
+  ) : <div />);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
@@ -101,14 +163,14 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-surf border border-bd rounded-2xl shadow-modal p-6 w-[380px] pt:w-[680px] pt:p-10 pt:rounded-3xl max-h-[90vh] overflow-y-auto"
+        className="bg-surf border border-bd rounded-2xl shadow-modal p-6 w-[380px] pt:w-[680px] pt:p-10 max-h-[90vh] overflow-y-auto"
         style={{ animation: 'popupIn 250ms var(--ease) forwards' }}
         dir="rtl"
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-5 pt:mb-8">
           <h3 className="text-lg pt:text-2xl font-bold text-tp">
-            {t.home.irRemote} - {roomName}
+            {t.home.remote} {roomName}
           </h3>
           <button
             onClick={onClose}
@@ -122,36 +184,35 @@ export default function IRRemoteOverlay({ entityId, roomName, onClose }) {
 
         {/* Power row */}
         <div className="flex justify-center mb-4 pt:mb-8">
-          <RemoteButton
-            label={t.home.power}
-            command="power"
-            entityId={entityId}
-            variant="danger"
-            size="lg"
-            className="w-full"
-          />
+          {key('power', t.home.power, { variant: 'danger', size: 'lg', className: 'w-full' })}
         </div>
 
-        {/* Volume / Channel row */}
-        <div className="grid grid-cols-3 gap-2 mb-4 pt:gap-4 pt:mb-10">
-          <RemoteButton label={t.home.volUp} command="volume_up" entityId={entityId} size="sm" />
-          <RemoteButton label={t.home.mute} command="mute" entityId={entityId} size="sm" />
-          <RemoteButton label={t.home.chUp} command="channel_up" entityId={entityId} size="sm" />
-          <RemoteButton label={t.home.volDown} command="volume_down" entityId={entityId} size="sm" />
-          <RemoteButton label={t.home.inputSource} command="source" entityId={entityId} size="sm" />
-          <RemoteButton label={t.home.chDown} command="channel_down" entityId={entityId} size="sm" />
+        {/* Volume / source rows */}
+        <div className="grid grid-cols-3 gap-2 mb-4 pt:gap-4 pt:mb-10 place-items-center">
+          {key('volume_up', t.home.volUp, { size: 'sm' })}
+          {key('mute', t.home.mute, { size: 'sm' })}
+          {scripts
+            ? key('source', t.home.inputSource, { size: 'sm' })
+            : key('channel_up', t.home.chUp, { size: 'sm' })}
+          {key('volume_down', t.home.volDown, { size: 'sm' })}
+          {scripts
+            ? key('hdmi', t.home.remoteHdmi, { size: 'sm' })
+            : key('source', t.home.inputSource, { size: 'sm' })}
+          {scripts
+            ? key('exit', t.home.remoteExit, { size: 'sm' })
+            : key('channel_down', t.home.chDown, { size: 'sm' })}
         </div>
 
         {/* Arrow pad */}
         <div className="mb-4 pt:mb-10">
-          <ArrowPad entityId={entityId} />
+          <ArrowPad press={press} isBroken={isBroken} />
         </div>
 
-        {/* Bottom row: Back, Home, Menu */}
+        {/* Bottom row */}
         <div className="flex justify-center gap-3 pt:gap-6">
-          <RemoteButton label={t.home.backBtn} command="back" entityId={entityId} size="md" />
-          <RemoteButton label={t.home.homeBtn} command="home" entityId={entityId} size="md" variant="accent" />
-          <RemoteButton label={t.home.menuBtn} command="menu" entityId={entityId} size="md" />
+          {key('back', t.home.backBtn)}
+          {!scripts && key('home', t.home.homeBtn, { variant: 'accent' })}
+          {key('menu', t.home.menuBtn)}
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ A beautiful, touch-enabled family dashboard for Raspberry Pi (or any small PC) �
 | :white_check_mark: **Tasks** | Kanban board with drag-and-drop, subtasks, priorities, due dates |
 | :star: **Chores** | Per-person columns with progress rings, celebration animations & sounds, family photos |
 | :books: **School** | Weekly timetable per child plus a "what to bring today" checklist — tick off each subject once it's packed |
-| :house: **Smart Home** | Home Assistant tiles, AC control (IR scripts), IR remote, curtain/cover control, power monitor, shopping list |
+| :house: **Smart Home** | Rooms with live temperature/humidity and their remotes, AC control (IR scripts), curated devices (lights, curtain, boiler), live power meter |
 | :musical_note: **Music** | YouTube search + IFrame player with queue, plus MP3 casting to Google Nest / Google Home speakers |
 | :alarm_clock: **Alarms** | Multi-room alarm clock with Android-style clock dial, recurring days, YouTube track/playlist alarms, volume escalation, and Google Cast speaker targeting |
 | :newspaper: **News** | Hebrew RSS feeds (Ynet, Channel 14) with full article extraction |
@@ -121,7 +121,8 @@ Connect DVRs, NVRs and IP cameras in **Settings → Cameras**. The Cameras tab a
 - :shopping_cart: **Shopping list** from Home Assistant
 - :bust_in_silhouette: **Person presence** indicators (home/away)
 - :zap: **Real-time electricity** monitoring
-- :electric_plug: **IR remote control** for TVs per room
+- :snowflake: **Air-conditioner control per room** — the popup offers exactly the presets Home Assistant has (`GET /api/ha/ac-presets` reads the learned-command scripts such as "Power On Cold 24 Low", per Broadlink blaster) instead of guessing script names; adding a script adds an option. IR is one-way, so the popup shows what was *last sent*, never a guessed state.
+- :electric_plug: **IR remote control** for TVs per room. Rooms are discovered from `remote.wifi_ir_<room>` blasters (a new blaster appears on its own, with its `sensor.wifi_ir_<room>_temperature/humidity`). The living-room TV is driven by its HA scripts (`script.tv`, `script.ok`, …), and a key whose script targets a blaster that no longer exists is dimmed and says so instead of silently doing nothing
 - :snowflake: **AC control** via IR scripts
 - :keyboard: **On-screen keyboard** (Hebrew / English / emoji) for touch input
 - :alarm_clock: **Alarm clock** with Android clock dial, repeating days, YouTube media, volume escalation & speaker targets

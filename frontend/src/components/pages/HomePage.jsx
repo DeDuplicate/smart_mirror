@@ -3,9 +3,14 @@ import t from '../../i18n/he.json';
 import useStore, { TAB_INDEX } from '../../store/index.js';
 import { HomeSkeleton } from '../Skeleton.jsx';
 import useHomeAssistant from '../../hooks/useHomeAssistant.js';
+import { fetchApi } from '../../hooks/useApi.js';
 import IRRemoteOverlay from '../IRRemoteOverlay.jsx';
 import ACControlPopup from '../ACControlPopup.jsx';
 import ConnectionBanner from '../ConnectionBanner.jsx';
+import {
+  discoverRooms, gaugePosition, comfortTone, COMFORT_RANGE, pickDevices, deviceName, isDeviceOn,
+  countOn, powerReading, powerTone, POWER_SCALE_MAX, visibleScenes, remoteScriptsFor, TABLE_BACKLIGHT,
+} from '../../hooks/homeModel.js';
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
@@ -366,126 +371,290 @@ function useDebouncedCallback(fn, delay) {
   );
 }
 
-// ─── Device Tile ───────────────────────────────────────────────────────────
+// ─── Gauge: the page's one instrument ──────────────────────────────────────
+//
+// A thin scale with a marker. The same device reads a room's comfort and the
+// power meter, and the brightness meter on a light is its filled cousin, so the
+// whole page speaks one visual language - like the dials on a control panel.
 
-function DeviceTile({ entity, onToggle, onLongPress, offline }) {
+const MONO = { fontFamily: "'DM Mono', monospace" };
+
+// Colour of a reading's marker / number, by tone (see homeModel comfortTone and
+// powerTone). Tokens, not hex, so dark mode follows data-theme.
+const TONE_COLOR = {
+  cool: 'var(--lav-d)',
+  ok: 'var(--acc2)',
+  warm: 'var(--amber)',
+  hot: 'var(--coral-d)',
+  low: 'var(--acc2)',
+  mid: 'var(--amber)',
+  high: 'var(--coral-d)',
+};
+
+const tint = (colorVar, pct) => `color-mix(in srgb, ${colorVar} ${pct}%, var(--s2))`;
+
+const COMFORT_TRACK = `linear-gradient(90deg, ${tint('var(--lav-d)', 45)} 0%, ${tint('var(--acc2)', 45)} 40%, ${tint('var(--amber)', 50)} 72%, ${tint('var(--coral-d)', 45)} 100%)`;
+
+// Hard bands at the same thresholds powerTone uses (500 W and 2 kW of a 4 kW scale).
+const POWER_TRACK = `linear-gradient(90deg, ${tint('var(--acc2)', 40)} 0 12.5%, ${tint('var(--amber)', 45)} 12.5% 50%, ${tint('var(--coral-d)', 40)} 50% 100%)`;
+
+function Gauge({ position, track, tone, label }) {
+  return (
+    // dir=ltr: a scale of numbers reads left to right even on an RTL page.
+    <div dir="ltr" role="img" aria-label={label} className="relative h-2 rounded-full" style={{ background: track }}>
+      {position != null && (
+        <span
+          className="absolute top-1/2 w-4 h-4 rounded-full bg-surf border-[3px] shadow-card"
+          style={{
+            left: `${position * 100}%`,
+            transform: 'translate(-50%, -50%)',
+            borderColor: TONE_COLOR[tone] || 'var(--tm)',
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return <h2 className="text-sm font-semibold text-ts mb-3 px-1">{children}</h2>;
+}
+
+function DropletIcon({ className = 'w-5 h-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M12 2.7s6.5 6.3 6.5 11.1A6.5 6.5 0 0 1 12 20.3a6.5 6.5 0 0 1-6.5-6.5C5.5 9 12 2.7 12 2.7z" />
+    </svg>
+  );
+}
+
+// ─── Room panel ────────────────────────────────────────────────────────────
+// A room is what a person thinks in, and it is how the sensors already group:
+// temperature and humidity on the big face, the room's controls underneath.
+
+/** A control button that confirms a send: IR has no state to read back. */
+function SendButton({ onSend, children, className = '' }) {
+  const [sent, setSent] = useState(false);
+  const timerRef = useRef(null);
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  const handle = async () => {
+    try {
+      await onSend();
+      setSent(true);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setSent(false), 900);
+    } catch { /* callService already logged it */ }
+  };
+
+  return (
+    <button
+      onClick={handle}
+      className={`ripple min-h-[56px] min-w-[72px] px-4 rounded-xl border text-base font-medium
+                  active:scale-95 transition-colors duration-[var(--dur-fast)]
+                  ${sent ? 'bg-acc2 border-acc2 text-white' : 'bg-s2 border-bd text-tp hover:bg-bd'} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RoomAction({ icon, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="ripple flex items-center justify-center gap-2.5 min-h-[56px] px-5 rounded-xl flex-1
+                 bg-s2 border border-bd text-base font-medium text-tp hover:bg-bd
+                 active:scale-95 transition-all duration-[var(--dur-fast)]"
+    >
+      <span className="text-lav-d">{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+function RoomPanel({ room, onRemote, hasAC, onAC, backlight, callService }) {
+  const tone = comfortTone(room.temp);
+  const position = gaugePosition(room.temp, COMFORT_RANGE.min, COMFORT_RANGE.max);
+  const isLiving = room.slug === 'living_room';
+
+  return (
+    <section className="card flex flex-col gap-4 p-5 pt:p-6" aria-label={room.name}>
+      <header className="flex items-center justify-between">
+        <h3 className="text-lg pt:text-xl font-semibold text-tp">{room.name}</h3>
+        {!room.remoteOnline && (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-coral-bg text-coral-d">
+            {t.home.unavailable}
+          </span>
+        )}
+      </header>
+
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex items-baseline tabular-nums" dir="ltr" style={MONO}>
+          {room.temp != null ? (() => {
+            const [whole, tenth] = room.temp.toFixed(1).split('.');
+            return (
+              <>
+                <span className="text-7xl font-medium leading-none text-tp">{whole}</span>
+                <span className="text-4xl leading-none text-ts">.{tenth}</span>
+              </>
+            );
+          })() : (
+            <span className="text-7xl font-medium leading-none text-tm">--</span>
+          )}
+          <span className="text-2xl text-ts ms-2">°C</span>
+        </div>
+        {room.humidity != null && (
+          <div className="flex items-center gap-1.5 text-ts pb-1" aria-label={`${t.home.humidity} ${Math.round(room.humidity)}%`}>
+            <DropletIcon />
+            <span className="text-xl tabular-nums" dir="ltr" style={MONO}>{Math.round(room.humidity)}%</span>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Gauge position={position} track={COMFORT_TRACK} tone={tone} label={room.temp != null ? `${room.temp.toFixed(1)}°C` : ''} />
+        <div dir="ltr" className="flex justify-between mt-1.5 text-xs text-tm tabular-nums" style={MONO}>
+          <span>{COMFORT_RANGE.min}°</span>
+          <span>{COMFORT_RANGE.max}°</span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-auto">
+        <RoomAction icon={<RemoteControlIcon className="w-6 h-6" />} label={t.home.remote} onClick={() => onRemote(room)} />
+        {hasAC && (
+          <RoomAction icon={<SnowflakeIcon className="w-6 h-6" />} label={t.home.ac} onClick={() => onAC(room)} />
+        )}
+      </div>
+
+      {isLiving && backlight && (
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-bd">
+          <span className="flex items-center gap-2 text-sm text-ts">
+            <BulbIcon className="w-5 h-5 text-amber" />
+            {t.home.tableBacklight}
+          </span>
+          <div className="flex gap-2">
+            <SendButton onSend={() => callService('script', 'turn_on', { entity_id: TABLE_BACKLIGHT.on })}>
+              {t.home.backlightOn}
+            </SendButton>
+            <SendButton onSend={() => callService('script', 'turn_on', { entity_id: TABLE_BACKLIGHT.off })}>
+              {t.home.backlightOff}
+            </SendButton>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Device card ───────────────────────────────────────────────────────────
+
+// What a lit device glows: a lamp is amber, a curtain lavender, the boiler's
+// heat coral, the master switch the app's teal.
+const DEVICE_TINT = {
+  light: 'var(--amber)',
+  cover: 'var(--lav-d)',
+  switch: 'var(--coral-d)',
+  input_boolean: 'var(--acc2)',
+};
+
+function deviceIcon(entity) {
+  // A boiler is not a generic power switch, and a cover here is a curtain.
+  if (entity.entity_id === 'switch.switcher_boiler_ba88') return <FlameIcon />;
+  if (getDomain(entity.entity_id) === 'cover') return <CurtainIcon />;
+  return getEntityIcon(entity);
+}
+
+function DeviceCard({ entity, name, onToggle, onLongPress, offline }) {
   const domain = getDomain(entity.entity_id);
-  const on = isEntityOn(entity);
+  const on = isDeviceOn(entity);
+  const gone = entity.state === 'unavailable';
+  const color = DEVICE_TINT[domain] || 'var(--acc2)';
+  const brightness = domain === 'light' && on && entity.attributes?.brightness != null
+    ? Math.round((entity.attributes.brightness / 255) * 100)
+    : null;
+
   const pressTimerRef = useRef(null);
   const pressedRef = useRef(false);
   const [pressing, setPressing] = useState(false);
-  const [justToggled, setJustToggled] = useState(false);
 
-  const handlePressStart = useCallback(
-    (e) => {
-      e.preventDefault();
-      pressedRef.current = true;
-      setPressing(true);
+  const handlePressStart = useCallback((e) => {
+    e.preventDefault();
+    if (gone) return;
+    pressedRef.current = true;
+    setPressing(true);
+    if (hasLongPressPopup(entity.entity_id)) {
+      pressTimerRef.current = setTimeout(() => {
+        if (pressedRef.current) {
+          pressedRef.current = false;
+          setPressing(false);
+          onLongPress(entity);
+        }
+      }, 300);
+    }
+  }, [entity, gone, onLongPress]);
 
-      if (hasLongPressPopup(entity.entity_id)) {
-        pressTimerRef.current = setTimeout(() => {
-          if (pressedRef.current) {
-            pressedRef.current = false;
-            setPressing(false);
-            onLongPress(entity);
-          }
-        }, 300);
-      }
-    },
-    [entity, onLongPress]
-  );
-
-  const handlePressEnd = useCallback(
-    (e) => {
-      e.preventDefault();
-      if (!pressedRef.current) {
-        setPressing(false);
-        return;
-      }
-      pressedRef.current = false;
+  const handlePressEnd = useCallback((e) => {
+    e.preventDefault();
+    if (!pressedRef.current) {
       setPressing(false);
-
-      if (pressTimerRef.current) {
-        clearTimeout(pressTimerRef.current);
-        pressTimerRef.current = null;
-      }
-
-      // Short tap -> toggle
-      onToggle(entity.entity_id, domain);
-      setJustToggled(true);
-      setTimeout(() => setJustToggled(false), 400);
-    },
-    [entity.entity_id, domain, onToggle]
-  );
+      return;
+    }
+    pressedRef.current = false;
+    setPressing(false);
+    clearTimeout(pressTimerRef.current);
+    onToggle(entity.entity_id, domain);
+  }, [entity.entity_id, domain, onToggle]);
 
   const handlePressCancel = useCallback(() => {
     pressedRef.current = false;
     setPressing(false);
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
+    clearTimeout(pressTimerRef.current);
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
-    };
-  }, []);
-
-  const borderColor = on
-    ? 'border-acc2'
-    : 'border-bd';
-
-  const toggleBorderStyle = justToggled
-    ? { borderColor: 'var(--acc2)', transition: 'border-color 400ms ease' }
-    : {};
+  useEffect(() => () => clearTimeout(pressTimerRef.current), []);
 
   return (
     <div
-      className={`relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
-                   cursor-pointer select-none overflow-hidden
-                   border-2 ${borderColor}
-                   transition-all duration-[var(--dur-fast)]
-                   ${pressing ? 'scale-[0.98]' : 'scale-100'}
-                   hover:shadow-raised`}
-      style={{
-        minHeight: '140px',
-        minWidth: '180px',
-        ...toggleBorderStyle,
-      }}
+      className={`relative card flex flex-col gap-3 p-4 h-full min-h-[148px] select-none overflow-hidden
+                  ${gone ? 'opacity-60' : 'cursor-pointer hover:shadow-raised'}
+                  transition-all duration-[var(--dur-fast)]
+                  ${pressing ? 'scale-[0.98]' : 'scale-100'}`}
+      style={on ? { borderColor: tint(color, 55) } : undefined}
       onPointerDown={handlePressStart}
       onPointerUp={handlePressEnd}
       onPointerLeave={handlePressCancel}
       onPointerCancel={handlePressCancel}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Offline badge */}
-      {offline && (
-        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px]
-                        font-semibold bg-coral/20 text-coral-d">
-          {t.home.notConnected}
+      <div className="flex items-center justify-between">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]"
+          style={on
+            ? { background: `color-mix(in srgb, ${color} 18%, transparent)`, color }
+            : { background: 'var(--s2)', color: 'var(--tm)' }}
+        >
+          {deviceIcon(entity)}
+        </div>
+        <span className="text-sm font-medium" style={{ color: on ? color : 'var(--tm)' }}>
+          {gone ? t.home.unavailable : getStatusText(entity)}
+        </span>
+      </div>
+
+      <span className="mt-auto text-xl font-semibold text-tp leading-tight line-clamp-2">{name}</span>
+
+      {brightness !== null && (
+        <div className="h-1.5 rounded-full bg-s2 overflow-hidden" role="img" aria-label={`${t.home.brightness} ${brightness}%`}>
+          <div className="h-full rounded-full" style={{ width: `${brightness}%`, background: color }} />
         </div>
       )}
 
-      {/* Icon */}
-      <div
-        className={`w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
-          ${on ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}
-      >
-        {getEntityIcon(entity)}
-      </div>
-
-      {/* Label */}
-      <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2 line-clamp-1">
-        {entity.attributes?.friendly_name || entity.entity_id}
-      </span>
-
-      {/* Status */}
-      <span className={`text-xs font-medium ${on ? 'text-acc2' : 'text-tm'}`}>
-        {getStatusText(entity)}
-      </span>
+      {offline && (
+        <div className="absolute top-2 start-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-coral-bg text-coral-d">
+          {t.home.notConnected}
+        </div>
+      )}
     </div>
   );
 }
@@ -800,7 +969,9 @@ function ControlPopup({ entity, anchorRect, onClose, ha }) {
   );
 }
 
-// ─── Scene Buttons ─────────────────────────────────────────────────────────
+// ─── Scene chips ───────────────────────────────────────────────────────────
+// Shown only for scenes that exist in Home Assistant (visibleScenes): a chip for
+// a scene HA does not have is a button that does nothing.
 
 const SCENE_CONFIG = [
   { key: 'morning', icon: SunriseIcon, label: t.home.sceneMorning, entityId: 'scene.good_morning' },
@@ -809,7 +980,7 @@ const SCENE_CONFIG = [
   { key: 'leaving', icon: DoorIcon, label: t.home.sceneLeaving, entityId: 'scene.leaving_home', confirm: true },
 ];
 
-function SceneButton({ config, onActivate }) {
+function SceneChip({ config, onActivate }) {
   const [pulsing, setPulsing] = useState(false);
   const Icon = config.icon;
 
@@ -824,145 +995,68 @@ function SceneButton({ config, onActivate }) {
   return (
     <button
       onClick={handleClick}
-      className={`ripple flex-1 flex items-center justify-center gap-3 min-h-[56px]
-                  pt:min-h-[88px] pt:rounded-2xl pt:text-lg
-                  rounded-xl bg-surf border border-bd text-sm font-medium text-tp
+      className={`ripple flex items-center gap-2.5 min-h-[56px] px-5 rounded-full
+                  bg-surf border border-bd text-base font-medium text-tp
                   hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                   ${pulsing ? 'animate-scene-pulse' : ''}`}
     >
-      <Icon className="w-5 h-5" />
+      <Icon className="w-5 h-5 text-lav-d" />
       <span>{config.label}</span>
     </button>
   );
 }
 
-// ─── Electricity Monitor Tile (Feature 1) ─────────────────────────────────
+// ─── Energy card ───────────────────────────────────────────────────────────
+// The house's meter, on the same gauge as a room's comfort. (The old tile read
+// a sensor that does not exist and always said "--".)
 
-function ElectricityTile({ allStates }) {
-  const sensor = allStates.find((e) => e.entity_id === 'sensor.2_power_meter');
-  const watts = sensor ? parseFloat(sensor.state) : null;
-  const isValid = watts !== null && !isNaN(watts);
-
-  const color = !isValid ? 'text-tm'
-    : watts < 500 ? 'text-[#2ab58a]'
-    : watts <= 2000 ? 'text-[var(--amber)]'
-    : 'text-[#c95454]';
-
-  const borderColor = !isValid ? 'border-bd'
-    : watts < 500 ? 'border-[#2ab58a]'
-    : watts <= 2000 ? 'border-[var(--amber)]'
-    : 'border-[#c95454]';
+function EnergyCard({ reading }) {
+  const tone = powerTone(reading.watts);
+  const color = TONE_COLOR[tone];
+  const position = gaugePosition(reading.watts, 0, POWER_SCALE_MAX);
+  const grouped = (n) => Math.round(n).toLocaleString('en-US');
 
   return (
-    <div
-      className={`relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
-                   select-none overflow-hidden
-                   border-2 ${borderColor}
-                   transition-all duration-[var(--dur-fast)]`}
-      style={{ minHeight: '140px', minWidth: '180px' }}
-    >
-      <div className={`w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center ${color}`}
-        style={{ backgroundColor: isValid && watts >= 500 ? (watts > 2000 ? 'rgba(201,84,84,0.15)' : 'color-mix(in srgb, var(--amber) 15%, transparent)') : 'rgba(42,181,138,0.15)' }}
-      >
-        <LightningBoltIcon />
+    <section className="card flex flex-col gap-4 p-5 pt:p-6 h-full" aria-label={t.home.sectionEnergy}>
+      <header className="flex items-center justify-between">
+        <h3 className="text-lg pt:text-xl font-semibold text-tp">{t.home.electricityNow}</h3>
+        <span
+          className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ color, background: `color-mix(in srgb, ${color} 16%, transparent)` }}
+        >
+          <LightningBoltIcon className="w-5 h-5" />
+        </span>
+      </header>
+
+      <div className="flex items-baseline gap-2 tabular-nums" dir="ltr" style={MONO}>
+        <span className="text-6xl font-medium leading-none" style={{ color }}>{grouped(reading.watts)}</span>
+        <span className="text-2xl text-ts">W</span>
       </div>
-      <span className={`text-2xl font-bold tabular-nums ${color}`}
-        style={{ fontFamily: "'DM Mono', monospace" }}
-      >
-        {isValid ? `${Math.round(watts)}W` : '--'}
-      </span>
-      <span className="text-xs font-medium text-ts">{t.home.electricityConsumption}</span>
-    </div>
-  );
-}
 
-// ─── Smart Curtain Tile (Feature 2) ───────────────────────────────────────
-
-function CurtainTile({ allStates, ha, onLongPress }) {
-  const entity = allStates.find((e) => e.entity_id === 'cover.smart_curtain_robot_curtain');
-  const pressTimerRef = useRef(null);
-  const pressedRef = useRef(false);
-  const [pressing, setPressing] = useState(false);
-
-  if (!entity) return null;
-
-  const pos = entity.attributes?.current_position;
-  const isClosed = entity.state === 'closed';
-  const isOpen = entity.state === 'open';
-  const statusText = isClosed ? t.home.curtainClosed
-    : (pos != null && pos > 0 && pos < 100) ? `${pos}%`
-    : t.home.curtainOpen;
-
-  const borderColor = isOpen ? 'border-acc2' : 'border-bd';
-
-  const handlePressStart = (e) => {
-    e.preventDefault();
-    pressedRef.current = true;
-    setPressing(true);
-    pressTimerRef.current = setTimeout(() => {
-      if (pressedRef.current) {
-        pressedRef.current = false;
-        setPressing(false);
-        onLongPress(entity);
-      }
-    }, 300);
-  };
-
-  const handlePressEnd = (e) => {
-    e.preventDefault();
-    if (!pressedRef.current) {
-      setPressing(false);
-      return;
-    }
-    pressedRef.current = false;
-    setPressing(false);
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
-    // Short tap: toggle open/close
-    if (isClosed) {
-      ha.callService('cover', 'open_cover', { entity_id: entity.entity_id });
-    } else {
-      ha.callService('cover', 'close_cover', { entity_id: entity.entity_id });
-    }
-  };
-
-  const handlePressCancel = () => {
-    pressedRef.current = false;
-    setPressing(false);
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
-  };
-
-  return (
-    <div
-      className={`relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
-                   cursor-pointer select-none overflow-hidden
-                   border-2 ${borderColor}
-                   transition-all duration-[var(--dur-fast)]
-                   ${pressing ? 'scale-[0.98]' : 'scale-100'}
-                   hover:shadow-raised`}
-      style={{ minHeight: '140px', minWidth: '180px' }}
-      onPointerDown={handlePressStart}
-      onPointerUp={handlePressEnd}
-      onPointerLeave={handlePressCancel}
-      onPointerCancel={handlePressCancel}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <div className={`w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center transition-colors duration-[var(--dur-fast)]
-        ${isOpen ? 'bg-acc2/15 text-acc2' : 'bg-s2 text-tm'}`}>
-        <CurtainIcon />
+      <div>
+        <Gauge position={position} track={POWER_TRACK} tone={tone} label={`${grouped(reading.watts)} W`} />
+        <div dir="ltr" className="flex justify-between mt-1.5 text-xs text-tm tabular-nums" style={MONO}>
+          <span>0</span>
+          <span>2 kW</span>
+          <span>4 kW</span>
+        </div>
       </div>
-      <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2 line-clamp-1">
-        {t.home.curtain}
-      </span>
-      <span className={`text-xs font-medium ${isOpen ? 'text-acc2' : 'text-tm'}`}>
-        {statusText}
-      </span>
-    </div>
+
+      <dl className="flex items-center gap-6 mt-auto pt-3 border-t border-bd text-sm">
+        {reading.volts != null && (
+          <div className="flex items-baseline gap-2">
+            <dt className="text-ts">{t.home.voltage}</dt>
+            <dd className="text-tp tabular-nums" dir="ltr" style={MONO}>{Math.round(reading.volts)} V</dd>
+          </div>
+        )}
+        {reading.totalKwh != null && (
+          <div className="flex items-baseline gap-2">
+            <dt className="text-ts">{t.home.totalEnergy}</dt>
+            <dd className="text-tp tabular-nums" dir="ltr" style={MONO}>{grouped(reading.totalKwh)} kWh</dd>
+          </div>
+        )}
+      </dl>
+    </section>
   );
 }
 
@@ -1058,29 +1152,6 @@ function CurtainPopup({ entity, anchorRect, onClose, ha }) {
   );
 }
 
-// ─── IR Remote Tile (Feature 3) ───────────────────────────────────────────
-
-function IRRemoteTile({ entityId, label, onTap }) {
-  return (
-    <div
-      className="relative card flex flex-col items-center justify-center gap-2.5 pt:h-full pt:gap-4 pt:rounded-3xl
-                 cursor-pointer select-none overflow-hidden
-                 border-2 border-bd hover:shadow-raised
-                 transition-all duration-[var(--dur-fast)] active:scale-[0.98]"
-      style={{ minHeight: '140px', minWidth: '180px' }}
-      onClick={() => onTap(entityId)}
-    >
-      <div className="w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center bg-lav-bg/50 text-lav-d">
-        <RemoteControlIcon />
-      </div>
-      <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2 line-clamp-1">
-        {label}
-      </span>
-      <span className="text-xs font-medium text-ts">{t.home.irRemote}</span>
-    </div>
-  );
-}
-
 // ─── HomePage ──────────────────────────────────────────────────────────────
 
 export default function HomePage() {
@@ -1093,11 +1164,38 @@ export default function HomePage() {
   const { entities, allStates, loading, connected } = ha;
 
   const [popup, setPopup] = useState(null); // { entity, rect }
-  const [acPopupOpen, setAcPopupOpen] = useState(false);
+  const [acRoom, setAcRoom] = useState(null); // the room whose AC popup is open
+  const [acPresets, setAcPresets] = useState({}); // blaster entity -> { off, on[] }
   const [curtainPopup, setCurtainPopup] = useState(null); // { entity, rect }
-  const [irOverlay, setIrOverlay] = useState(null); // { entityId, roomName }
+  const [irOverlay, setIrOverlay] = useState(null); // { entityId, roomName, scripts }
 
   const isConfigured = haStatus === 'connected' || haStatus === 'degraded';
+
+  // The AC presets HA really has, per blaster (the popup offers exactly these).
+  useEffect(() => {
+    if (!isConfigured) return undefined;
+    let cancelled = false;
+    fetchApi('/api/ha/ac-presets')
+      .then((res) => { if (!cancelled) setAcPresets(res?.presets || {}); })
+      .catch(() => { /* no AC buttons without presets */ });
+    return () => { cancelled = true; };
+  }, [isConfigured]);
+
+  // What the page shows is derived from the real states by rules (homeModel),
+  // not by position: the first four things HA happened to list.
+  const states = allStates || [];
+  const rooms = useMemo(() => discoverRooms(states, {
+    living_room: t.home.roomLiving,
+    master_bedroom: t.home.roomMaster,
+    childrens_room: t.home.roomChildren,
+  }), [states]);
+  const devices = useMemo(() => pickDevices(states), [states]);
+  const reading = useMemo(() => powerReading(states), [states]);
+  const scenes = useMemo(() => visibleScenes(states, SCENE_CONFIG), [states]);
+  const hasBacklight = useMemo(
+    () => [TABLE_BACKLIGHT.on, TABLE_BACKLIGHT.off].every((id) => states.some((s) => s.entity_id === id)),
+    [states]
+  );
 
   // ── Not configured state ──────────────────────────────────────────────────
 
@@ -1139,27 +1237,15 @@ export default function HomePage() {
   };
 
   const handleLongPress = (entity) => {
-    // Find the tile element to anchor the popup
     const tileEl = document.querySelector(`[data-entity-id="${entity.entity_id}"]`);
     const rect = tileEl ? tileEl.getBoundingClientRect() : null;
-    setPopup({ entity, rect });
+    // Every cover - the curtain - gets the position popup.
+    if (getDomain(entity.entity_id) === 'cover') setCurtainPopup({ entity, rect });
+    else setPopup({ entity, rect });
   };
 
-  const handleCurtainLongPress = (entity) => {
-    const tileEl = document.querySelector(`[data-entity-id="curtain-tile"]`);
-    const rect = tileEl ? tileEl.getBoundingClientRect() : null;
-    setCurtainPopup({ entity, rect });
-  };
-
-  // ── IR Remote config ──
-  const IR_REMOTES = [
-    { entityId: 'remote.wifi_ir_master_bedroom', label: t.home.irRemoteMaster },
-    { entityId: 'remote.wifi_ir_childrens_room', label: t.home.irRemoteChildren },
-  ];
-
-  const handleIRTap = (entityId) => {
-    const remote = IR_REMOTES.find((r) => r.entityId === entityId);
-    setIrOverlay({ entityId, roomName: remote?.label || entityId });
+  const handleRemote = (room) => {
+    setIrOverlay({ entityId: room.remote, roomName: room.name, scripts: remoteScriptsFor(room) });
   };
 
   const handleSceneActivate = (config) => {
@@ -1179,11 +1265,14 @@ export default function HomePage() {
   };
 
   const offline = !connected && isConfigured;
+  const labels = { deviceBoiler: t.home.deviceBoiler, deviceMasterPower: t.home.deviceMasterPower, curtain: t.home.curtain };
+  const onCount = countOn(devices);
+  const summary = onCount === 0 ? t.home.allOff : onCount === 1 ? t.home.deviceOnOne : t.home.devicesOn.replace('{n}', String(onCount));
 
   // ── Main content ──────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-hidden p-6 gap-5 pt:p-8 pt:gap-6" dir="rtl">
+    <div className="flex flex-col h-full overflow-y-auto p-6 gap-6 pt:p-8 pt:gap-8" dir="rtl" style={{ scrollbarWidth: 'thin' }}>
       {haStatus === 'degraded' && (
         <ConnectionBanner
           integration={t.connection.degraded}
@@ -1192,91 +1281,80 @@ export default function HomePage() {
         />
       )}
 
-      {/* Device tiles grid */}
-      <div className="flex-1 grid grid-cols-5 grid-rows-2 gap-4 overflow-y-auto
-                      pt:grid-cols-2 pt:grid-rows-5 pt:gap-5">
-        {/* AC Control tile — spans 2 columns (full width row in portrait) */}
-        <div
-          className="col-span-2 card flex flex-col items-center justify-center gap-2.5 pt:gap-4 pt:rounded-3xl
-                     cursor-pointer select-none overflow-hidden
-                     border-2 border-bd hover:shadow-raised
-                     transition-all duration-[var(--dur-fast)]
-                     hover:border-acc2 active:scale-[0.98]"
-          style={{ minHeight: '140px' }}
-          onClick={() => setAcPopupOpen(true)}
-        >
-          <div className="w-12 h-12 pt:w-16 pt:h-16 rounded-full flex items-center justify-center bg-s2 text-tm">
-            <SnowflakeIcon />
-          </div>
-          <span className="text-sm pt:text-lg font-medium text-tp text-center leading-tight px-2">
-            {t.home.ac}
-          </span>
-          <span className="text-xs font-medium text-tm">
-            {t.home.acControl}
-          </span>
+      {/* Title, a one-line summary of the house, and any scenes that exist */}
+      <header className="flex items-center justify-between gap-4 shrink-0">
+        <div>
+          <h1 className="text-2xl pt:text-3xl font-bold text-tp">{t.home.title}</h1>
+          <p className="text-sm text-ts mt-0.5">{summary}</p>
         </div>
-
-        {/* Regular device tiles (up to 4, since AC=2cols + 4 special tiles = 10) */}
-        {entities.slice(0, 4).map((entity) => (
-          <div key={entity.entity_id} data-entity-id={entity.entity_id}>
-            <DeviceTile
-              entity={entity}
-              onToggle={handleToggle}
-              onLongPress={handleLongPress}
-              offline={offline}
-            />
+        {scenes.length > 0 && (
+          <div className="flex flex-wrap gap-3 pt:hidden">
+            {scenes.map((scene) => (
+              <SceneChip key={scene.key} config={scene} onActivate={handleSceneActivate} />
+            ))}
           </div>
-        ))}
+        )}
+      </header>
 
-        {/* Electricity Monitor tile */}
-        <div key="electricity-tile">
-          <ElectricityTile allStates={allStates || []} />
-        </div>
-
-        {/* Smart Curtain tile */}
-        <div key="curtain-tile" data-entity-id="curtain-tile">
-          <CurtainTile allStates={allStates || []} ha={ha} onLongPress={handleCurtainLongPress} />
-        </div>
-
-        {/* IR Remote tiles */}
-        {IR_REMOTES.map((remote) => (
-          <div key={remote.entityId}>
-            <IRRemoteTile
-              entityId={remote.entityId}
-              label={remote.label}
-              onTap={handleIRTap}
-            />
-          </div>
-        ))}
-
-        {/* Fill remaining tiles if fewer entities */}
-        {entities.length < 4 &&
-          Array.from({ length: 4 - entities.length }).map((_, i) => (
-            <div
-              key={`empty-${i}`}
-              className="card flex flex-col items-center justify-center gap-2
-                         border-2 border-dashed border-bd
-                         min-h-[140px] min-w-[180px] opacity-30 pt:rounded-3xl"
-            >
-              <div className="w-10 h-10 rounded-full bg-s2 flex items-center justify-center">
-                <span className="text-tm text-lg">+</span>
-              </div>
-            </div>
+      {/* Portrait has no room beside the title, so scenes get their own row. */}
+      {scenes.length > 0 && (
+        <div className="hidden pt:flex flex-wrap gap-3 -mt-2">
+          {scenes.map((scene) => (
+            <SceneChip key={scene.key} config={scene} onActivate={handleSceneActivate} />
           ))}
+        </div>
+      )}
+
+      {rooms.length > 0 && (
+        <section aria-label={t.home.sectionRooms}>
+          <SectionLabel>{t.home.sectionRooms}</SectionLabel>
+          <div className="grid grid-cols-3 gap-4 pt:grid-cols-1 pt:gap-5">
+            {rooms.map((room) => (
+              <RoomPanel
+                key={room.slug}
+                room={room}
+                onRemote={handleRemote}
+                hasAC={Boolean(acPresets[room.remote] && (acPresets[room.remote].on.length || acPresets[room.remote].off))}
+                onAC={setAcRoom}
+                backlight={hasBacklight}
+                callService={ha.callService}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <div className="grid grid-cols-3 gap-4 pt:grid-cols-1 pt:gap-8">
+        <section className={`flex flex-col ${reading ? 'col-span-2 pt:col-span-1' : 'col-span-3 pt:col-span-1'}`} aria-label={t.home.sectionDevices}>
+          <SectionLabel>{t.home.sectionDevices}</SectionLabel>
+          {devices.length > 0 ? (
+            <div className={`grid flex-1 auto-rows-fr gap-4 pt:grid-cols-2 pt:gap-5 ${reading ? 'grid-cols-4' : 'grid-cols-6'}`}>
+              {devices.map((entity) => (
+                <div key={entity.entity_id} data-entity-id={entity.entity_id} className="h-full">
+                  <DeviceCard
+                    entity={entity}
+                    name={deviceName(entity, labels)}
+                    onToggle={handleToggle}
+                    onLongPress={handleLongPress}
+                    offline={offline}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-base text-tm py-6">{t.home.noDevices}</p>
+          )}
+        </section>
+
+        {reading && (
+          <section className="flex flex-col" aria-label={t.home.sectionEnergy}>
+            <SectionLabel>{t.home.sectionEnergy}</SectionLabel>
+            <div className="flex-1"><EnergyCard reading={reading} /></div>
+          </section>
+        )}
       </div>
 
-      {/* Scene buttons */}
-      <div className="flex gap-4 shrink-0 pt:grid pt:grid-cols-2">
-        {SCENE_CONFIG.map((scene) => (
-          <SceneButton
-            key={scene.key}
-            config={scene}
-            onActivate={handleSceneActivate}
-          />
-        ))}
-      </div>
-
-      {/* Control popup (lights, climate, media, cover) */}
+      {/* Control popup (lights, climate, media) */}
       {popup && (
         <ControlPopup
           entity={popup.entity}
@@ -1288,12 +1366,14 @@ export default function HomePage() {
 
       {/* AC Control popup */}
       <ACControlPopup
-        visible={acPopupOpen}
-        onClose={() => setAcPopupOpen(false)}
+        visible={Boolean(acRoom)}
+        room={acRoom}
+        presets={acRoom ? acPresets[acRoom.remote] : null}
+        onClose={() => setAcRoom(null)}
         callService={ha.callService}
       />
 
-      {/* Curtain popup */}
+      {/* Curtain / cover popup */}
       {curtainPopup && (
         <CurtainPopup
           entity={curtainPopup.entity}
@@ -1303,11 +1383,12 @@ export default function HomePage() {
         />
       )}
 
-      {/* IR Remote overlay */}
+      {/* Remote overlay */}
       {irOverlay && (
         <IRRemoteOverlay
           entityId={irOverlay.entityId}
           roomName={irOverlay.roomName}
+          scripts={irOverlay.scripts}
           onClose={() => setIrOverlay(null)}
         />
       )}
