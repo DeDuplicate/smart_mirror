@@ -207,6 +207,50 @@ export default function useChores() {
     [fetchTasks, addToast]
   );
 
+  // ── Reorder one kid's chores (drag and drop) ───────────────────────────
+  // `orderedIds` is the person's full chore list in the new order. Optimistic.
+  // On failure (server unreachable, or a 409 because another screen changed the
+  // list) the chore snaps back to where it was: leaving it in an order that was
+  // never saved looks like it worked, and a refetch alone cannot undo that when
+  // the server is the thing that is down.
+  const peopleRef = useRef(people);
+  peopleRef.current = people;
+
+  const reorderTasks = useCallback(
+    async (personId, orderedIds) => {
+      const before = peopleRef.current.find((p) => p.id === personId)?.tasks.map((task) => task.id) || [];
+      setPeople((prev) =>
+        prev.map((person) => {
+          if (person.id !== personId) return person;
+          const byId = new Map(person.tasks.map((task) => [task.id, task]));
+          const tasks = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+          return tasks.length === person.tasks.length ? { ...person, tasks } : person;
+        })
+      );
+      try {
+        await apiFetch(`/api/tasks/people/${personId}/tasks/reorder`, {
+          method: 'PUT',
+          body: JSON.stringify({ order: orderedIds }),
+        });
+      } catch {
+        addToast('error', t.tasks.choreReorderError);
+        const rank = new Map(before.map((id, i) => [id, i]));
+        setPeople((prev) =>
+          prev.map((person) =>
+            person.id === personId
+              ? {
+                ...person,
+                tasks: [...person.tasks].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)),
+              }
+              : person
+          )
+        );
+        await fetchTasks(); // best effort: picks up whatever really changed
+      }
+    },
+    [fetchTasks, addToast]
+  );
+
   // ── Avatar photo (camera/file picker) — persisted to the DB ────────────
   const uploadAvatar = useCallback(
     async (personId, dataUrl) => {
@@ -283,6 +327,7 @@ export default function useChores() {
     toggleTask,
     addTask,
     deleteTask,
+    reorderTasks,
     addPerson,
     removePerson,
     uploadAvatar,

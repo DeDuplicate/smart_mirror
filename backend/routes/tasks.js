@@ -643,6 +643,43 @@ router.post('/people/:personId/tasks', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PUT /api/tasks/people/:personId/tasks/reorder
+// Body: { order: [taskId, ...] } - the person's chores, in the new order.
+//
+// Must be exactly the person's current chores. A list that is missing one
+// (added from another screen) or names one that is gone (deleted elsewhere) is
+// stale, and applying it would leave positions colliding - so it is a 409 and
+// the client refetches instead.
+// ---------------------------------------------------------------------------
+router.put('/people/:personId/tasks/reorder', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+  const { personId } = req.params;
+  const order = req.body && req.body.order;
+
+  if (!Array.isArray(order) || order.some((id) => typeof id !== 'string')) {
+    return res.status(400).json({ error: 'order must be an array of chore ids' });
+  }
+
+  try {
+    const current = db.prepare('SELECT id FROM chore_tasks WHERE person_id = ?').all(personId).map((r) => r.id);
+    const sameSet = order.length === current.length
+      && new Set(order).size === order.length
+      && order.every((id) => current.includes(id));
+    if (!sameSet) return res.status(409).json({ error: 'chore list changed, refresh and retry' });
+
+    const setPos = db.prepare('UPDATE chore_tasks SET position = ? WHERE id = ? AND person_id = ?');
+    db.transaction(() => order.forEach((id, i) => setPos.run(i, id, personId)))();
+
+    emitTasksUpdated(req);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Chores reorder error: %s', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/tasks/people/:personId/tasks/:taskId — delete a chore task
 // ---------------------------------------------------------------------------
 router.delete('/people/:personId/tasks/:taskId', (req, res) => {

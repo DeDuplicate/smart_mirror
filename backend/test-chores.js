@@ -137,3 +137,43 @@ test('nightly chore reset', async (t) => {
     assert.match(fs.readFileSync(path.join(__dirname, 'server.js'), 'utf-8'), /cron\.schedule\('0 0 \* \* \*'/);
   });
 });
+
+test('chore reorder', async (t) => {
+  const { db, server, base } = makeApp();
+  t.after(() => server.close());
+  db.prepare("INSERT INTO chore_people (id, name) VALUES ('p1', 'Anna'), ('p2', 'Bob')").run();
+  for (const [id, person, pos] of [['a', 'p1', 0], ['b', 'p1', 1], ['c', 'p1', 2], ['x', 'p2', 0]]) {
+    db.prepare("INSERT INTO chore_tasks (id, person_id, title, position) VALUES (?, ?, ?, ?)").run(id, person, id, pos);
+  }
+  const order = (p) => db.prepare('SELECT id FROM chore_tasks WHERE person_id = ? ORDER BY position').all(p).map((r) => r.id);
+  const put = (p, body) => req(base, 'PUT', `/api/tasks/people/${p}/tasks/reorder`, body);
+
+  await t.test('saves the new order as contiguous positions, and GET returns it', async () => {
+    const r = await put('p1', { order: ['c', 'a', 'b'] });
+    assert.equal(r.status, 200);
+    assert.deepEqual(order('p1'), ['c', 'a', 'b']);
+    assert.deepEqual(db.prepare("SELECT position FROM chore_tasks WHERE person_id='p1' ORDER BY position").all().map((x) => x.position), [0, 1, 2]);
+    const people = (await req(base, 'GET', '/api/tasks/people')).body;
+    assert.deepEqual(people.find((p) => p.id === 'p1').tasks.map((x) => x.id), ['c', 'a', 'b']);
+  });
+
+  await t.test('another kid keeps their own order', () => {
+    assert.deepEqual(order('p2'), ['x']);
+  });
+
+  await t.test('a stale list is a 409 and changes nothing', async () => {
+    const before = order('p1');
+    assert.equal((await put('p1', { order: ['a', 'b'] })).status, 409, 'missing a chore');
+    assert.equal((await put('p1', { order: ['a', 'b', 'c', 'zzz'] })).status, 409, 'unknown chore');
+    assert.equal((await put('p1', { order: ['a', 'a', 'b'] })).status, 409, 'duplicate');
+    assert.equal((await put('p1', { order: ['a', 'b', 'x'] })).status, 409, "another kid's chore");
+    assert.deepEqual(order('p1'), before);
+    assert.deepEqual(order('p2'), ['x'], "the other kid's chore was not touched");
+  });
+
+  await t.test('rejects a malformed body', async () => {
+    assert.equal((await put('p1', {})).status, 400);
+    assert.equal((await put('p1', { order: 'a,b,c' })).status, 400);
+    assert.equal((await put('p1', { order: [1, 2, 3] })).status, 400);
+  });
+});

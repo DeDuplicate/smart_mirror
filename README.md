@@ -115,6 +115,7 @@ Connect DVRs, NVRs and IP cameras in **Settings → Cameras**. The Cameras tab a
 - :speech_balloon: **Daily phrase / quote** of the day — 133 phrases with sources and explanations, configurable rotation
 - :family_man_woman_girl_boy: **Family member photos** on chore avatars
 - :fireworks: **Fireworks celebration** when kids complete all chores
+- :arrow_up_down: **Drag to reorder chores** — grab the grip on a chore and drag it up or down to order each kid's list; open and done chores stay in their own groups and the order is saved
 - :crescent_moon: **Nightly chore reset** (opt-in, Settings → family members) — at 00:00 every ticked chore is unticked so each day starts clean; open screens update immediately
 - :clap: **Clap animation + sound** on each chore completion
 - :shopping_cart: **Shopping list** from Home Assistant

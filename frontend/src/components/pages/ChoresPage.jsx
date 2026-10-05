@@ -6,6 +6,7 @@ import { TasksSkeleton } from '../Skeleton.jsx';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import useChores from "../../hooks/useChores.js";
 import CelebrationAnimation from '../CelebrationAnimation.jsx';
+import { insertionPoint, moveNextTo } from '../../hooks/choreOrder.js';
 
 // ─── Recurrence config ─────────────────────────────────────────────────────
 
@@ -257,7 +258,18 @@ function ClapBurst({ onDone }) {
   );
 }
 
-function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
+function GripIcon({ className = 'w-6 h-6' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" />
+      <circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" />
+      <circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+    </svg>
+  );
+}
+
+function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, isBeingDragged, dropEdge }) {
+  const cardRef = useRef(null);
   const isComplete = task.completed;
   const overdue = !isComplete && isOverdue(task.dueDate);
   const [justToggled, setJustToggled] = useState(false);
@@ -301,6 +313,9 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
     // SIBLINGS inside it, never nested (nested interactive elements are invalid
     // HTML and made the delete action unreachable by keyboard/switch access).
     <div
+      ref={cardRef}
+      data-chore-id={task.id}
+      data-chore-group={isComplete ? 'done' : 'open'}
       className={`
         relative flex items-center rounded-xl
         border border-[var(--bd)]
@@ -308,9 +323,37 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
         active:scale-[0.98]
         min-h-[56px]
         ${bgClass}
+        ${isBeingDragged ? 'opacity-40 border-dashed' : ''}
       `}
       style={{ borderInlineStart: `3px solid ${personColor}` }}
     >
+      {/* Where the dragged chore would land. Drawn over the gap between cards,
+          not as a list item, so nothing shifts and the drop point cannot flicker. */}
+      {dropEdge && (
+        <div
+          aria-hidden="true"
+          className={`absolute inset-x-1 h-1.5 rounded-full bg-[var(--acc)] opacity-70 pointer-events-none
+                      ${dropEdge === 'before' ? '-top-[7px]' : '-bottom-[7px]'}`}
+        />
+      )}
+
+      {/* Drag handle - press and move to reorder. At the start edge, as far as
+          possible from the delete button. touch-none stops the browser from
+          scrolling the column instead of dragging. */}
+      {onDragStart && (
+        <button
+          type="button"
+          data-no-swipe
+          onMouseDown={(e) => onDragStart(task, e, cardRef.current)}
+          onTouchStart={(e) => onDragStart(task, e, cardRef.current)}
+          aria-label={t.tasks.dragToReorder.replace('{title}', task.title)}
+          className="flex-shrink-0 min-w-[44px] min-h-[56px] flex items-center justify-center
+                     text-[var(--ts)] cursor-grab touch-none select-none"
+        >
+          <GripIcon />
+        </button>
+      )}
+
       {/* Card body — tap to toggle. Fills the row apart from the delete target. */}
       <button
         type="button"
@@ -318,7 +361,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap }) {
         data-clap-target
         aria-pressed={isComplete}
         aria-label={`${task.title}${isComplete ? ` — ${t.tasks.done}` : ''}${overdue ? ` — ${t.tasks.overdue}` : ''}`}
-        className="flex-1 min-w-0 flex items-center gap-3 ps-3 py-3 rounded-xl"
+        className="flex-1 min-w-0 flex items-center gap-3 ps-1 py-3 rounded-xl"
       >
         {/* Checkbox — purely decorative: state is announced by the button label */}
         <div
@@ -391,6 +434,7 @@ function PersonColumn({
   onToggleTask,
   onAddTask,
   onDeleteTask,
+  onReorderTasks,
   onPhotoChange,
 }) {
   const columnRef = useRef(null);
@@ -441,6 +485,103 @@ function PersonColumn({
   const handleCelebrationComplete = useCallback(() => {
     setCelebration(null);
   }, []);
+
+  // ── Drag to reorder (inside this kid's column only) ──────────────────────
+  const listRef = useRef(null);
+  const ghostRef = useRef(null);
+  const dragRef = useRef(null); // facts the document listeners read; not state, so moves cost no re-render
+  const insertRef = useRef(null); // mirrors `insert`, for the listeners
+  const tasksRef = useRef(person.tasks);
+  tasksRef.current = person.tasks;
+  const lastTouchRef = useRef(0);
+  const [drag, setDrag] = useState(null); // { task, left, top, width, height } - fixed for the whole drag
+  const [insert, setInsert] = useState(null); // { targetId, after }
+
+  const startDrag = useCallback((task, e, cardEl) => {
+    if (!cardEl) return;
+    // A touch is followed by a compatibility mousedown; it must not start a second drag.
+    if (e.type === 'mousedown' && Date.now() - lastTouchRef.current < 800) return;
+    if (e.type === 'touchstart') lastTouchRef.current = Date.now();
+    const point = e.touches ? e.touches[0] : e;
+    const r = cardEl.getBoundingClientRect();
+    dragRef.current = {
+      id: task.id,
+      // Open and done chores are listed apart, so a chore only moves among its own kind.
+      group: task.completed ? 'done' : 'open',
+      offsetY: point.clientY - r.top,
+      left: r.left,
+    };
+    insertRef.current = null;
+    setInsert(null);
+    setDrag({ task, left: r.left, top: r.top, width: r.width, height: r.height });
+  }, []);
+
+  useEffect(() => {
+    if (!drag) return undefined;
+
+    const finish = (commit) => {
+      const d = dragRef.current;
+      const point = insertRef.current;
+      dragRef.current = null;
+      insertRef.current = null;
+      setDrag(null);
+      setInsert(null);
+      if (!commit || !d || !point) return;
+      // Reorder the FULL saved list so chores of the other group keep their place.
+      const ids = tasksRef.current.map((x) => x.id);
+      const next = moveNextTo(ids, d.id, point.targetId, point.after);
+      if (next.some((id, i) => id !== ids[i])) onReorderTasks(person.id, next);
+    };
+
+    const onMove = (e) => {
+      const d = dragRef.current;
+      const list = listRef.current;
+      if (!d || !list) return;
+      e.preventDefault();
+      const pt = e.touches ? e.touches[0] : e;
+      if (ghostRef.current) {
+        ghostRef.current.style.transform = `translate3d(${d.left}px, ${pt.clientY - d.offsetY}px, 0)`;
+      }
+      // ponytail: edge auto-scroll steps per move event, so a finger held
+      // perfectly still at the edge does not keep scrolling. Switch to a
+      // requestAnimationFrame loop if long lists make that annoying.
+      const box = list.getBoundingClientRect();
+      if (pt.clientY < box.top + 48) list.scrollTop -= 14;
+      else if (pt.clientY > box.bottom - 48) list.scrollTop += 14;
+
+      const cards = [...list.querySelectorAll(`[data-chore-group="${d.group}"]`)]
+        .filter((el) => el.dataset.choreId !== d.id)
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          return { id: el.dataset.choreId, top: r.top, height: r.height };
+        });
+      const next = insertionPoint(cards, pt.clientY);
+      const prev = insertRef.current;
+      if (prev?.targetId !== next?.targetId || prev?.after !== next?.after) {
+        insertRef.current = next;
+        setInsert(next);
+      }
+    };
+
+    const onEnd = () => finish(true);
+    const onCancel = () => finish(false);
+    const onKey = (e) => { if (e.key === 'Escape') finish(false); };
+
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onCancel);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onCancel);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [drag, onReorderTasks, person.id]);
 
   const progressText = allDone
     ? t.tasks.allCompleted
@@ -501,7 +642,7 @@ function PersonColumn({
       </div>
 
       {/* Task list */}
-      <div className="flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-2">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-3 pt-2 pb-2 flex flex-col gap-2">
         {sortedTasks.map((task) => (
           <TaskCard
             key={task.id}
@@ -510,6 +651,9 @@ function PersonColumn({
             onToggle={handleToggle}
             onDelete={handleDelete}
             onClap={() => setShowClap(true)}
+            onDragStart={startDrag}
+            isBeingDragged={drag?.task.id === task.id}
+            dropEdge={insert && insert.targetId === task.id ? (insert.after ? 'after' : 'before') : null}
           />
         ))}
         {sortedTasks.length === 0 && (
@@ -538,6 +682,27 @@ function PersonColumn({
           <span>{t.tasks.addTaskBtn}</span>
         </button>
       </div>
+
+      {/* The chore being dragged, following the finger. Moved by transform only. */}
+      {drag && createPortal(
+        <div
+          ref={ghostRef}
+          aria-hidden="true"
+          className="fixed left-0 top-0 z-[80] pointer-events-none flex items-center gap-3 px-4
+                     rounded-xl border border-[var(--bd)] bg-[var(--surf)] shadow-popover"
+          style={{
+            width: drag.width,
+            height: drag.height,
+            transform: `translate3d(${drag.left}px, ${drag.top}px, 0)`,
+            borderInlineStart: `3px solid ${person.color}`,
+            willChange: 'transform',
+          }}
+        >
+          {drag.task.emoji && <span className="text-lg">{drag.task.emoji}</span>}
+          <span className="text-sm font-medium text-[var(--tp)] truncate">{drag.task.title}</span>
+        </div>,
+        document.body
+      )}
 
       {/* Add task bottom sheet */}
       {addingTask && (
@@ -808,6 +973,7 @@ export default function TasksPage() {
     toggleTask,
     addTask,
     deleteTask,
+    reorderTasks,
     uploadAvatar,
   } = useChores();
 
@@ -893,6 +1059,7 @@ export default function TasksPage() {
             onToggleTask={toggleTask}
             onAddTask={addTask}
             onDeleteTask={deleteTask}
+            onReorderTasks={reorderTasks}
             onPhotoChange={handlePhotoChange}
           />
         ))}
