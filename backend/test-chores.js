@@ -88,3 +88,52 @@ test('chores routes', async (t) => {
     ]);
   });
 });
+
+test('nightly chore reset', async (t) => {
+  const { runNightlyReset } = require('./routes/tasks');
+  const db = new Database(':memory:');
+  for (const f of ['001_initial.sql', '002_chores.sql']) {
+    db.exec(fs.readFileSync(path.join(__dirname, 'db/migrations', f), 'utf-8'));
+  }
+  db.prepare("INSERT INTO chore_people (id, name) VALUES ('p1', 'Anna'), ('p2', 'Bob')").run();
+  const seed = () => {
+    db.prepare('DELETE FROM chore_tasks').run();
+    db.prepare(`INSERT INTO chore_tasks (id, person_id, title, completed, recurrence) VALUES
+      ('a', 'p1', 'dishes', 1, 'once'), ('b', 'p1', 'bed', 0, 'daily'),
+      ('c', 'p2', 'trash', 1, 'once'), ('d', 'p2', 'homework', 1, 'weekly')`).run();
+  };
+  const done = () => db.prepare('SELECT id FROM chore_tasks WHERE completed = 1 ORDER BY id').all().map((r) => r.id);
+  const emitted = [];
+  const ctx = { db, io: { emit: (e) => emitted.push(e) }, logger: { info() {} } };
+
+  await t.test('does nothing until the setting is on', () => {
+    seed();
+    assert.equal(runNightlyReset(ctx), 0, 'no setting row at all');
+    db.prepare("INSERT OR REPLACE INTO config VALUES ('choresResetNightly', 'false')").run();
+    assert.equal(runNightlyReset(ctx), 0);
+    assert.deepEqual(done(), ['a', 'c', 'd']);
+    assert.deepEqual(emitted, []);
+  });
+
+  await t.test('unchecks every completed chore, for everyone, and tells open screens', () => {
+    // The value exactly as PUT /api/settings stores a boolean true.
+    db.prepare("INSERT OR REPLACE INTO config VALUES ('choresResetNightly', ?)").run(JSON.stringify(true));
+    assert.equal(runNightlyReset(ctx), 3);
+    assert.deepEqual(done(), []);
+    assert.deepEqual(emitted, ['tasks:updated']);
+    // The chores themselves survive - only the ticks go.
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM chore_tasks').get().n, 4);
+  });
+
+  await t.test('a night with nothing ticked is quiet (no needless refetch)', () => {
+    emitted.length = 0;
+    assert.equal(runNightlyReset(ctx), 0);
+    assert.deepEqual(emitted, []);
+  });
+
+  await t.test('the cron expression is valid and fires at local midnight', () => {
+    const cron = require('node-cron');
+    assert.ok(cron.validate('0 0 * * *'));
+    assert.match(fs.readFileSync(path.join(__dirname, 'server.js'), 'utf-8'), /cron\.schedule\('0 0 \* \* \*'/);
+  });
+});

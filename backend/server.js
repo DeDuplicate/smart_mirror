@@ -294,6 +294,15 @@ cron.schedule('0 3 * * *', () => {
   }
 });
 
+// Chores: uncheck everything at local midnight (opt-in, Settings -> chores).
+cron.schedule('0 0 * * *', () => {
+  try {
+    require('./routes/tasks').runNightlyReset({ db, io, logger });
+  } catch (err) {
+    logger.error('Nightly chore reset failed: %s', err.message);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 12. Graceful shutdown
 // ---------------------------------------------------------------------------

@@ -554,6 +554,22 @@ router.delete('/people/:personId/avatar', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Nightly reset: with the "choresResetNightly" setting on, uncheck every chore
+// so each day starts clean. Scheduled for 00:00 from server.js; the setting is
+// read on every run, so toggling it needs no restart.
+// ponytail: cron only - if the backend is down at exactly 00:00 that night's
+// reset is skipped. Add a last-reset-date check if that ever bites.
+// ---------------------------------------------------------------------------
+function runNightlyReset({ db, io, logger }) {
+  const row = db.prepare('SELECT value FROM config WHERE key = ?').get('choresResetNightly');
+  if (!row || row.value !== 'true') return 0;
+  const { changes } = db.prepare('UPDATE chore_tasks SET completed = 0 WHERE completed = 1').run();
+  logger.info('Nightly chore reset: unchecked %d chore(s)', changes);
+  if (changes && io) io.emit('tasks:updated'); // open screens refetch immediately
+  return changes;
+}
+
+// ---------------------------------------------------------------------------
 // PATCH /api/tasks/people/:personId/tasks/:taskId/toggle
 // ---------------------------------------------------------------------------
 router.patch('/people/:personId/tasks/:taskId/toggle', (req, res) => {
@@ -648,3 +664,4 @@ router.delete('/people/:personId/tasks/:taskId', (req, res) => {
 });
 
 module.exports = router;
+module.exports.runNightlyReset = runNightlyReset;

@@ -1656,6 +1656,8 @@ function FamilySection() {
   const [people, setPeople] = useState([]);
   const [newName, setNewName] = useState('');
   const addToast = useStore((s) => s.addToast);
+  const { settings, updateSettings } = useSettings();
+  const { setSettings } = useStore();
 
   // Persist to both localStorage (so the Chores tab's sync seed converges)
   // and the backend DB (source of truth for chores).
@@ -1766,6 +1768,19 @@ function FamilySection() {
           <PlusIcon className="w-4 h-4" />
           {t.common.add}
         </Btn>
+      </div>
+
+      {/* Opt-in: the backend unchecks every chore at 00:00 (routes/tasks.js). */}
+      <div className="flex flex-col border-t border-bd mt-4 pt-2">
+        <ToggleRow
+          label={t.settings.choresResetNightly}
+          checked={settings.choresResetNightly === true}
+          onChange={(val) => {
+            setSettings({ choresResetNightly: val });
+            updateSettings({ choresResetNightly: val });
+          }}
+        />
+        <p className="text-sm text-tm">{t.settings.choresResetNightlyDesc}</p>
       </div>
     </Section>
   );

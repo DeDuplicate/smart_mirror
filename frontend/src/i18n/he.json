@@ -635,6 +635,8 @@
     "newsSourcesLoadError": "שגיאה בטעינת מקורות החדשות",
     "familyMembers": "בני המשפחה (מטלות)",
     "familyMembersDesc": "הוסף את בני המשפחה שיופיעו בלשונית מטלות",
+    "choresResetNightly": "איפוס מטלות כל לילה",
+    "choresResetNightlyDesc": "בחצות (00:00) כל המטלות שסומנו כבוצעו יחזרו למצב לא מסומן, וכל יום מתחיל מחדש",
     "familyNamePlaceholder": "שם...",
     "removeFamilyMember": "הסר בן משפחה",
     "noFamilyMembers": "אין בני משפחה — הוסף אחד למטה",
