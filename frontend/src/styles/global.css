@@ -1040,3 +1040,14 @@ html[data-cursor="hidden"] * {
 .text-tp\/70 { color: var(--ts); }
 .border-bd { border-color: var(--bd); }
 .border-surf { border-color: var(--surf); }
+
+/* A star just earned pops in (opacity and transform only). */
+@keyframes starPop {
+  0% { transform: scale(0.3); opacity: 0; }
+  55% { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.star-pop {
+  animation: starPop 700ms var(--ease-out) both;
+}

@@ -16,6 +16,7 @@
 
 const { Router } = require('express');
 const { execFile } = require('child_process');
+const crypto = require('crypto');
 const fsp = require('fs').promises;
 const os = require('os');
 const path = require('path');
@@ -419,14 +420,269 @@ router.get('/immich/:id', async (req, res) => {
   try {
     // `preview` is ~1440px on the long edge by default, which upscales
     // acceptably to 1080p; `fullsize` 302s back here on most servers because
-    // the fullsize derivative is off by default.
-    const r = await immichFetch(cfg, `/assets/${id}/thumbnail?size=preview`, { redirect: 'follow' });
+    // the fullsize derivative is off by default. `?size=thumbnail` (~250px) is
+    // for the picture browser's grid, where 30 previews at once would be 10 MB.
+    const size = req.query.size === 'thumbnail' ? 'thumbnail' : 'preview';
+    const r = await immichFetch(cfg, `/assets/${id}/thumbnail?size=${size}`, { redirect: 'follow' });
     res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
     res.setHeader('Cache-Control', 'private, max-age=3600');
     const buf = Buffer.from(await r.arrayBuffer());
     res.end(buf);
   } catch (err) {
     logger.warn('Immich asset %s failed: %s', id, err.message);
+    res.status(502).end();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Picture browser: choosing ONE photo (a kid's avatar)
+// ---------------------------------------------------------------------------
+// The slideshow only needs a list. Choosing a single picture needs thumbnails
+// you can scan at a glance, folders you can walk, and Immich in pages. These
+// routes are read-only and never write to a share or to Immich.
+// ---------------------------------------------------------------------------
+
+const BROWSE_IMMICH_PAGE = 60;  // photos per Immich page
+const BROWSE_FOLDER_MAX = 300;  // photos listed from one folder
+
+function cleanRel(value) {
+  return String(value || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+/** The pictures directly inside one folder (not recursive) and its subfolders. */
+async function listFolder(dir, rel) {
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
+  const folders = [];
+  const photos = [];
+  for (const entry of entries) {
+    if (isJunk(entry.name)) continue;
+    const childRel = rel ? `${rel}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) folders.push({ name: entry.name, path: childRel });
+    else if (isPhotoFile(entry.name)) photos.push({ name: entry.name, path: childRel });
+  }
+  folders.sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  photos.sort((a, b) => a.name.localeCompare(b.name, 'he', { numeric: true }));
+  return { folders, photos: photos.slice(0, BROWSE_FOLDER_MAX), photoCount: photos.length };
+}
+
+// GET /api/photoframe/browse/local?path= - one folder: its subfolders and pictures
+router.get('/browse/local', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const rel = cleanRel(req.query.path);
+  const dir = resolveSubdir(rel);
+  if (!dir) return res.status(400).json({ error: 'Folder is outside the photo directory' });
+
+  const parent = rel ? rel.split('/').slice(0, -1).join('/') : null;
+  try {
+    res.json({ path: rel, parent, ...(await listFolder(dir, rel)) });
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.json({ path: rel, parent, folders: [], photos: [], photoCount: 0 });
+    logger.warn('Folder browse failed for %j: %s', rel, err.message);
+    res.status(500).json({ error: 'Folder could not be read', code: err.code });
+  }
+});
+
+// --- Thumbnails -------------------------------------------------------------
+// A NAS photo is typically 3-10 MB. Thirty of them in a grid would stall the Pi,
+// so grid tiles and the crop view get a cached, downscaled copy made with ffmpeg
+// (which the mirror already ships for audio). If ffmpeg is missing or cannot read
+// a file, the original is served instead: slower, but never a hole in the grid.
+
+const THUMB_DIR = path.join(__dirname, '..', 'data', 'cache', 'thumbs');
+const THUMB_SIDES = { thumb: 240, medium: 1024 };
+const THUMB_PARALLEL = 2; // a Pi 2 has four slow cores and one gigabyte
+
+let thumbsRunning = 0;
+const thumbQueue = [];
+function withThumbSlot(task) {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      thumbsRunning += 1;
+      task().then(resolve, reject).finally(() => {
+        thumbsRunning -= 1;
+        const next = thumbQueue.shift();
+        if (next) next();
+      });
+    };
+    if (thumbsRunning < THUMB_PARALLEL) start();
+    else thumbQueue.push(start);
+  });
+}
+
+/**
+ * The EXIF orientation tag (1-8) of a JPEG, or null. Phones store a portrait shot
+ * as landscape pixels plus this tag; browsers apply it, but ffmpeg 5.x (Raspberry
+ * Pi OS) does not, so a thumbnail made without it would lie on its side.
+ */
+function parseExifOrientation(buf) {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 4 <= buf.length) {
+    if (buf[i] !== 0xff) return null;
+    const marker = buf[i + 1];
+    const len = buf.readUInt16BE(i + 2);
+    if (marker === 0xe1 && buf.toString('latin1', i + 4, i + 8) === 'Exif') {
+      return tiffOrientation(buf.subarray(i + 10, i + 2 + len));
+    }
+    if (marker === 0xda) return null; // start of image data: no EXIF before it
+    i += 2 + len;
+  }
+  return null;
+}
+
+function tiffOrientation(t) {
+  if (t.length < 8) return null;
+  const order = t.toString('latin1', 0, 2);
+  if (order !== 'II' && order !== 'MM') return null;
+  const le = order === 'II';
+  const u16 = (o) => (le ? t.readUInt16LE(o) : t.readUInt16BE(o));
+  const u32 = (o) => (le ? t.readUInt32LE(o) : t.readUInt32BE(o));
+  const ifd = u32(4);
+  if (ifd + 2 > t.length) return null;
+  const count = u16(ifd);
+  for (let k = 0; k < count; k += 1) {
+    const entry = ifd + 2 + k * 12;
+    if (entry + 12 > t.length) return null;
+    if (u16(entry) === 0x0112) {
+      const value = u16(entry + 8);
+      return value >= 1 && value <= 8 ? value : null;
+    }
+  }
+  return null;
+}
+
+async function exifOrientation(file) {
+  let handle;
+  try {
+    handle = await fsp.open(file, 'r');
+    const buf = Buffer.alloc(65536);
+    const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
+    return parseExifOrientation(buf.subarray(0, bytesRead));
+  } catch {
+    return null;
+  } finally {
+    await handle?.close();
+  }
+}
+
+// ffmpeg filter that turns each EXIF orientation upright.
+const ORIENTATION_FILTER = { 2: 'hflip', 3: 'hflip,vflip', 4: 'vflip', 5: 'transpose=0', 6: 'transpose=1', 7: 'transpose=3', 8: 'transpose=2' };
+
+function thumbKey(sizeName, rel, stat) {
+  return crypto.createHash('sha1').update(`${sizeName}|${rel}|${stat.mtimeMs}|${stat.size}`).digest('hex');
+}
+
+async function makeThumb(abs, out, sizeName, bytes) {
+  const side = THUMB_SIDES[sizeName];
+  const jpeg = /\.jpe?g$/i.test(abs);
+  // JPEG can be decoded at 1/2, 1/4 or 1/8 size, which is several times faster
+  // than decoding a 12 MP photo in full just to shrink it to 240 px.
+  let lowres = 0;
+  if (jpeg && sizeName === 'thumb' && bytes > 1_500_000) lowres = 2;
+  else if (jpeg && sizeName === 'medium' && bytes > 3_000_000) lowres = 1;
+
+  const turn = jpeg ? ORIENTATION_FILTER[await exifOrientation(abs)] : null;
+  const filter = [turn, `scale=${side}:${side}:force_original_aspect_ratio=decrease`].filter(Boolean).join(',');
+  const tmp = `${out}.${process.pid}.tmp.jpg`;
+  const args = ['-v', 'error', '-y', '-noautorotate', ...(lowres ? ['-lowres', String(lowres)] : []), '-i', abs, '-vf', filter, '-frames:v', '1', '-q:v', '5', tmp];
+  const result = await run('ffmpeg', args, 30000);
+  if (!result.ok) {
+    await fsp.rm(tmp, { force: true });
+    return false;
+  }
+  await fsp.rename(tmp, out);
+  return true;
+}
+
+// GET /api/photoframe/thumb?path=&size=thumb|medium - a downscaled copy of a photo
+router.get('/thumb', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const rel = cleanRel(req.query.path);
+  const sizeName = req.query.size === 'medium' ? 'medium' : 'thumb';
+  const abs = rel ? resolveSubdir(rel) : null;
+  if (!abs || abs === PHOTO_ROOT || !isPhotoFile(rel)) return res.status(400).json({ error: 'Not a photo in the photo directory' });
+
+  let stat;
+  try {
+    stat = await fsp.stat(abs);
+  } catch {
+    return res.status(404).end();
+  }
+  if (!stat.isFile()) return res.status(404).end();
+
+  const cached = path.join(THUMB_DIR, `${thumbKey(sizeName, rel, stat)}.jpg`);
+  const send = (file) => res.sendFile(file, { maxAge: '1d' });
+  try {
+    await fsp.access(cached);
+    return send(cached);
+  } catch {
+    // not cached yet
+  }
+
+  try {
+    await fsp.mkdir(THUMB_DIR, { recursive: true });
+    if (await withThumbSlot(() => makeThumb(abs, cached, sizeName, stat.size))) return send(cached);
+  } catch (err) {
+    logger.warn('Thumbnail failed for %j: %s', rel, err.message);
+  }
+  send(abs); // ffmpeg missing or unreadable: the original still shows
+});
+
+// --- Immich -----------------------------------------------------------------
+
+/** One page of the library for the picture browser, newest first. */
+function immichBrowseBody(albumId, personId, page) {
+  return {
+    ...immichSearchBody(albumId, personId ? [personId] : []),
+    size: BROWSE_IMMICH_PAGE,
+    order: 'desc',
+    ...(page ? { page: Number(page) } : {}),
+  };
+}
+
+// GET /api/photoframe/browse/immich?albumId=&personId=&page=
+router.get('/browse/immich', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const albumId = String(req.query.albumId || '');
+  const personId = String(req.query.personId || '');
+  const page = String(req.query.page || '');
+  if (albumId && albumId !== 'favorites' && !UUID_RE.test(albumId)) return res.status(400).json({ error: 'Invalid album id' });
+  if (personId && !UUID_RE.test(personId)) return res.status(400).json({ error: 'Invalid person id' });
+  if (page && !/^\d{1,6}$/.test(page)) return res.status(400).json({ error: 'Invalid page' });
+
+  const cfg = immichConfig(req.app.locals.db);
+  if (!cfg.base || !cfg.key) return res.status(503).json({ error: 'Immich is not configured' });
+
+  try {
+    const r = await immichFetch(cfg, '/search/metadata', { method: 'POST', body: JSON.stringify(immichBrowseBody(albumId, personId, page)) });
+    const body = await r.json();
+    const assets = immichItems(body)
+      .filter((a) => a?.id && a.type === 'IMAGE')
+      .map((a) => ({ id: a.id, name: a.originalFileName || a.id }));
+    const next = body?.assets?.nextPage;
+    res.json({ assets, nextPage: next ? String(next) : null });
+  } catch (err) {
+    logger.error('Immich browse failed: %s', err.message);
+    res.status(502).json({ error: 'Could not reach Immich', status: err.status || null });
+  }
+});
+
+// GET /api/photoframe/people/:id/face - Immich's own face crop of a person, which
+// is already the right shape for an avatar.
+router.get('/people/:id/face', async (req, res) => {
+  const logger = req.app.locals.logger;
+  const { id } = req.params;
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid person id' });
+  const cfg = immichConfig(req.app.locals.db);
+  if (!cfg.base || !cfg.key) return res.status(503).json({ error: 'Immich is not configured' });
+
+  try {
+    const r = await immichFetch(cfg, `/people/${id}/thumbnail`, { redirect: 'follow' });
+    res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.end(Buffer.from(await r.arrayBuffer()));
+  } catch (err) {
+    logger.warn('Immich face %s failed: %s', id, err.message);
     res.status(502).end();
   }
 });
@@ -518,3 +774,8 @@ module.exports.parseShares = parseShares;
 module.exports.isValidSmbHost = isValidSmbHost;
 module.exports.PHOTO_ROOT = PHOTO_ROOT;
 module.exports.mergeSettledAssets = mergeSettledAssets;
+module.exports.listFolder = listFolder;
+module.exports.parseExifOrientation = parseExifOrientation;
+module.exports.thumbKey = thumbKey;
+module.exports.immichBrowseBody = immichBrowseBody;
+module.exports.cleanRel = cleanRel;

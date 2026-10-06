@@ -6,6 +6,8 @@ import { TasksSkeleton } from '../Skeleton.jsx';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import useChores from "../../hooks/useChores.js";
 import CelebrationAnimation from '../CelebrationAnimation.jsx';
+import PhotoPickerPopup from '../PhotoPickerPopup.jsx';
+import StarIcon from '../StarIcon.jsx';
 import { insertionPoint, moveNextTo } from '../../hooks/choreOrder.js';
 
 // ─── Recurrence config ─────────────────────────────────────────────────────
@@ -115,15 +117,52 @@ function ProgressRing({ progress, color, size = 68, strokeWidth = 4 }) {
 
 // ─── Avatar with initials ──────────────────────────────────────────────────
 
-function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange }) {
+// What tapping a kid's picture offers. A centred sheet of big buttons, not the
+// browser's own file dialog, which on the kiosk is small and hard to use by touch.
+function AvatarMenu({ name, hasPhoto, immichReady, onImmich, onFolders, onDevice, onRemove, onClose }) {
+  const item = 'w-full min-h-[64px] px-5 rounded-xl border text-lg font-semibold text-start active:scale-95 transition-transform duration-[var(--dur-fast)]';
+  const plain = `${item} bg-[var(--s2)] border-[var(--bd)] text-[var(--tp)]`;
+  return createPortal(
+    <div
+      data-no-swipe
+      dir="rtl"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t.avatarPicker.menuTitle.replace('{name}', name)}
+        className="relative w-[460px] max-w-[92%] p-6 rounded-3xl bg-[var(--surf)] border border-[var(--bd)] shadow-modal flex flex-col gap-3"
+      >
+        <h2 className="text-2xl font-bold text-[var(--tp)] mb-2">{t.avatarPicker.menuTitle.replace('{name}', name)}</h2>
+        {immichReady && <button type="button" className={plain} onClick={onImmich}>{t.avatarPicker.fromImmich}</button>}
+        <button type="button" className={plain} onClick={onFolders}>{t.avatarPicker.fromFolders}</button>
+        <button type="button" className={plain} onClick={onDevice}>{t.avatarPicker.fromDevice}</button>
+        {hasPhoto && (
+          <button type="button" className={`${item} bg-[var(--coral-bg)] border-[var(--bd)] text-[var(--coral-d)]`} onClick={onRemove}>
+            {t.avatarPicker.remove}
+          </button>
+        )}
+        <button type="button" className={`${plain} text-center`} onClick={onClose}>{t.avatarPicker.cancel}</button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange, onPhotoRemove }) {
   const initials = name.charAt(0);
   const isComplete = progress >= 1;
   const fileInputRef = useRef(null);
   const addToast = useStore((s) => s.addToast);
+  const immichReady = useStore((s) => Boolean(s.settings.immichUrl) && Boolean(s.settings.immichApiKeySet));
+  const [menu, setMenu] = useState(false);
+  const [picker, setPicker] = useState(null); // 'immich' | 'folders' | null
 
-  const handlePhotoClick = useCallback(() => {
-    if (fileInputRef.current) fileInputRef.current.click();
-  }, []);
+  const handlePhotoClick = useCallback(() => setMenu(true), []);
 
   const handleFileChange = useCallback((e) => {
     const file = e.target.files?.[0];
@@ -199,6 +238,32 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange })
         accept="image/*"
         className="hidden"
         onChange={handleFileChange}
+      />
+
+      {menu && (
+        <AvatarMenu
+          name={name}
+          hasPhoto={Boolean(photo)}
+          immichReady={immichReady}
+          onClose={() => setMenu(false)}
+          onImmich={() => { setMenu(false); setPicker('immich'); }}
+          onFolders={() => { setMenu(false); setPicker('folders'); }}
+          // The file dialog must open inside this tap, so the menu closes and the
+          // input is clicked in the same handler.
+          onDevice={() => { setMenu(false); fileInputRef.current?.click(); }}
+          onRemove={() => { setMenu(false); if (onPhotoRemove) onPhotoRemove(personId); }}
+        />
+      )}
+      <PhotoPickerPopup
+        visible={picker !== null}
+        personName={name}
+        initialTab={picker || 'immich'}
+        immichReady={immichReady}
+        onClose={() => setPicker(null)}
+        onPick={(dataUrl) => {
+          setPicker(null);
+          if (onPhotoChange) onPhotoChange(personId, dataUrl);
+        }}
       />
     </div>
   );
@@ -396,10 +461,10 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
         {/* Content */}
         <div className="flex-1 flex flex-col items-start gap-0.5 min-w-0">
           <div className="flex items-center gap-2 w-full">
-            {task.emoji && <span className="text-lg" aria-hidden="true">{task.emoji}</span>}
+            {task.emoji && <span className="text-2xl" aria-hidden="true">{task.emoji}</span>}
             <span
               className={`
-                text-sm font-medium text-start leading-snug truncate
+                min-w-0 text-lg font-medium text-start leading-snug line-clamp-2
                 transition-all duration-[var(--dur-normal)]
                 ${isComplete ? 'line-through text-[var(--ts)]' : 'text-[var(--tp)]'}
               `}
@@ -408,7 +473,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
             </span>
           </div>
           {recurrenceLabel && (
-            <span className="text-xs text-[var(--tm)]">
+            <span className="text-sm text-[var(--tm)]">
               {recurrenceLabel}
             </span>
           )}
@@ -438,6 +503,36 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
   );
 }
 
+// ─── Weekly stars ──────────────────────────────────────────────────────────
+// One slot per star of the goal, filled as the week goes. The server counts the
+// week (Sunday to Saturday), so this only draws what it is given.
+
+function StarRow({ stars, pop }) {
+  if (!stars) return null;
+  const { week, goal, reward } = stars;
+  const label = t.stars.weekProgress.replace('{n}', String(week)).replace('{goal}', String(goal));
+  return (
+    <div className="flex flex-col items-center gap-1.5" role="img" aria-label={label}>
+      <div className="flex items-center gap-1">
+        {Array.from({ length: goal }, (_, i) => (
+          <StarIcon
+            key={i}
+            filled={i < week}
+            className={`w-7 h-7 ${pop && i === week - 1 ? 'star-pop' : ''}`}
+          />
+        ))}
+      </div>
+      {reward ? (
+        <span className="px-3 py-0.5 rounded-full bg-[var(--gold-bg)] text-[var(--gold-d)] text-sm font-bold">
+          {t.stars.rewardBadge}
+        </span>
+      ) : (
+        <span className="text-xs font-medium text-[var(--ts)]">{label}</span>
+      )}
+    </div>
+  );
+}
+
 // ─── PersonColumn component ────────────────────────────────────────────────
 
 function PersonColumn({
@@ -448,8 +543,11 @@ function PersonColumn({
   onDeleteTask,
   onReorderTasks,
   onPhotoChange,
+  onPhotoRemove,
 }) {
   const columnRef = useRef(null);
+  const addToast = useStore((s) => s.addToast);
+  const [starPop, setStarPop] = useState(false);
   const [celebration, setCelebration] = useState(null);
   const [showClap, setShowClap] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
@@ -485,8 +583,18 @@ function PersonColumn({
           personColor: result.personColor,
         });
       }
+      if (result && result.starAwarded) {
+        // The count shown is still last render's, so this star makes it week + 1.
+        const goal = person.stars?.goal ?? 6;
+        const reached = (person.stars?.week ?? 0) + 1 >= goal;
+        addToast('success', (reached ? t.stars.rewardToast : t.stars.earnedToast)
+          .replace('{name}', person.name)
+          .replace('{goal}', String(goal)));
+        setStarPop(true);
+        setTimeout(() => setStarPop(false), 1500);
+      }
     },
-    [onToggleTask, person.id, person.tasks]
+    [onToggleTask, person.id, person.tasks, person.stars, person.name, addToast]
   );
 
   const handleDelete = useCallback(
@@ -632,6 +740,7 @@ function PersonColumn({
           progress={progress}
           photo={person.avatar}
           onPhotoChange={onPhotoChange}
+          onPhotoRemove={onPhotoRemove}
         />
         <span className="text-base font-bold text-[var(--tp)]" style={{ fontWeight: 700 }}>
           {person.name}
@@ -643,6 +752,7 @@ function PersonColumn({
         >
           {allDone ? `✅ ${t.tasks.allCompleted}` : progressText}
         </span>
+        <StarRow stars={person.stars} pop={starPop} />
       </div>
 
       {/* Progress bar */}
@@ -990,6 +1100,7 @@ export default function TasksPage() {
     deleteTask,
     reorderTasks,
     uploadAvatar,
+    removeAvatar,
   } = useChores();
 
   const addToast = useStore((s) => s.addToast);
@@ -1001,6 +1112,14 @@ export default function TasksPage() {
       addToast(ok ? 'success' : 'error', ok ? t.tasks.photoUploaded : t.tasks.photoUploadError);
     },
     [uploadAvatar, addToast]
+  );
+
+  const handlePhotoRemove = useCallback(
+    async (personId) => {
+      await removeAvatar(personId);
+      addToast('success', t.avatarPicker.photoRemoved);
+    },
+    [removeAvatar, addToast]
   );
 
   const peopleWithPhotos = useMemo(() => people || [], [people]);
@@ -1076,6 +1195,7 @@ export default function TasksPage() {
             onDeleteTask={deleteTask}
             onReorderTasks={reorderTasks}
             onPhotoChange={handlePhotoChange}
+            onPhotoRemove={handlePhotoRemove}
           />
         ))}
       </div>

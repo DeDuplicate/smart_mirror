@@ -72,7 +72,9 @@ for (const v of OPTIONAL_VARS) {
 // ---------------------------------------------------------------------------
 const Database = require('better-sqlite3');
 
-const dbPath = path.join(__dirname, 'db', 'smart-mirror.db');
+// SMART_MIRROR_DB points a second instance at a copy of the data, so automated
+// browser tests can tick chores and earn stars without touching the real database.
+const dbPath = process.env.SMART_MIRROR_DB || path.join(__dirname, 'db', 'smart-mirror.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');

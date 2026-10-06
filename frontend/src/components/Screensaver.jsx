@@ -397,15 +397,53 @@ function DailyPhrase({ compact = false, photoMode = false }) {
   const phrase = useDailyPhrase();
   if (!phrase?.text) return null;
 
-  // Slideshow mode sits the quote over a real (now bright) photo instead of
-  // a dark gradient, so it needs its own shadow even when not `compact` --
-  // but it should NOT also shrink to the compact font sizes, so this is a
-  // separate flag rather than reusing `compact` for both concerns.
-  const textShadow = compact
-    ? PHOTO_TEXT_SHADOW
-    : photoMode
-      ? PHOTO_TEXT_SHADOW
-      : 'none';
+  // Over a photo the phrase gets a card of its own. A bare white line, even with
+  // a shadow, is lost on a bright picture, and a shade over the whole photo was
+  // tried and rejected (it reads as haze). The card is a flat, mostly opaque ink
+  // panel: white on it is about 10:1 even over a white photo, it paints once (no
+  // blur, which the Pi cannot do), and it sits in the bottom-left corner, away
+  // from the middle of the picture where the people are.
+  if (photoMode) {
+    return (
+      <figure
+        dir="rtl"
+        className="select-none w-[540px] max-w-full pt:w-full rounded-2xl text-center flex flex-col items-center"
+        style={{
+          background: 'rgba(10, 10, 15, 0.8)',
+          border: '1px solid rgba(255, 255, 255, 0.14)',
+          padding: '22px 28px 24px',
+        }}
+      >
+        {/* Hebrew quotation marks are low-high: the low „ (U+201E) opens and the high ”
+            (U+201D) closes, in reading order, so in this right-to-left card the
+            opening one sits on the right. No space between mark and word. */}
+        <blockquote className="text-white font-normal leading-relaxed line-clamp-4" style={{ fontSize: 32 }}>
+          <span aria-hidden="true" className="text-[var(--amber)] font-bold" style={{ fontSize: '1.4em', lineHeight: 0 }}>„</span>
+          {phrase.text}
+          <span aria-hidden="true" className="text-[var(--amber)] font-bold" style={{ fontSize: '1.4em', lineHeight: 0 }}>”</span>
+        </blockquote>
+
+        {/* Source as a footnote: the name between two short rules. No dash
+            character, which reads as part of the sentence in Hebrew. */}
+        {phrase.source && (
+          <figcaption className="mt-4 flex items-center justify-center gap-3 max-w-full text-white/85 font-medium" style={{ fontSize: 20 }}>
+            <span aria-hidden="true" className="inline-block h-px w-8 shrink-0 bg-white/50" />
+            <span className="min-w-0 truncate">{phrase.source}</span>
+            <span aria-hidden="true" className="inline-block h-px w-8 shrink-0 bg-white/50" />
+          </figcaption>
+        )}
+
+        {phrase.explanation && (
+          <p className="mt-2 text-white/75 leading-snug line-clamp-2" style={{ fontSize: 17 }}>
+            {phrase.explanation}
+          </p>
+        )}
+      </figure>
+    );
+  }
+
+  // The clock screensaver sits it on a dark gradient, centred, large and quiet.
+  const textShadow = compact ? PHOTO_TEXT_SHADOW : 'none';
 
   return (
     <div
@@ -423,12 +461,10 @@ function DailyPhrase({ compact = false, photoMode = false }) {
       </p>
 
       {/* Attribution — set well below the quote so it reads as a footnote
-          rather than a second line of the sentence itself. A soft shadow
-          alone can't rescue a very translucent fill over a bright photo, so
-          photoMode also lifts the fill itself. */}
+          rather than a second line of the sentence itself. */}
       {phrase.source && (
         <p
-          className={`${photoMode ? 'text-white/80' : 'text-white/40'} font-light line-clamp-1`}
+          className="text-white/40 font-light line-clamp-1"
           style={{
             fontSize: compact ? 15 : 19,
             marginTop: compact ? 8 : 14,
@@ -443,7 +479,7 @@ function DailyPhrase({ compact = false, photoMode = false }) {
       {/* Optional gloss, when the source supplies one */}
       {phrase.explanation && (
         <p
-          className={`${photoMode ? 'text-white/70' : 'text-white/30'} font-light leading-snug line-clamp-2`}
+          className="text-white/30 font-light leading-snug line-clamp-2"
           style={{
             fontSize: compact ? 14 : 17,
             marginTop: 6,
@@ -1091,7 +1127,7 @@ function ScreensaverNewsTicker({ now, compact = false }) {
 // in one column, so both modes share one alignment system and nothing collides.
 // The frame is RTL, so grid column 1 is the RIGHT edge of the screen.
 
-function ScreensaverFrame({ background, topStart, topEnd, center, playerBar, bottomBar }) {
+function ScreensaverFrame({ background, topStart, topEnd, center, bottomStart, playerBar, bottomBar }) {
   return (
     <div dir="rtl" className="relative w-full h-full overflow-hidden select-none">
       {background}
@@ -1116,6 +1152,14 @@ function ScreensaverFrame({ background, topStart, topEnd, center, playerBar, bot
         <div className="flex items-end justify-center min-w-0 col-start-1 col-span-2 row-start-3 pt:col-span-1 pt:row-start-4">
           {playerBar}
         </div>
+        {/* Bottom-left corner (the frame is RTL, so justify-end is the left edge).
+            Shares the player's row without colliding: the player is centred and
+            narrow. In portrait it takes the bottom of the free middle row. */}
+        {bottomStart && (
+          <div className="flex items-end justify-end min-w-0 col-start-2 row-start-3 pt:col-start-1 pt:row-start-3 pt:justify-stretch">
+            {bottomStart}
+          </div>
+        )}
         <div className="min-w-0 col-start-1 col-span-2 row-start-4 pt:col-span-1 pt:row-start-5">
           {bottomBar}
         </div>
@@ -1312,9 +1356,9 @@ function SlideshowMode() {
           (or a top/bottom band of it) to help text legibility, but users
           consistently read that as a grey/black "shade" laid over the
           photo, however light it was tuned. Text now carries its own
-          per-element shadow instead (see DailyPhrase's photoMode, the news
-          ticker, ScreensaverWeather's compact shadow, etc.), so the photo
-          itself stays completely untouched. */}
+          per-element shadow instead (the news ticker, ScreensaverWeather's
+          compact shadow, etc.), and the daily phrase gets a card of its own
+          (DailyPhrase's photoMode), so the photo itself stays untouched. */}
       {!isPhoto && (
         <div
           className="absolute inset-0"
@@ -1347,7 +1391,7 @@ function SlideshowMode() {
           <ScreensaverForecast compact />
         </>
       }
-      center={<DailyPhrase photoMode />}
+      bottomStart={<DailyPhrase photoMode />}
       playerBar={<ScreensaverNowPlaying compact />}
       bottomBar={<ScreensaverNews now={time} compact />}
     />

@@ -14,6 +14,7 @@ import {
 import { fetchApi } from '../../hooks/useApi.js';
 import useSchool from '../../hooks/useSchool.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
+import StarIcon from '../StarIcon.jsx';
 import WifiPopup from '../WifiPopup.jsx';
 import BluetoothPopup from '../BluetoothPopup.jsx';
 import FolderPickerPopup from '../FolderPickerPopup.jsx';
@@ -3676,6 +3677,127 @@ function AboutSection() {
   );
 }
 
+// ─── Section: Chore stars ────────────────────────────────────────────────────
+// Stars are earned on their own (the server gives one when a child ticks the last
+// chore of the day), so this is where a parent takes one back for behaviour, and
+// gives it back if that was a mistake or too harsh. There is no add button on
+// purpose: a star only ever comes from finishing the day's chores, and only a star
+// that was removed can be restored.
+
+function StarsSection() {
+  const [people, setPeople] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const showConfirm = useStore((s) => s.showConfirm);
+  const addToast = useStore((s) => s.addToast);
+
+  const load = useCallback(async () => {
+    try {
+      setPeople(await fetchApi('/api/tasks/people'));
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const askRemove = (person, day, dayName) =>
+    showConfirm({
+      title: t.stars.removeTitle,
+      message: t.stars.removeMessage.replace('{name}', person.name).replace('{day}', dayName),
+      confirmLabel: t.stars.removeConfirm,
+      onConfirm: async () => {
+        try {
+          await fetchApi(`/api/tasks/people/${encodeURIComponent(person.id)}/stars/${day}`, { method: 'DELETE' });
+          addToast('success', t.stars.removed);
+        } catch {
+          addToast('error', t.stars.removeFailed);
+        }
+        load();
+      },
+    });
+
+  // Giving a star back needs no confirmation: it undoes a removal, and tapping it
+  // again takes it away with one.
+  const restore = async (person, day) => {
+    try {
+      await fetchApi(`/api/tasks/people/${encodeURIComponent(person.id)}/stars/${day}/restore`, { method: 'POST' });
+      addToast('success', t.stars.restored);
+    } catch {
+      addToast('error', t.stars.restoreFailed);
+    }
+    load();
+  };
+
+  return (
+    <Section title={t.stars.title}>
+      <p className="text-base text-ts mb-4">{t.stars.desc}</p>
+      {failed && <p className="text-base text-coral-d mb-3">{t.stars.loadFailed}</p>}
+      {people && people.length === 0 && <p className="text-base text-ts">{t.stars.noKids}</p>}
+
+      <div className="flex flex-col gap-4">
+        {(people || []).filter((p) => p.stars).map((p) => (
+          <div key={p.id} className="rounded-2xl border border-bd bg-s2 p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-lg font-semibold text-tp">{p.name}</span>
+              <span className={`text-base font-bold ${p.stars.reward ? 'text-[var(--gold-d)]' : 'text-ts'}`}>
+                {p.stars.reward ? `${t.stars.rewardBadge} ` : ''}{p.stars.week}/{p.stars.goal}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {p.stars.days.map((d, i) => {
+                const earned = d.status === 'earned';
+                const dayName = t.stars.weekdays[i];
+                const base = `min-h-[76px] rounded-xl border bg-surf flex flex-col items-center justify-center gap-1 ${
+                  d.day === p.stars.today ? 'border-acc' : 'border-bd'
+                }`;
+                const face = (
+                  <>
+                    <span className="text-sm text-ts">{t.stars.weekdayShort[i]}</span>
+                    <StarIcon filled={earned} crossed={d.status === 'removed'} className="w-8 h-8" />
+                  </>
+                );
+                if (earned) {
+                  return (
+                    <button
+                      key={d.day}
+                      type="button"
+                      aria-label={t.stars.dayEarned.replace('{day}', dayName)}
+                      onClick={() => askRemove(p, d.day, dayName)}
+                      className={`${base} active:scale-95 transition-transform duration-[var(--dur-fast)]`}
+                    >
+                      {face}
+                    </button>
+                  );
+                }
+                if (d.status === 'removed') {
+                  return (
+                    <button
+                      key={d.day}
+                      type="button"
+                      aria-label={t.stars.dayRemoved.replace('{day}', dayName)}
+                      onClick={() => restore(p, d.day)}
+                      className={`${base} border-dashed active:scale-95 transition-transform duration-[var(--dur-fast)]`}
+                    >
+                      {face}
+                    </button>
+                  );
+                }
+                return (
+                  <div key={d.day} role="img" aria-label={t.stars.dayNone.replace('{day}', dayName)} className={base}>
+                    {face}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 // ─── SettingsPage ─────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -3689,8 +3811,9 @@ export default function SettingsPage() {
       {/* Two fixed columns, balanced by hand; single column in portrait.
           Heights measured at 1920x1080 (px): the right column is Profile 290,
           Location 428, Display 3779 (one huge section: screensaver, photo
-          frame, Immich, touch), Wi-Fi 166, Bluetooth 166, Sonos 292, Alarms 220
-          = ~5340; the left is Family 555, Tasks 228, School 797, Home Assistant
+          frame, Immich, touch), Wi-Fi 166, Bluetooth 166, Sonos 292, Alarms 220,
+          Stars 514 (two kids; ~230 more per child) = ~5850; the left is Family
+          555, Tasks 228, School 797, Home Assistant
           362, Cameras 995, News 710, iCal 965, System 336, Logs 444, About 313
           = ~5700. They were 7160 vs 3890, which left the whole lower left of the
           screen empty. Re-measure after adding a big section: a CSS multi-column
@@ -3706,6 +3829,7 @@ export default function SettingsPage() {
           <BluetoothSection />
           <SonosSection />
           <AlarmsSection />
+          <StarsSection />
         </div>
 
         {/* Column B (left in RTL): family, connections, then the system itself */}

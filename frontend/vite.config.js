@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// BACKEND_URL lets a second dev server talk to a second backend (see SMART_MIRROR_DB).
+const BACKEND = process.env.BACKEND_URL || 'http://localhost:3001';
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -8,11 +11,11 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: BACKEND,
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: BACKEND,
         changeOrigin: true,
         ws: true,
       },

@@ -18,6 +18,7 @@ function makeApp() {
   db.exec(fs.readFileSync(path.join(__dirname, 'db/migrations/002_chores.sql'), 'utf-8'));
   db.exec(fs.readFileSync(path.join(__dirname, 'db/migrations/003_kanban_tasks.sql'), 'utf-8'));
   db.exec(fs.readFileSync(path.join(__dirname, 'db/migrations/005_task_subtasks.sql'), 'utf-8'));
+  db.exec(fs.readFileSync(path.join(__dirname, 'db/migrations/012_chore_stars.sql'), 'utf-8'));
 
   const app = express();
   app.use(express.json());

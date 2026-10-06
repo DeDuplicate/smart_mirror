@@ -172,19 +172,22 @@ export default function useChores() {
       const justCompleted =
         completed && peopleRef.current.find((p) => p.id === personId).tasks.every((t) => t.completed);
 
+      // The server decides whether this tap finished the day (and so earned a star).
+      let starAwarded = false;
       await save(async () => {
         try {
-          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
+          const res = await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
             method: 'PATCH',
             body: JSON.stringify({ completed }),
           });
+          starAwarded = Boolean(res?.starAwarded);
         } catch {
           await fetchTasks(); // read again once the saves settle, which also undoes the tap
         }
       });
 
       // Return whether celebration should trigger
-      return { justCompleted, personName: person.name, personColor: person.color };
+      return { justCompleted, starAwarded, personName: person.name, personColor: person.color };
     },
     [fetchTasks, save]
   );

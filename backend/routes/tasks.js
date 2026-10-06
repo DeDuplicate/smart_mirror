@@ -1,6 +1,7 @@
 'use strict';
 
 const { Router } = require('express');
+const stars = require('../lib/stars');
 const router = Router();
 
 // ---------------------------------------------------------------------------
@@ -426,11 +427,15 @@ router.get('/people', (req, res) => {
     const people = db.prepare('SELECT * FROM chore_people ORDER BY position, rowid').all();
     const taskStmt = db.prepare('SELECT * FROM chore_tasks WHERE person_id = ? ORDER BY position, created_at');
 
+    const today = stars.localDay();
+    const starRows = stars.weekRows(db, today);
+
     const result = people.map((p) => ({
       id: p.id,
       name: p.name,
       color: p.color,
       avatar: p.avatar || null,
+      stars: stars.summarize(starRows.filter((r) => r.person_id === p.id), today),
       tasks: taskStmt.all(p.id).map((t) => ({
         id: t.id,
         title: t.title,
@@ -500,6 +505,57 @@ router.delete('/people/:personId', (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     logger.error('Person delete error: %s', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/tasks/people/:personId/stars/:day - take one star back
+// ---------------------------------------------------------------------------
+// A parent's call from Settings, for behaviour. Stars are only ever EARNED by
+// finishing the day's chores, so there is no route to add one; a removed day
+// stays removed even if the chores are still all ticked (until a parent gives
+// it back, below). Only days of the current week can be taken back.
+// ---------------------------------------------------------------------------
+router.delete('/people/:personId/stars/:day', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    const { personId, day } = req.params;
+    if (!stars.removeStar(db, personId, day, stars.localDay())) {
+      return res.status(404).json({ error: 'No star to remove on that day' });
+    }
+    logger.info('Star removed for %s on %s', personId, day);
+    emitTasksUpdated(req);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Star removal error: %s', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/tasks/people/:personId/stars/:day/restore - give a removed star back
+// ---------------------------------------------------------------------------
+// For a removal that was a mistake, or too harsh. Only a star that was earned and
+// then removed can come back; there is still no way to create one for a day the
+// chores were not finished.
+// ---------------------------------------------------------------------------
+router.post('/people/:personId/stars/:day/restore', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    const { personId, day } = req.params;
+    if (!stars.restoreStar(db, personId, day, stars.localDay())) {
+      return res.status(404).json({ error: 'No removed star on that day' });
+    }
+    logger.info('Star restored for %s on %s', personId, day);
+    emitTasksUpdated(req);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Star restore error: %s', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -588,11 +644,16 @@ router.patch('/people/:personId/tasks/:taskId/toggle', (req, res) => {
     // Without a body it still flips, for older clients.
     const wanted = req.body && typeof req.body.completed === 'boolean' ? (req.body.completed ? 1 : 0) : null;
     const newCompleted = wanted ?? (task.completed === 1 ? 0 : 1);
+    let starAwarded = false;
     if (newCompleted !== task.completed) {
       db.prepare('UPDATE chore_tasks SET completed = ? WHERE id = ?').run(newCompleted, taskId);
+      // Ticking the last chore of the day earns the day's star. Done here, on the
+      // server, so it counts whichever screen did the ticking, and before the
+      // update goes out so every screen refetches with the star already in.
+      if (newCompleted === 1) starAwarded = stars.awardStarIfDone(db, personId, stars.localDay());
       emitTasksUpdated(req);
     }
-    res.json({ id: taskId, completed: newCompleted === 1 });
+    res.json({ id: taskId, completed: newCompleted === 1, starAwarded });
   } catch (err) {
     logger.error('Chores toggle error: %s', err.message);
     res.status(500).json({ error: err.message });

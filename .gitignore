@@ -45,6 +45,8 @@ backend/data/sounds/reminders/*
 # device, out of git - see backend/data/photos/README.md.
 backend/data/photos/*
 !backend/data/photos/README.md
+# Thumbnails made on demand for the picture browser (kid avatars); rebuilt as needed.
+backend/data/cache/
 
 # go2rtc camera sidecar: downloaded on first need (routes/go2rtc.js), and its
 # generated config holds camera passwords.
