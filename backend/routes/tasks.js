@@ -571,6 +571,7 @@ function runNightlyReset({ db, io, logger }) {
 
 // ---------------------------------------------------------------------------
 // PATCH /api/tasks/people/:personId/tasks/:taskId/toggle
+// Body (optional): { completed: boolean } - set that state instead of flipping.
 // ---------------------------------------------------------------------------
 router.patch('/people/:personId/tasks/:taskId/toggle', (req, res) => {
   const db = req.app.locals.db;
@@ -582,10 +583,15 @@ router.patch('/people/:personId/tasks/:taskId/toggle', (req, res) => {
     const task = db.prepare('SELECT * FROM chore_tasks WHERE id = ? AND person_id = ?').get(taskId, personId);
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
-    const newCompleted = task.completed === 1 ? 0 : 1;
-    db.prepare('UPDATE chore_tasks SET completed = ? WHERE id = ?').run(newCompleted, taskId);
-
-    emitTasksUpdated(req);
+    // The screen says which state it wants ({ completed }), so a tap that is
+    // replayed or lands out of order cannot flip the chore the wrong way.
+    // Without a body it still flips, for older clients.
+    const wanted = req.body && typeof req.body.completed === 'boolean' ? (req.body.completed ? 1 : 0) : null;
+    const newCompleted = wanted ?? (task.completed === 1 ? 0 : 1);
+    if (newCompleted !== task.completed) {
+      db.prepare('UPDATE chore_tasks SET completed = ? WHERE id = ?').run(newCompleted, taskId);
+      emitTasksUpdated(req);
+    }
     res.json({ id: taskId, completed: newCompleted === 1 });
   } catch (err) {
     logger.error('Chores toggle error: %s', err.message);

@@ -68,6 +68,19 @@ test('chores routes', async (t) => {
     assert.equal(b.body.completed, false);
   });
 
+  await t.test('toggle sets the state the screen asks for, so a repeat cannot flip it back', async () => {
+    const id = db.prepare("SELECT id FROM chore_tasks WHERE title = 'sweep'").get().id;
+    const url = `/api/tasks/people/p1/tasks/${id}/toggle`;
+    assert.equal((await req(base, 'PATCH', url, { completed: true })).body.completed, true);
+    assert.equal((await req(base, 'PATCH', url, { completed: true })).body.completed, true, 'same request twice stays done');
+    assert.equal(db.prepare('SELECT completed FROM chore_tasks WHERE id = ?').get(id).completed, 1);
+    assert.equal((await req(base, 'PATCH', url, { completed: false })).body.completed, false);
+    assert.equal((await req(base, 'PATCH', url, { completed: false })).body.completed, false, 'same request twice stays open');
+    // Older clients send no body and still get a flip.
+    assert.equal((await req(base, 'PATCH', url)).body.completed, true);
+    assert.equal((await req(base, 'PATCH', url)).body.completed, false);
+  });
+
   await t.test('unknown person is a 404, not a 500', async () => {
     const r = await req(base, 'POST', '/api/tasks/people/nope/tasks', { title: 'x' });
     assert.equal(r.status, 404);

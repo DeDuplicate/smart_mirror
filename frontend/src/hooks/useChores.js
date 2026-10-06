@@ -61,6 +61,15 @@ function saveHideCompleted(val) {
   }
 }
 
+// One chore set to an explicit state. Setting (not flipping) means applying it
+// twice, or on top of a fresher list, can never undo it.
+const withCompleted = (people, personId, taskId, completed) =>
+  people.map((p) =>
+    p.id !== personId
+      ? p
+      : { ...p, tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, completed } : t)) }
+  );
+
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
 export default function useChores() {
@@ -71,11 +80,26 @@ export default function useChores() {
   const intervalRef = useRef(null);
   const addToast = useStore((s) => s.addToast);
 
+  // Always the latest list, including edits React has not rendered yet, so two
+  // taps in the same frame both see each other.
+  const peopleRef = useRef(people);
+  peopleRef.current = people;
+
+  // Every save broadcasts tasks:updated, and every screen answers by refetching
+  // the whole list. A refetch that overlaps a save returns a list WITHOUT that
+  // save yet, and applying it makes the chore jump back and then forward again
+  // (and the next tap on it then undoes it). So a read that started before, or
+  // runs during, a save is thrown away; one fresh read follows the last save.
+  const savesRef = useRef(0); // saves in flight
+  const epochRef = useRef(0); // bumps when a save starts
+  const staleRef = useRef(false); // a read was thrown away while saves were in flight
+
   // ── Fetch people + chores from the backend (SQLite) ────────────────────
   // If Settings has a configured family, sync it into the DB first so the
   // two stores converge; otherwise read the DB as-is.
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async function load() {
     try {
+      const epoch = epochRef.current;
       const configured = getConfiguredPeople();
       let url = '/api/tasks/people';
       if (configured.length > 0) {
@@ -87,6 +111,12 @@ export default function useChores() {
         url += `?sync=${syncParam}`;
       }
       const data = await apiFetch(url);
+      if (savesRef.current > 0 || epoch !== epochRef.current) {
+        // Out of date. Read again now if no save is running, else when the last one lands.
+        if (savesRef.current === 0) return load();
+        staleRef.current = true;
+        return undefined;
+      }
       setPeople(data);
       setError(null);
     } catch (err) {
@@ -111,52 +141,52 @@ export default function useChores() {
     };
   }, [fetchTasks]);
 
+  // Runs a save while keeping refetches from overwriting what it changed.
+  const save = useCallback(
+    async (run) => {
+      savesRef.current += 1;
+      epochRef.current += 1;
+      try {
+        return await run();
+      } finally {
+        savesRef.current -= 1;
+        if (savesRef.current === 0 && staleRef.current) {
+          staleRef.current = false;
+          fetchTasks();
+        }
+      }
+    },
+    [fetchTasks]
+  );
+
   // ── Toggle task completion (optimistic) ────────────────────────────────
   const toggleTask = useCallback(
     async (personId, taskId) => {
-      let wasAllComplete = false;
-      let isNowAllComplete = false;
-      let personName = '';
-      let personColor = '';
+      const person = peopleRef.current.find((p) => p.id === personId);
+      const task = person?.tasks.find((t) => t.id === taskId);
+      if (!task) return null;
 
-      setPeople((prev) =>
-        prev.map((person) => {
-          if (person.id !== personId) return person;
+      const completed = !task.completed;
+      peopleRef.current = withCompleted(peopleRef.current, personId, taskId, completed);
+      setPeople((prev) => withCompleted(prev, personId, taskId, completed));
+      const justCompleted =
+        completed && peopleRef.current.find((p) => p.id === personId).tasks.every((t) => t.completed);
 
-          personName = person.name;
-          personColor = person.color;
-
-          const updatedTasks = person.tasks.map((task) =>
-            task.id === taskId ? { ...task, completed: !task.completed } : task
-          );
-
-          const totalTasks = updatedTasks.length;
-          const completedBefore = person.tasks.filter((t) => t.completed).length;
-          const completedAfter = updatedTasks.filter((t) => t.completed).length;
-
-          wasAllComplete = completedBefore === totalTasks;
-          isNowAllComplete = completedAfter === totalTasks && totalTasks > 0;
-
-          return { ...person, tasks: updatedTasks };
-        })
-      );
-
-      try {
-        await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
-          method: 'PATCH',
-        });
-      } catch {
-        await fetchTasks();
-      }
+      await save(async () => {
+        try {
+          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}/toggle`, {
+            method: 'PATCH',
+            body: JSON.stringify({ completed }),
+          });
+        } catch {
+          await fetchTasks(); // read again once the saves settle, which also undoes the tap
+        }
+      });
 
       // Return whether celebration should trigger
-      return {
-        justCompleted: !wasAllComplete && isNowAllComplete,
-        personName,
-        personColor,
-      };
+      return { justCompleted, personName: person.name, personColor: person.color };
     },
-    [fetchTasks]
+    [fetchTasks, save]
   );
 
   // ── Add task to a person ───────────────────────────────────────────────
@@ -194,17 +224,19 @@ export default function useChores() {
         )
       );
 
-      try {
-        await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}`, {
-          method: 'DELETE',
-        });
-      } catch {
-        // Reverting on its own just made the chore reappear with no explanation.
-        addToast('error', t.tasks.choreDeleteError);
-        await fetchTasks();
-      }
+      await save(async () => {
+        try {
+          await apiFetch(`/api/tasks/people/${personId}/tasks/${taskId}`, {
+            method: 'DELETE',
+          });
+        } catch {
+          // Reverting on its own just made the chore reappear with no explanation.
+          addToast('error', t.tasks.choreDeleteError);
+          await fetchTasks();
+        }
+      });
     },
-    [fetchTasks, addToast]
+    [fetchTasks, addToast, save]
   );
 
   // ── Reorder one kid's chores (drag and drop) ───────────────────────────
@@ -213,9 +245,6 @@ export default function useChores() {
   // list) the chore snaps back to where it was: leaving it in an order that was
   // never saved looks like it worked, and a refetch alone cannot undo that when
   // the server is the thing that is down.
-  const peopleRef = useRef(people);
-  peopleRef.current = people;
-
   const reorderTasks = useCallback(
     async (personId, orderedIds) => {
       const before = peopleRef.current.find((p) => p.id === personId)?.tasks.map((task) => task.id) || [];
@@ -228,10 +257,12 @@ export default function useChores() {
         })
       );
       try {
-        await apiFetch(`/api/tasks/people/${personId}/tasks/reorder`, {
-          method: 'PUT',
-          body: JSON.stringify({ order: orderedIds }),
-        });
+        await save(() =>
+          apiFetch(`/api/tasks/people/${personId}/tasks/reorder`, {
+            method: 'PUT',
+            body: JSON.stringify({ order: orderedIds }),
+          })
+        );
       } catch {
         addToast('error', t.tasks.choreReorderError);
         const rank = new Map(before.map((id, i) => [id, i]));
@@ -248,7 +279,7 @@ export default function useChores() {
         await fetchTasks(); // best effort: picks up whatever really changed
       }
     },
-    [fetchTasks, addToast]
+    [fetchTasks, addToast, save]
   );
 
   // ── Avatar photo (camera/file picker) — persisted to the DB ────────────

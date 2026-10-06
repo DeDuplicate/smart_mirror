@@ -546,8 +546,11 @@ function PersonColumn({
       // perfectly still at the edge does not keep scrolling. Switch to a
       // requestAnimationFrame loop if long lists make that annoying.
       const box = list.getBoundingClientRect();
-      if (pt.clientY < box.top + 48) list.scrollTop -= 14;
-      else if (pt.clientY > box.bottom - 48) list.scrollTop += 14;
+      // 'instant': every scroll container is smooth-scrolling (global.css), and a
+      // new smooth scroll started on each move lags behind the finger and lets
+      // the chores slide under it.
+      if (pt.clientY < box.top + 48) list.scrollBy({ top: -14, behavior: 'instant' });
+      else if (pt.clientY > box.bottom - 48) list.scrollBy({ top: 14, behavior: 'instant' });
 
       const cards = [...list.querySelectorAll(`[data-chore-group="${d.group}"]`)]
         .filter((el) => el.dataset.choreId !== d.id)
