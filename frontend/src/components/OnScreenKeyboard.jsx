@@ -54,8 +54,8 @@ function Key({ label, onPress, flex = 1, variant = 'default', icon, ariaLabel })
         ${variants[variant]}
         border rounded-xl
         flex items-center justify-center
-        min-w-[56px] h-[56px] pt:h-[72px] touch-none
-        font-heebo font-medium text-base pt:text-xl
+        min-w-[56px] min-h-[56px] pt:h-[72px] touch-none
+        font-heebo font-medium text-3xl pt:text-xl
         select-none transition-transform
         active:brightness-90
       `}
@@ -109,7 +109,7 @@ function BackspaceKey({ onBackspace }) {
   }, []);
 
   const backspaceIcon = (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 pt:w-6 pt:h-6">
       <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" />
       <line x1="18" y1="9" x2="12" y2="15" />
       <line x1="12" y1="9" x2="18" y2="15" />
@@ -134,7 +134,7 @@ function BackspaceKey({ onBackspace }) {
       className="
         bg-s2 border border-bd text-ts rounded-xl
         flex items-center justify-center
-        min-w-[56px] h-[56px] pt:h-[72px] touch-none
+        min-w-[56px] min-h-[56px] pt:h-[72px] touch-none
         select-none transition-transform
         active:brightness-90
       "
@@ -199,7 +199,7 @@ export default function OnScreenKeyboard({
 
   // Icons
   const langIcon = (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 pt:w-6 pt:h-6">
       <circle cx="12" cy="12" r="10" />
       <line x1="2" y1="12" x2="22" y2="12" />
       <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
@@ -207,14 +207,14 @@ export default function OnScreenKeyboard({
   );
 
   const enterIcon = (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 pt:w-6 pt:h-6">
       <path d="M9 10l-5 5 5 5" />
       <path d="M20 4v7a4 4 0 01-4 4H4" />
     </svg>
   );
 
   const shiftIcon = (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 pt:w-6 pt:h-6">
       <path d="M12 19V5" />
       <path d="M5 12l7-7 7 7" />
     </svg>
@@ -236,17 +236,17 @@ export default function OnScreenKeyboard({
 
       {/* Keyboard panel */}
       <div
-        className="relative bg-s2 border-t border-bd px-3 pb-4 pt-3 h-[40%]
+        className="relative bg-s2 border-t border-bd px-4 pb-5 pt-4 h-[40%]
                    pt:h-auto pt:px-4 pt:pt-5 pt:pb-8 pt:rounded-t-3xl pt:shadow-modal"
         style={{
           animation: 'keyboardSlideUp var(--dur-normal) var(--ease-out) forwards',
         }}
       >
         {/* Key rows */}
-        <div className="flex flex-col gap-2 pt:gap-2.5 h-full justify-center max-w-[900px] pt:max-w-none mx-auto">
+        <div className="flex flex-col gap-2.5 pt:gap-2.5 h-full justify-center w-full mx-auto">
           {/* Character rows */}
           {rows.map((row, rowIndex) => (
-            <div key={rowIndex} className="flex gap-1.5 justify-center">
+            <div key={rowIndex} className="flex gap-2.5 justify-center flex-1 min-h-0 pt:flex-none">
               {/* Shift key on last row for English mode */}
               {rowIndex === 2 && lang === 'en' && !numberMode && (
                 <Key
@@ -286,7 +286,7 @@ export default function OnScreenKeyboard({
           ))}
 
           {/* Bottom row: lang toggle, optional 123/ABC, space, enter */}
-          <div className="flex gap-1.5 justify-center">
+          <div className="flex gap-2.5 justify-center flex-1 min-h-0 pt:flex-none">
             {/* Language toggle */}
             <Key
               label={lang === 'he' ? 'EN' : 'עב'}

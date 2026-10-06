@@ -1,11 +1,10 @@
 // Pure helpers for drag-reordering a kid's chores (kept free of React so
 // choreOrder.test.mjs can run under plain node).
 //
-// A column shows open chores first and done chores below, so a drag can only
-// land among chores of its OWN group. The saved order, though, is the full
-// list: moving one chore must not disturb the relative order of the rest,
-// including chores of the other group, or they would come back in a different
-// order after the nightly reset.
+// A column shows the chores in their saved order (done ones stay put), but with
+// "hide completed" some are not on screen. The saved order is the full list:
+// moving one chore must not disturb the relative order of the rest, including
+// the hidden ones, or they would come back in a different order.
 
 /**
  * Where would a dragged chore land?

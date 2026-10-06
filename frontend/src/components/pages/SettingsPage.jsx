@@ -3654,28 +3654,37 @@ export default function SettingsPage() {
     >
       <h1 className="text-3xl font-bold text-tp mb-6 pt:text-4xl pt:mb-8 pt:px-2">{t.tabs.settings}</h1>
 
-      {/* Two-column masonry-style grid; single column in portrait */}
+      {/* Two fixed columns, balanced by hand; single column in portrait.
+          Heights measured at 1920x1080 (px): the right column is Profile 290,
+          Location 428, Display 3779 (one huge section: screensaver, photo
+          frame, Immich, touch), Wi-Fi 166, Bluetooth 166, Sonos 292, Alarms 220
+          = ~5340; the left is Family 555, Tasks 228, School 797, Home Assistant
+          362, Cameras 995, News 710, iCal 965, System 336, Logs 444, About 313
+          = ~5700. They were 7160 vs 3890, which left the whole lower left of the
+          screen empty. Re-measure after adding a big section: a CSS multi-column
+          layout would balance itself, but it reflows sections between columns
+          whenever one grows, which moves buttons under a finger. */}
       <div className="grid grid-cols-2 gap-x-6 items-start max-w-[1600px] mx-auto pt:grid-cols-1 pt:max-w-none">
-        {/* Column A (right in RTL — rendered first) */}
+        {/* Column A (right in RTL — rendered first): you, the screen, devices */}
         <div>
           <ProfileSection />
           <LocationSection />
-          <HomeAssistantSection />
-          <NewsSection />
           <DisplaySection />
           <WifiSection />
           <BluetoothSection />
           <SonosSection />
-          <IcsCalendarSection />
+          <AlarmsSection />
         </div>
 
-        {/* Column B (left in RTL) */}
+        {/* Column B (left in RTL): family, connections, then the system itself */}
         <div>
           <FamilySection />
-          <CamerasSection />
           <TasksSection />
           <SchoolSection />
-          <AlarmsSection />
+          <HomeAssistantSection />
+          <CamerasSection />
+          <NewsSection />
+          <IcsCalendarSection />
           <SystemSection />
           <LogViewerSection />
           <AboutSection />

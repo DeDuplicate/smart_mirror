@@ -10,6 +10,14 @@ import { insertionPoint, moveNextTo } from '../../hooks/choreOrder.js';
 
 // ─── Recurrence config ─────────────────────────────────────────────────────
 
+// The IR frame can register one touch twice, and the Pi is slow enough that a tap
+// shows nothing for a moment, so people tap again. Either one would undo the tap:
+// a chore ignores a second toggle this soon after the first.
+const TOGGLE_LOCKOUT_MS = 500;
+// With "hide completed", a chore that vanishes the instant it is ticked pulls the
+// next one under the finger. Ticked chores stay this long after the last tap.
+const JUST_DONE_MS = 4000;
+
 const RECURRENCE_OPTIONS = [
   { value: 'daily', label: t.tasks.recurrenceDaily },
   { value: 'weekly', label: t.tasks.recurrenceWeekly },
@@ -273,6 +281,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
   const isComplete = task.completed;
   const overdue = !isComplete && isOverdue(task.dueDate);
   const [justToggled, setJustToggled] = useState(false);
+  const lastToggleRef = useRef(0);
 
   const recurrenceLabel = useMemo(() => {
     const found = RECURRENCE_OPTIONS.find((r) => r.value === task.recurrence);
@@ -280,6 +289,9 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
   }, [task.recurrence]);
 
   const handleToggle = useCallback(() => {
+    const now = Date.now();
+    if (now - lastToggleRef.current < TOGGLE_LOCKOUT_MS) return;
+    lastToggleRef.current = now;
     const wasIncomplete = !task.completed;
     setJustToggled(true);
     setTimeout(() => setJustToggled(false), 500);
@@ -447,23 +459,25 @@ function PersonColumn({
   const progress = totalTasks > 0 ? completedTasks / totalTasks : 0;
   const allDone = totalTasks > 0 && completedTasks === totalTasks;
 
-  const visibleTasks = useMemo(() => {
-    if (hideCompleted) {
-      return person.tasks.filter((t) => !t.completed);
-    }
-    return person.tasks;
-  }, [person.tasks, hideCompleted]);
+  const [justDone, setJustDone] = useState(() => new Set());
+  const justDoneTimer = useRef(null);
+  useEffect(() => () => clearTimeout(justDoneTimer.current), []);
 
-  // Sort: incomplete first, then completed
-  const sortedTasks = useMemo(() => {
-    return [...visibleTasks].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      return 0;
-    });
-  }, [visibleTasks]);
+  // Chores stay where they are when ticked, in the saved (draggable) order. They
+  // used to drop to the bottom, which moved the next chore under the finger and
+  // on this slow IR frame the next tap landed on it.
+  const sortedTasks = useMemo(
+    () => (hideCompleted ? person.tasks.filter((t) => !t.completed || justDone.has(t.id)) : person.tasks),
+    [person.tasks, hideCompleted, justDone]
+  );
 
   const handleToggle = useCallback(
     async (taskId) => {
+      if (!person.tasks.find((x) => x.id === taskId)?.completed) {
+        setJustDone((set) => new Set(set).add(taskId));
+        clearTimeout(justDoneTimer.current);
+        justDoneTimer.current = setTimeout(() => setJustDone(new Set()), JUST_DONE_MS);
+      }
       const result = await onToggleTask(person.id, taskId);
       if (result && result.justCompleted) {
         setCelebration({
@@ -472,7 +486,7 @@ function PersonColumn({
         });
       }
     },
-    [onToggleTask, person.id]
+    [onToggleTask, person.id, person.tasks]
   );
 
   const handleDelete = useCallback(
@@ -506,8 +520,6 @@ function PersonColumn({
     const r = cardEl.getBoundingClientRect();
     dragRef.current = {
       id: task.id,
-      // Open and done chores are listed apart, so a chore only moves among its own kind.
-      group: task.completed ? 'done' : 'open',
       offsetY: point.clientY - r.top,
       left: r.left,
     };
@@ -552,7 +564,7 @@ function PersonColumn({
       if (pt.clientY < box.top + 48) list.scrollBy({ top: -14, behavior: 'instant' });
       else if (pt.clientY > box.bottom - 48) list.scrollBy({ top: 14, behavior: 'instant' });
 
-      const cards = [...list.querySelectorAll(`[data-chore-group="${d.group}"]`)]
+      const cards = [...list.querySelectorAll('[data-chore-id]')]
         .filter((el) => el.dataset.choreId !== d.id)
         .map((el) => {
           const r = el.getBoundingClientRect();
