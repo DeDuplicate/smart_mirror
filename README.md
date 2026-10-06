@@ -55,6 +55,8 @@ The screensaver's photo-slideshow style turns the idle display into a digital ph
 
 Only one source is active at a time — pick the one that fits your setup. If the source is empty or unreachable, the slideshow falls back to the built-in gradients instead of breaking.
 
+**Transitions.** Pick how one photo gives way to the next in **Settings → תצוגה → מעבר בין תמונות**: fade, slide, zoom, a quick 0.2 s dissolve, or random (a different one each time). They move only opacity and transform, so they stay smooth on the Pi's software rendering. The next photo is fetched and decoded before the swap and the old one stays on screen underneath, so the frame never goes blank between pictures. Moving the interval slider shows a message saying what was saved.
+
 ### :speech_balloon: Daily Phrase
 
 - **133 curated Hebrew phrases**, each with a source and a one-line explanation

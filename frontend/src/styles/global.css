@@ -863,6 +863,45 @@ html[data-cursor="hidden"] * {
   will-change: transform;
 }
 
+/* Photo-frame transitions (see hooks/slideTransition.js). Opacity and transform
+   only: the Pi renders in software, so nothing here may repaint per frame. The
+   incoming layer is .ss-<kind>-in and the one it replaces is .ss-<kind>-out; they
+   run together. `both` holds the end state until the old layer is removed.
+   Keep the 900ms in step with TRANSITION_MS. */
+@keyframes ssFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ssFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes ssSlideIn {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes ssSlideOut {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-100%, 0, 0); }
+}
+
+@keyframes ssZoomIn {
+  from { opacity: 0; transform: scale(1.1); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.ss-fade-in { animation: ssFadeIn 900ms ease both; }
+.ss-fade-out { animation: ssFadeOut 900ms ease both; }
+.ss-slide-in { animation: ssSlideIn 900ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.ss-slide-out { animation: ssSlideOut 900ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+.ss-zoom-in { animation: ssZoomIn 900ms ease-out both; }
+.ss-zoom-out { animation: ssFadeOut 900ms ease both; }
+.ss-quick-in { animation: ssFadeIn 200ms linear both; }
+.ss-quick-out { animation: ssFadeOut 200ms linear both; }
+
 /* Noise dither tile, currently used only on the scrim (via .scrim-dither
    below) to break up 8-bit gradient banding on the Pi's software rasterizer.
    It used to also back a blurred "contain" letterbox backdrop, removed

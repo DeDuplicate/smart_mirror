@@ -2218,6 +2218,20 @@ function DisplaySection() {
   const [applyingTouch, setApplyingTouch] = useState(false);
   const addToast = useStore((s) => s.addToast);
 
+  // The slider only writes after you stop moving it, with nothing on screen to say
+  // so; a confirmation shows what was actually saved, or that it was not.
+  const saveInterval = useCallback(
+    async (patch) => {
+      const ok = await updateSettings(patch);
+      addToast(
+        ok ? 'success' : 'error',
+        ok ? t.settings.photoIntervalSaved.replace('{n}', String(patch.photoIntervalSec)) : t.settings.photoIntervalSaveFailed
+      );
+    },
+    [updateSettings, addToast]
+  );
+  const debouncedIntervalSave = useDebouncedSave(saveInterval);
+
   useEffect(() => {
     if (screensaver !== 'slideshow') return undefined;
     let cancelled = false;
@@ -2431,7 +2445,7 @@ function DisplaySection() {
                 // the write is debounced because a single drag crosses
                 // dozens of steps and would otherwise be dozens of PUTs.
                 setSettings({ photoIntervalSec: val });
-                debouncedSave({ photoIntervalSec: val });
+                debouncedIntervalSave({ photoIntervalSec: val });
               }}
               unit={` ${t.settings.photoIntervalUnit}`}
             />
@@ -2446,6 +2460,24 @@ function DisplaySection() {
               options={[
                 { value: 'contain', label: t.settings.photoFitContain },
                 { value: 'cover',   label: t.settings.photoFitCover },
+              ]}
+            />
+
+            <SelectRow
+              label={t.settings.photoTransition}
+              value={settings.photoTransition || 'fade'}
+              onChange={async (e) => {
+                const photoTransition = e.target.value;
+                setSettings({ photoTransition });
+                const ok = await updateSettings({ photoTransition });
+                addToast(ok ? 'success' : 'error', ok ? t.settings.photoTransitionSaved : t.settings.photoTransitionSaveFailed);
+              }}
+              options={[
+                { value: 'fade',   label: t.settings.photoTransitionFade },
+                { value: 'slide',  label: t.settings.photoTransitionSlide },
+                { value: 'zoom',   label: t.settings.photoTransitionZoom },
+                { value: 'quick',  label: t.settings.photoTransitionQuick },
+                { value: 'random', label: t.settings.photoTransitionRandom },
               ]}
             />
 

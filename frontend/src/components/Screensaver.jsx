@@ -18,6 +18,7 @@ import useNews from '../hooks/useNews.js';
 import { fetchApi } from '../hooks/useApi.js';
 import { getHebrewDateParts } from '../utils/hebrewDate.js';
 import { useMusicContext } from '../context/MusicContext.jsx';
+import { TRANSITION_MS, pickTransition } from '../hooks/slideTransition.js';
 import {
   SCREENSAVER_INTERACTIVE_ATTR,
   isScreensaverInteractive,
@@ -45,7 +46,6 @@ const DEFAULT_SLIDE_SECONDS = 15;
 // Exported: SettingsPage bounds its slider by this. Two separate copies of
 // the floor would let the UI offer an interval the slideshow silently clamps.
 export const MIN_SLIDE_SECONDS = 5;
-const CROSSFADE_DURATION = 1000; // 1s crossfade
 
 // Overlay text/icon legibility over a REAL PHOTO (compact/photo mode only).
 // Now that the global scrim is gone (see SlideshowMode), photos render at
@@ -100,41 +100,51 @@ function usePhotoFrame() {
   return photos;
 }
 
+const DECODE_TIMEOUT_MS = 12000;
+
 /**
- * One crossfade layer. "Contain" mode letterboxes the photo against the
- * screensaver's own plain dark background rather than an enlarged, blurred
- * copy of the same photo -- that "photo frame" trick looked like a wall of
- * blur around the picture (on portrait AND landscape photos both) rather
- * than a frame, and it was also the source of a whole separate rendering
- * bug on the Pi's software rasterizer. Plain dark bars are simpler and look
- * cleaner.
+ * Fetches a photo and decodes it off screen. Resolves with the Image once the
+ * browser can paint it without a pause, or null if it fails or takes too long.
  */
-function SlideLayer({ slide, isPhoto, cover, kenburns, visible, durationMs }) {
-  const fade = {
-    opacity: visible ? 1 : 0,
-    transition: `opacity ${CROSSFADE_DURATION}ms ease`,
-  };
+function decodePhoto(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve(null), DECODE_TIMEOUT_MS);
+    img.src = url;
+    img.decode().then(() => resolve(img), () => resolve(null)).finally(() => clearTimeout(timer));
+  });
+}
+
+/**
+ * One photo layer. `role` is 'in' for the photo being shown and 'out' for the one
+ * it replaces; `kind` picks the animation (global.css .ss-<kind>-<role>).
+ *
+ * The layer has no background of its own on purpose: a solid one paints dark in
+ * any tile the slow Pi has not drawn yet, which showed as a blank frame at every
+ * change. "Contain" letterboxes against the screensaver's own dark background, and
+ * the outgoing layer fades out with the incoming one fading in, so the margins of
+ * a narrower photo never show the previous picture once the change is done.
+ */
+function SlideLayer({ slide, isPhoto, cover, kenburns, role, kind, durationMs }) {
+  const wrapper = `absolute inset-0 isolate ss-${kind}-${role}`;
 
   if (!isPhoto) {
     return (
-      <div
-        className={`absolute inset-0 ${kenburns}`}
-        style={{ background: slide, ...fade, willChange: 'transform' }}
-      />
+      <div className={wrapper}>
+        <div className={`absolute inset-0 ${kenburns}`} style={{ background: slide, willChange: 'transform' }} />
+      </div>
     );
   }
 
-  const image = `url("${slide}")`;
-
   return (
-    <div className="absolute inset-0 isolate" style={fade}>
+    <div className={wrapper}>
       <div
         // Cover crops anyway, so it can take the full Ken Burns move. Contain
         // is there precisely to show the whole photo, so it gets the gentle
         // drift instead.
         className={`absolute inset-0 photo-main ${cover ? kenburns : 'photo-drift'}`}
         style={{
-          backgroundImage: image,
+          backgroundImage: `url("${slide}")`,
           backgroundSize: cover ? 'cover' : 'contain',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
@@ -1204,42 +1214,97 @@ function SlideshowMode() {
   const slideMs =
     Math.max(MIN_SLIDE_SECONDS, Number(intervalSec) || DEFAULT_SLIDE_SECONDS) * 1000;
 
-  const [index, setIndex] = useState(0);
-  const next = slides.length ? (index + 1) % slides.length : 0;
+  // Photo changes. The next photo is fetched AND decoded before the swap, and the
+  // photo it replaces stays on screen under the transition. Swapping first and
+  // decoding after left the frame empty for about a second on the Pi at every
+  // change. Layers are [{ id, idx, role: 'in' | 'out', kind }].
+  const [layers, setLayers] = useState([]);
+  const indexRef = useRef(0);
+  const layerIdRef = useRef(0);
+  const heldRef = useRef(null); // keeps the decoded photo alive until it is on screen
+  const transitionSetting = useStore((st) => st.settings.photoTransition);
+  const transitionRef = useRef(transitionSetting);
+  transitionRef.current = transitionSetting; // read at each change, so picking another does not restart the timer
 
-  // Cycle through one decoded layer. Crossfading two real photos looked like a
-  // flicker/double image on the mirror, and preloading is enough here.
   useEffect(() => {
-    setIndex(0);
+    indexRef.current = 0;
+    layerIdRef.current += 1;
+    setLayers(slides.length ? [{ id: layerIdRef.current, idx: 0, role: 'in', kind: 'quick' }] : []);
     if (slides.length < 2) return undefined;
 
-    const slideTimer = setInterval(() => {
-      setIndex((prev) => (prev + 1) % slides.length);
-    }, slideMs);
+    let alive = true;
+    let busy = false;
+    let settleTimer = null;
 
-    return () => clearInterval(slideTimer);
-  }, [slides, slideMs]);
+    // The next slide that loads; a photo that fails is skipped, not shown as a hole.
+    const findNext = async () => {
+      let idx = indexRef.current;
+      for (let tries = 0; tries < 3; tries += 1) {
+        idx = (idx + 1) % slides.length;
+        if (!isPhoto) return idx;
+        const img = await decodePhoto(slides[idx]);
+        if (img) {
+          heldRef.current = img;
+          return idx;
+        }
+      }
+      return null;
+    };
 
-  // Decode the next photo ahead of time — on the Pi a cold JPEG can take
-  // longer than the crossfade, which shows up as a flash of empty frame.
+    const advance = async () => {
+      if (busy) return; // still waiting for the previous photo
+      busy = true;
+      try {
+        const next = await findNext();
+        if (next === null || !alive) return;
+        const kind = pickTransition(transitionRef.current);
+        indexRef.current = next;
+        layerIdRef.current += 1;
+        const id = layerIdRef.current;
+        setLayers((ls) => [
+          ...ls.filter((l) => l.role === 'in').map((l) => ({ ...l, role: 'out', kind })),
+          { id, idx: next, role: 'in', kind },
+        ]);
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          if (alive) setLayers((ls) => ls.filter((l) => l.role === 'in'));
+        }, TRANSITION_MS + 250);
+      } finally {
+        busy = false;
+      }
+    };
+
+    const timer = setInterval(advance, slideMs);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      clearTimeout(settleTimer);
+    };
+  }, [slides, slideMs, isPhoto]);
+
+  // Fetch the photo after the one on screen, long before it is due.
+  const shownIdx = layers.find((l) => l.role === 'in')?.idx ?? 0;
   useEffect(() => {
     if (!isPhoto) return;
     const img = new Image();
-    img.src = slides[next];
-  }, [isPhoto, slides, next]);
+    img.src = slides[(shownIdx + 1) % slides.length];
+  }, [isPhoto, slides, shownIdx]);
 
   const background = (
     <>
-      {slides.length > 0 && (
-        <SlideLayer
-          key={slides[index]}
-          slide={slides[index]}
-          isPhoto={isPhoto}
-          cover={cover}
-          kenburns="kenburns-1"
-          visible
-          durationMs={slideMs}
-        />
+      {layers.map((layer) =>
+        slides[layer.idx] === undefined ? null : (
+          <SlideLayer
+            key={layer.id}
+            slide={slides[layer.idx]}
+            isPhoto={isPhoto}
+            cover={cover}
+            kenburns="kenburns-1"
+            role={layer.role}
+            kind={layer.kind}
+            durationMs={slideMs}
+          />
+        )
       )}
       {/* Scrim — only needed over the gradient deck (no real photo loaded
           yet), to keep text legible against its flat colour. Real photos

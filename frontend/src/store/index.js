@@ -172,6 +172,7 @@ const settingsSlice = (set, get) => ({
     screensaverShowNews: true,
     photoIntervalSec: 15,
     photoFit: 'contain',
+    photoTransition: 'fade',
     photoSource: 'local',
     photoSubdir: '',
     hideCursor: true,
