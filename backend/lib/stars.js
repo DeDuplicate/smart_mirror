@@ -2,8 +2,9 @@
 
 // Weekly stars for chores.
 //
-// A child earns a star on a day when every one of their chores is ticked. Six
-// stars in a week earns a reward. The week is the Israeli one: Sunday to Saturday,
+// A child earns a star on a day when every one of their chores is ticked, and a
+// parent can add one by hand when they forgot to tick. Six stars in a week earns a
+// reward. The week is the Israeli one: Sunday to Saturday,
 // so the count starts again on Sunday. Nothing is "reset" - the week is worked
 // out from the date, and last week's rows simply fall outside it.
 //
@@ -80,14 +81,36 @@ function removeStar(db, personId, day, today) {
 }
 
 /**
- * A parent gives back a star they took away. Only a REMOVED one of this week: it
- * was earned by finishing that day's chores, so bringing it back adds nothing the
- * child did not do. A day with no star has no row to restore, so this can never
- * create one - stars still only come from finishing the day.
+ * A parent gives back a star they took away. Only a REMOVED one of this week.
+ * (A day with no star is not restored but added, below.)
  */
 function restoreStar(db, personId, day, today) {
   if (!isDay(day) || !weekDays(today).includes(day)) return false;
   return db.prepare("UPDATE chore_stars SET status = 'earned' WHERE person_id = ? AND day = ? AND status = 'removed'").run(personId, day).changes === 1;
 }
 
-module.exports = { STAR_GOAL, localDay, addDays, weekStart, weekDays, isDay, summarize, weekRows, awardStarIfDone, removeStar, restoreStar };
+/**
+ * Can a star be added on this day? Any day of the current week up to and including
+ * today, never one still to come: a star for tomorrow would be a prize for chores
+ * not yet done, and last week's total is closed.
+ */
+function isAddableDay(day, today) {
+  return isDay(day) && day <= today && weekDays(today).includes(day);
+}
+
+/**
+ * A parent adds the star for a day the child did the chores but forgot to tick them
+ * (so the automatic star never came). Done from Settings, with a confirmation.
+ * A day already holding its star is left alone (false); a day whose star was
+ * removed gets it back. False too for an unknown child or a day that is not
+ * addable, and no row is made in those cases.
+ */
+function addStar(db, personId, day, today) {
+  if (!isAddableDay(day, today)) return false;
+  if (!db.prepare('SELECT 1 FROM chore_people WHERE id = ?').get(personId)) return false;
+  return db
+    .prepare("INSERT INTO chore_stars (person_id, day, status) VALUES (?, ?, 'earned') ON CONFLICT(person_id, day) DO UPDATE SET status = 'earned' WHERE status = 'removed'")
+    .run(personId, day).changes === 1;
+}
+
+module.exports = { STAR_GOAL, localDay, addDays, weekStart, weekDays, isDay, isAddableDay, summarize, weekRows, awardStarIfDone, removeStar, restoreStar, addStar };

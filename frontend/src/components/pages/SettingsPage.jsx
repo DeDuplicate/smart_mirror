@@ -3679,10 +3679,9 @@ function AboutSection() {
 
 // ─── Section: Chore stars ────────────────────────────────────────────────────
 // Stars are earned on their own (the server gives one when a child ticks the last
-// chore of the day), so this is where a parent takes one back for behaviour, and
-// gives it back if that was a mistake or too harsh. There is no add button on
-// purpose: a star only ever comes from finishing the day's chores, and only a star
-// that was removed can be restored.
+// chore of the day). This is where a parent steps in: ADD one for a day the chores
+// were done but never ticked, take one back for behaviour, or give it back if that
+// was a mistake or too harsh. Adding only reaches days of this week up to today.
 
 function StarsSection() {
   const [people, setPeople] = useState(null);
@@ -3712,6 +3711,23 @@ function StarsSection() {
           addToast('success', t.stars.removed);
         } catch {
           addToast('error', t.stars.removeFailed);
+        }
+        load();
+      },
+    });
+
+  // Adding a star is the one that grants something, so it asks first.
+  const askAdd = (person, day, dayName) =>
+    showConfirm({
+      title: t.stars.addTitle,
+      message: t.stars.addMessage.replace('{name}', person.name).replace('{day}', dayName),
+      confirmLabel: t.stars.addConfirm,
+      onConfirm: async () => {
+        try {
+          await fetchApi(`/api/tasks/people/${encodeURIComponent(person.id)}/stars/${day}`, { method: 'POST' });
+          addToast('success', t.stars.added);
+        } catch {
+          addToast('error', t.stars.addFailed);
         }
         load();
       },
@@ -3752,10 +3768,11 @@ function StarsSection() {
                 const base = `min-h-[76px] rounded-xl border bg-surf flex flex-col items-center justify-center gap-1 ${
                   d.day === p.stars.today ? 'border-acc' : 'border-bd'
                 }`;
+                const addable = d.status === null && d.day <= p.stars.today;
                 const face = (
                   <>
                     <span className="text-sm text-ts">{t.stars.weekdayShort[i]}</span>
-                    <StarIcon filled={earned} crossed={d.status === 'removed'} className="w-8 h-8" />
+                    <StarIcon filled={earned} crossed={d.status === 'removed'} plus={addable} className="w-8 h-8" />
                   </>
                 );
                 if (earned) {
@@ -3784,8 +3801,21 @@ function StarsSection() {
                     </button>
                   );
                 }
+                if (addable) {
+                  return (
+                    <button
+                      key={d.day}
+                      type="button"
+                      aria-label={t.stars.dayAddable.replace('{day}', dayName)}
+                      onClick={() => askAdd(p, d.day, dayName)}
+                      className={`${base} active:scale-95 transition-transform duration-[var(--dur-fast)]`}
+                    >
+                      {face}
+                    </button>
+                  );
+                }
                 return (
-                  <div key={d.day} role="img" aria-label={t.stars.dayNone.replace('{day}', dayName)} className={base}>
+                  <div key={d.day} role="img" aria-label={t.stars.dayFuture.replace('{day}', dayName)} className={`${base} opacity-60`}>
                     {face}
                   </div>
                 );

@@ -164,6 +164,40 @@ test('a parent can give back a removed star, and only a removed one of this week
   assert.equal(stars.summarize(db.prepare('SELECT day, status FROM chore_stars').all(), '2026-10-06').week, 2);
 });
 
+test('a parent can add a star for a day this week up to today, and no other', () => {
+  const db = makeDb();
+  const today = '2026-10-07';   // a Wednesday: the week is 4 Oct to 10 Oct
+  const rows = () => db.prepare('SELECT day, status FROM chore_stars ORDER BY day').all();
+  assert.equal(stars.isAddableDay('2026-10-04', today), true, 'Sunday');
+  assert.equal(stars.isAddableDay('2026-10-07', today), true, 'today itself');
+  assert.equal(stars.isAddableDay('2026-10-08', today), false, 'tomorrow');
+  assert.equal(stars.isAddableDay('2026-10-10', today), false, 'later this week');
+  assert.equal(stars.isAddableDay('2026-10-03', today), false, 'last week is closed');
+  assert.equal(stars.isAddableDay('nonsense', today), false);
+
+  assert.equal(stars.addStar(db, 'kid', '2026-10-05', today), true);
+  assert.deepEqual(rows(), [{ day: '2026-10-05', status: 'earned' }]);
+  assert.equal(stars.addStar(db, 'kid', '2026-10-05', today), false, 'a day that has its star is left alone');
+  assert.equal(stars.addStar(db, 'kid', '2026-10-08', today), false, 'a future day');
+  assert.equal(stars.addStar(db, 'kid', '2026-10-02', today), false, 'last week');
+  assert.equal(stars.addStar(db, 'nobody', '2026-10-06', today), false, 'not a child');
+  assert.equal(rows().length, 1, 'no row was made by the refusals');
+
+  // a removed day gets its star back this way too
+  stars.removeStar(db, 'kid', '2026-10-05', today);
+  assert.equal(stars.addStar(db, 'kid', '2026-10-05', today), true);
+  assert.deepEqual(rows(), [{ day: '2026-10-05', status: 'earned' }]);
+});
+
+test('a star added by hand does not stop the automatic one, and never doubles it', () => {
+  const db = makeDb();
+  addChore(db, 'a');
+  assert.equal(stars.addStar(db, 'kid', '2026-10-06', '2026-10-06'), true);   // parent adds today's
+  tick(db, 'a');
+  assert.equal(stars.awardStarIfDone(db, 'kid', '2026-10-06'), false, 'the finish adds nothing more');
+  assert.equal(rowsOf(db).length, 1);
+});
+
 test('stars follow the child out when they are deleted', () => {
   const db = makeDb();
   db.prepare("INSERT INTO chore_stars (person_id, day) VALUES ('kid', '2026-10-06')").run();
@@ -264,17 +298,33 @@ test('stars through the routes: earn, keep, remove, reward', async (t) => {
   assert.equal(done.stars.goal, 6);
 });
 
-test('there is no way to add a star by hand', async (t) => {
+test('adding a star through the route: this week up to today, once a day', async (t) => {
   const { db, server, base } = makeApp();
   t.after(() => server.close());
   db.prepare("INSERT INTO chore_people (id, name, color, position) VALUES ('p1', 'Noa', '#111', 0)").run();
-  const day = stars.localDay();
-  for (const method of ['POST', 'PUT', 'PATCH']) {
-    const r = await call(base, method, `/people/p1/stars/${day}`, { status: 'earned' });
-    assert.ok([404, 405].includes(r.status), `${method} -> ${r.status}`);
-  }
-  // restoring is not a back door either: a day with no star has nothing to restore
-  const restore = await call(base, 'POST', `/people/p1/stars/${day}/restore`);
-  assert.equal(restore.status, 404);
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM chore_stars').get().n, 0);
+  const today = stars.localDay();
+  const week = stars.weekDays(today);
+  const noa = async () => (await call(base, 'GET', '/people')).body[0];
+
+  // the first day of the week is always addable (today is on or after it)
+  const first = week[0];
+  assert.equal((await call(base, 'POST', `/people/p1/stars/${first}`)).status, 200);
+  const after = await noa();
+  assert.equal(after.stars.week, 1);
+  assert.equal(after.stars.days[0].status, 'earned');
+  assert.equal((await call(base, 'POST', `/people/p1/stars/${first}`)).status, 409, 'it already has one');
+
+  // not a day still to come, not last week, not a day at all, not a child
+  const tomorrow = stars.addDays(today, 1);
+  if (week.includes(tomorrow)) assert.equal((await call(base, 'POST', `/people/p1/stars/${tomorrow}`)).status, 400, 'tomorrow');
+  assert.equal((await call(base, 'POST', `/people/p1/stars/${stars.addDays(week[0], -1)}`)).status, 400, 'last week');
+  assert.equal((await call(base, 'POST', '/people/p1/stars/garbage')).status, 400, 'not a day');
+  assert.equal((await call(base, 'POST', `/people/nobody/stars/${first}`)).status, 404, 'not a child');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM chore_stars').get().n, 1, 'the refusals made no rows');
+
+  // a removed day comes back the same way, and the count follows
+  await call(base, 'DELETE', `/people/p1/stars/${first}`);
+  assert.equal((await noa()).stars.week, 0);
+  assert.equal((await call(base, 'POST', `/people/p1/stars/${first}`)).status, 200);
+  assert.equal((await noa()).stars.week, 1);
 });

@@ -510,12 +510,43 @@ router.delete('/people/:personId', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/tasks/people/:personId/stars/:day - add a star the child forgot to tick for
+// ---------------------------------------------------------------------------
+// A parent's call from Settings, for a day the chores were done but never ticked,
+// so the automatic star (ticking the last chore) never came. Any day of this week
+// up to today; not a future day. Also brings back a day whose star was removed.
+// ---------------------------------------------------------------------------
+router.post('/people/:personId/stars/:day', (req, res) => {
+  const db = req.app.locals.db;
+  const logger = req.app.locals.logger;
+
+  try {
+    const { personId, day } = req.params;
+    const today = stars.localDay();
+    if (!db.prepare('SELECT 1 FROM chore_people WHERE id = ?').get(personId)) {
+      return res.status(404).json({ error: 'Person not found' });
+    }
+    if (!stars.isAddableDay(day, today)) {
+      return res.status(400).json({ error: 'A star can be added for a day of this week, up to today' });
+    }
+    if (!stars.addStar(db, personId, day, today)) {
+      return res.status(409).json({ error: 'That day already has its star' });
+    }
+    logger.info('Star added by hand for %s on %s', personId, day);
+    emitTasksUpdated(req);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error('Star add error: %s', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // DELETE /api/tasks/people/:personId/stars/:day - take one star back
 // ---------------------------------------------------------------------------
-// A parent's call from Settings, for behaviour. Stars are only ever EARNED by
-// finishing the day's chores, so there is no route to add one; a removed day
-// stays removed even if the chores are still all ticked (until a parent gives
-// it back, below). Only days of the current week can be taken back.
+// A parent's call from Settings, for behaviour. A removed day stays removed even
+// if the chores are still all ticked (until a parent gives it back, below). Only
+// days of the current week can be taken back.
 // ---------------------------------------------------------------------------
 router.delete('/people/:personId/stars/:day', (req, res) => {
   const db = req.app.locals.db;
@@ -538,9 +569,8 @@ router.delete('/people/:personId/stars/:day', (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/tasks/people/:personId/stars/:day/restore - give a removed star back
 // ---------------------------------------------------------------------------
-// For a removal that was a mistake, or too harsh. Only a star that was earned and
-// then removed can come back; there is still no way to create one for a day the
-// chores were not finished.
+// For a removal that was a mistake, or too harsh. Only a star that was removed
+// can come back this way (a day with no star is added, above).
 // ---------------------------------------------------------------------------
 router.post('/people/:personId/stars/:day/restore', (req, res) => {
   const db = req.app.locals.db;
