@@ -547,6 +547,7 @@ function PersonColumn({
 }) {
   const columnRef = useRef(null);
   const addToast = useStore((s) => s.addToast);
+  const showConfirm = useStore((s) => s.showConfirm);
   const [starPop, setStarPop] = useState(false);
   const [celebration, setCelebration] = useState(null);
   const [showClap, setShowClap] = useState(false);
@@ -597,11 +598,21 @@ function PersonColumn({
     [onToggleTask, person.id, person.tasks, person.stars, person.name, addToast]
   );
 
+  // Children delete chores by accident, so the trash button only asks. The dialog
+  // names the chore and the child; a tap on the backdrop (or a stray second tap on
+  // the trash button's spot) cancels rather than confirms.
   const handleDelete = useCallback(
     (taskId) => {
-      onDeleteTask(person.id, taskId);
+      const task = person.tasks.find((x) => x.id === taskId);
+      showConfirm({
+        title: t.tasks.deleteChoreTitle,
+        message: t.tasks.deleteChoreMessage.replace('{title}', task?.title || '').replace('{name}', person.name),
+        confirmLabel: t.tasks.deleteChoreConfirm,
+        cancelLabel: t.tasks.deleteChoreCancel,
+        onConfirm: () => onDeleteTask(person.id, taskId),
+      });
     },
-    [onDeleteTask, person.id]
+    [onDeleteTask, person.id, person.name, person.tasks, showConfirm]
   );
 
   const handleCelebrationComplete = useCallback(() => {
