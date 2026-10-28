@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { io } from 'socket.io-client';
 import { fetchApi } from '../hooks/useApi.js';
 import OnScreenKeyboard from './OnScreenKeyboard.jsx';
+import { IS_PHONE } from '../phone.js';
 import t from '../i18n/he.json';
 
 // ─── Socket.io singleton (real-time HA sync) ────────────────────────────────
@@ -344,9 +345,9 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
   return (
     <div
       ref={popupRef}
-      className="absolute top-full start-0 z-50 mt-3
-                 bg-surf border border-bd rounded-2xl shadow-popover w-[320px] max-h-[760px] flex flex-col
-                 overflow-hidden animate-popup-in"
+      className="absolute ph:fixed ph:inset-x-0 ph:top-auto ph:bottom-0 top-full start-0 z-50 ph:mt-0 mt-3
+                 bg-surf border border-bd rounded-2xl ph:rounded-b-none ph:rounded-t-3xl shadow-popover w-[320px] ph:w-full max-h-[760px] ph:max-h-[88dvh] flex flex-col
+                 overflow-hidden ph:animate-none ph:pb-[env(safe-area-inset-bottom)] animate-popup-in"
       dir="rtl"
     >
       {/* Header */}
@@ -391,7 +392,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             <button
               onClick={() => handleSetAll('completed')}
               disabled={bulkBusy}
-              className="flex-1 min-h-[56px] rounded-xl bg-s2 text-xs font-medium text-ts
+              className="flex-1 min-h-[56px] rounded-xl bg-s2 text-xs ph:text-sm font-medium text-ts
                          hover:bg-bd transition-colors active:scale-95
                          disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -401,7 +402,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             <button
               onClick={() => handleSetAll('needs_action')}
               disabled={bulkBusy}
-              className="flex-1 min-h-[56px] rounded-xl bg-s2 text-xs font-medium text-ts
+              className="flex-1 min-h-[56px] rounded-xl bg-s2 text-xs ph:text-sm font-medium text-ts
                          hover:bg-bd transition-colors active:scale-95
                          disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -412,7 +413,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
             <button
               onClick={handleClearCompleted}
               disabled={bulkBusy}
-              className="flex-1 min-h-[56px] rounded-xl bg-[var(--coral-bg)] text-xs font-medium text-[var(--coral-d)]
+              className="flex-1 min-h-[56px] rounded-xl bg-[var(--coral-bg)] text-xs ph:text-sm font-medium text-[var(--coral-d)]
                          hover:opacity-80 transition-opacity active:scale-95
                          disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -460,7 +461,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
                   className="flex items-center gap-3 flex-1 min-w-0 min-h-[56px] text-start active:scale-[0.98] transition-transform"
                 >
                   <div className="w-5 h-5 rounded border-2 border-bd flex items-center justify-center shrink-0" />
-                  <span className="text-sm text-tp text-start flex-1 truncate">{item.summary}</span>
+                  <span className="text-sm ph:text-base text-tp text-start flex-1 truncate">{item.summary}</span>
                 </button>
                 <button
                   onClick={(e) => handleRemoveItem(idx, e)}
@@ -485,7 +486,7 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
                   <div className="w-5 h-5 rounded bg-acc2/20 border-2 border-acc2 flex items-center justify-center shrink-0">
                     <CheckIcon className="w-3 h-3 text-acc2" />
                   </div>
-                  <span className="text-sm text-tm text-start flex-1 truncate line-through">{item.summary}</span>
+                  <span className="text-sm ph:text-base text-tm text-start flex-1 truncate line-through">{item.summary}</span>
                 </button>
                 <button
                   onClick={(e) => handleRemoveItem(idx, e)}
@@ -516,9 +517,24 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
           placeholder={t.shoppingList.addItem}
           className="flex-1 bg-s2 border border-bd rounded-xl px-3 min-h-[56px] text-sm text-tp
                      placeholder:text-tm focus:outline-none focus:border-acc
-                     transition-colors"
+                     ph:hidden transition-colors"
           dir="auto"
         />
+        {IS_PHONE && (
+          <input
+            type="text"
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAdd();
+            }}
+            placeholder={t.shoppingList.addItem}
+            enterKeyHint="send"
+            className="flex-1 min-w-0 bg-s2 border border-bd rounded-xl px-3 min-h-[56px] text-base text-tp
+                       placeholder:text-tm focus:outline-none focus:border-acc transition-colors"
+            dir="auto"
+          />
+        )}
         <button
           onClick={handleAdd}
           disabled={!newItem.trim() || adding}
@@ -530,6 +546,18 @@ export default function ShoppingListPopup({ visible, onClose, anchorRef }) {
           <PlusIcon className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Phone: dim the page behind the sheet. A tap on it closes the sheet on the click, and its
+          pointerdown is stopped so the outside-click handler above does not close it a beat early
+          (the click would then land on whatever is underneath). */}
+      {IS_PHONE && createPortal(
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onClose}
+        />,
+        document.getElementById('root') || document.body
+      )}
 
       {/* On-screen keyboard for the add-item input (touch kiosk).
           Portaled to #root: this popup keeps a `transform` from its

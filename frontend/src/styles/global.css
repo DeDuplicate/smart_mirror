@@ -1086,3 +1086,46 @@ html[data-phone] .anchored-popup > div:not(.absolute) {
 html[data-phone] .anchored-popup > .absolute {
   display: none;
 }
+
+/* phone: music */
+/* The volume slider: a 44px hit box with the 8px track painted only in the content box (the
+   page's own rule resets background-clip), and a thumb big enough for a finger. */
+html[data-phone] .music-volume-slider {
+  height: 44px;
+  padding: 18px 0;
+  background: linear-gradient(
+    to left,
+    var(--acc) 0%,
+    var(--acc) var(--fill-pct, 50%),
+    var(--bd) var(--fill-pct, 50%),
+    var(--bd) 100%
+  );
+  background-clip: content-box;
+}
+
+html[data-phone] .music-volume-slider::-webkit-slider-thumb {
+  width: 28px;
+  height: 28px;
+}
+
+html[data-phone] .music-volume-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+}
+
+/* phone: calendar */
+/* The day timeline already lists the day's events, so the side list is dropped there
+   (CalendarPage renders the <i data-cal-view> marker only on the phone). */
+html[data-phone] i[data-cal-view="day"] ~ aside {
+  display: none;
+}
+
+/* The kiosk toolbar has an empty flex-1 spacer; the phone toolbar is a grid, where it would take a cell. */
+html[data-phone] .ph\:grid-cols-\[44px_1fr_44px_auto\] > div.flex-1:empty {
+  display: none;
+}
+
+/* Week view: the grid is the point, the upcoming list just peeks in under it. */
+html[data-phone] i[data-cal-view="week"] ~ aside {
+  flex-grow: 1;
+}

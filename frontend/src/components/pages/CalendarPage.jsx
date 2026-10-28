@@ -12,6 +12,7 @@ import useCalendar, {
   CALENDAR_COLORS,
 } from '../../hooks/useCalendar.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
+import { IS_PHONE } from '../../phone.js';
 import { CalendarSkeleton, MonthGridSkeleton } from '../Skeleton.jsx';
 import MonthGrid from '../MonthGrid.jsx';
 import EventEditor from '../EventEditor.jsx';
@@ -291,7 +292,7 @@ function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
       <div
         ref={popupRef}
         className="bg-surf rounded-2xl shadow-popover border border-bd w-[380px] max-h-[520px] overflow-y-auto
-                   pt:w-[640px] pt:max-h-[960px] pt:rounded-3xl"
+                   pt:w-[640px] pt:max-h-[960px] ph:w-[calc(100vw-24px)] ph:max-h-[80dvh] pt:rounded-3xl"
         style={{
           transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(12px)',
           opacity: visible ? 1 : 0,
@@ -310,7 +311,7 @@ function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
             />
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-tp leading-snug">{event.title}</h3>
-              <span className="text-xs text-ts">{event.calendar}</span>
+              <span className="text-xs ph:text-sm text-ts">{event.calendar}</span>
             </div>
           </div>
 
@@ -334,7 +335,7 @@ function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
           {/* Description */}
           {hasDescription && (
             <div className="text-sm text-ts leading-relaxed border-t border-bd pt-3">
-              <span className="text-xs font-semibold text-tm block mb-1">{t.calendar.description}</span>
+              <span className="text-xs ph:text-sm font-semibold text-tm block mb-1">{t.calendar.description}</span>
               {event.description}
             </div>
           )}
@@ -348,7 +349,7 @@ function EventDetailPopup({ event, onClose, onEdit, onDelete }) {
               </div>
               <div className="flex flex-wrap gap-2">
                 {event.attendees.map((name, i) => (
-                  <span key={i} className="text-xs bg-s2 text-ts rounded-full px-3 py-1">
+                  <span key={i} className="text-xs ph:text-sm bg-s2 text-ts rounded-full px-3 py-1">
                     {name}
                   </span>
                 ))}
@@ -414,7 +415,7 @@ function EventBlock({ event, style, height, onTap }) {
       }}
       className="absolute rounded-xl overflow-hidden text-start cursor-pointer
                  hover:brightness-95 active:scale-[0.98] transition-transform duration-[var(--dur-fast)]
-                 flex flex-col justify-start p-2.5 gap-0.5"
+                 flex flex-col justify-start p-2.5 ph:p-1 gap-0.5"
       style={{
         ...style,
         direction: 'rtl', /* Text inside events is RTL */
@@ -424,7 +425,7 @@ function EventBlock({ event, style, height, onTap }) {
       }}
     >
       <span
-        className="shrink-0 text-xs font-semibold leading-tight"
+        className="shrink-0 text-xs font-semibold ph:!line-clamp-3 leading-tight"
         style={{
           color: color.text,
           display: '-webkit-box',
@@ -436,13 +437,13 @@ function EventBlock({ event, style, height, onTap }) {
         {event.title}
       </span>
       <span
-        className="shrink-0 text-[11px] opacity-80"
+        className="shrink-0 text-[11px] ph:hidden opacity-80"
         style={{ color: color.text, fontFamily: "'DM Mono', monospace" }}
       >
         {formatTime(event.start)}
       </span>
       {showLocation && (
-        <span className="flex items-center gap-1 text-[10px] opacity-70 min-w-0"
+        <span className="flex items-center gap-1 text-[10px] opacity-70 ph:hidden min-w-0"
           style={{ color: color.text }}>
           <LocationIcon className="w-3 h-3 shrink-0" />
           <span className="truncate">{event.location}</span>
@@ -464,7 +465,7 @@ function AllDayPill({ event, span = 1, startCol, onTap }) {
         onTap(event, e.currentTarget.getBoundingClientRect());
       }}
       className="rounded-full px-3 py-1.5 text-xs font-medium truncate cursor-pointer
-                 hover:brightness-95 active:scale-[0.98] transition-transform duration-[var(--dur-fast)]"
+                 hover:brightness-95 active:scale-[0.98] ph:min-h-[44px] ph:max-h-[72px] ph:px-1.5 ph:py-1 ph:rounded-xl ph:whitespace-normal ph:leading-tight transition-transform duration-[var(--dur-fast)]"
       style={{
         direction: 'rtl',
         backgroundColor: color.bg,
@@ -496,21 +497,21 @@ function UpcomingCard({ event, onTap, showDay = false }) {
         style={{ backgroundColor: color.dot }}
       />
       <div className="flex-1 min-w-0">
-        <span className="text-sm pt:text-base font-medium text-tp block truncate">{event.title}</span>
+        <span className="text-sm pt:text-base ph:text-base font-medium text-tp block truncate">{event.title}</span>
         {day && (
           <span
-            className={`text-xs font-medium block mt-1 truncate ${day.isNear ? 'text-acc2' : 'text-ts'}`}
+            className={`text-xs ph:text-sm font-medium block mt-1 truncate ${day.isNear ? 'text-acc2' : 'text-ts'}`}
           >
             {day.text}
           </span>
         )}
         <span
-          className="text-xs text-ts block mt-0.5"
+          className="text-xs ph:text-sm text-ts block mt-0.5"
           style={{ fontFamily: "'DM Mono', monospace" }}
         >
           {event.allDay ? t.calendar.allDay : formatTime(event.start)}
         </span>
-        <span className="text-[11px] text-tm block mt-0.5">{event.calendar}</span>
+        <span className="text-[11px] ph:text-xs text-tm block mt-0.5">{event.calendar}</span>
       </div>
     </button>
   );
@@ -554,7 +555,7 @@ function CurrentTimeLine({ hourHeight, gutter }) {
       />
       <div
         className="absolute -translate-y-1/2 rounded-full px-2.5 py-1 bg-surf border border-bd
-                   shadow-card text-xs font-semibold text-tp whitespace-nowrap"
+                   shadow-card text-xs font-semibold text-tp ph:hidden whitespace-nowrap"
         style={{ insetInlineStart: '14px', fontFamily: "'DM Mono', monospace" }}
       >
         {label} · {t.calendar.now}
@@ -653,6 +654,41 @@ function DayEventBlock({ event, style, height, onTap }) {
 // ─── CalendarPage ───────────────────────────────────────────────────────────
 
 const VIEW_STORAGE_KEY = 'calendar_view';
+
+// Phone: open on the day view unless a view was already picked. Done before the
+// first render so the page does not fetch the week and then the day.
+if (IS_PHONE) {
+  try {
+    if (!localStorage.getItem(VIEW_STORAGE_KEY)) localStorage.setItem(VIEW_STORAGE_KEY, 'day');
+  } catch {
+    // private mode: falls back to the kiosk default
+  }
+}
+
+// Phone: the timeline opens around "now" (day view of today) or at the first event, not at 06:00.
+function phoneFocusHour(dates, timedEvents, followNow) {
+  if (followNow && dates.some(isToday)) {
+    const n = new Date();
+    return n.getHours() + n.getMinutes() / 60 - 1;
+  }
+  let first = null;
+  for (const ev of timedEvents) {
+    const st = new Date(ev.start);
+    if (!dates.some((d) => isSameDay(st, d))) continue;
+    const h = st.getHours() + st.getMinutes() / 60;
+    if (first === null || h < first) first = h;
+  }
+  return first === null ? 8 : first - 0.5;
+}
+
+function PhoneScrollTo({ hour, hourHeight }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const scroller = ref.current?.closest('.overflow-y-auto');
+    if (scroller) scroller.scrollTop = Math.max(0, (hour - HOUR_START) * hourHeight);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once per mount; the page remounts on every range change
+  return <span ref={ref} className="absolute top-0 w-0 h-0" aria-hidden="true" />;
+}
 
 export default function CalendarPage() {
   const showWeekend = useStore((s) => s.settings.showWeekend);
@@ -1092,7 +1128,7 @@ export default function CalendarPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Navigation Bar ── */}
-      <div className="flex items-center gap-3 px-6 py-3 pt:py-4 shrink-0 border-b border-bd bg-surf">
+      <div className="flex items-center gap-3 px-6 py-3 pt:py-4 shrink-0 ph:grid ph:grid-cols-[44px_1fr_44px_auto] ph:gap-2 ph:px-3 ph:py-2 border-b border-bd bg-surf">
         <button
           onClick={goNext}
           className="ripple flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl
@@ -1102,7 +1138,7 @@ export default function CalendarPage() {
           <ChevronRight />
         </button>
 
-        <span className="text-base pt:text-lg font-semibold text-tp min-w-[260px] pt:min-w-[220px] text-center select-none">
+        <span className="text-base pt:text-lg font-semibold text-tp min-w-[260px] pt:min-w-[220px] text-center ph:min-w-0 ph:leading-tight select-none">
           {monthYearLabel}
         </span>
 
@@ -1118,7 +1154,7 @@ export default function CalendarPage() {
         <div className="flex-1" />
 
         {/* ── View toggle (segmented control) ── */}
-        <div className="flex items-center gap-1 bg-s2 border border-bd rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-s2 border border-bd ph:col-span-3 ph:order-1 rounded-xl p-1">
           {[
             { value: 'day', label: t.calendar.dayView },
             { value: 'week', label: t.calendar.weekView },
@@ -1129,7 +1165,7 @@ export default function CalendarPage() {
               onClick={() => switchView(opt.value)}
               aria-pressed={view === opt.value}
               className={`px-5 min-w-[96px] min-h-[56px] rounded-xl text-sm transition-all
-                          duration-[var(--dur-fast)] active:scale-95
+                          duration-[var(--dur-fast)] active:scale-95 ph:flex-1 ph:min-w-0 ph:px-2 ph:min-h-[44px]
                           ${view === opt.value
                             ? 'bg-acc text-white font-semibold shadow-card'
                             : 'text-ts font-medium hover:text-tp'}`}
@@ -1142,7 +1178,7 @@ export default function CalendarPage() {
         <button
           onClick={goToday}
           className="ripple px-5 min-h-[56px] rounded-xl bg-acc text-white font-medium text-sm
-                     hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
+                     hover:bg-acc/90 active:scale-95 transition-all ph:px-3 ph:min-h-[44px] duration-[var(--dur-fast)]"
         >
           {t.calendar.today}
         </button>
@@ -1160,7 +1196,7 @@ export default function CalendarPage() {
           }}
           className="ripple flex items-center justify-center min-w-[56px] min-h-[56px] rounded-xl
                      bg-acc/10 text-acc hover:bg-acc/20 active:scale-95
-                     transition-all duration-[var(--dur-fast)]"
+                     transition-all ph:min-w-[44px] ph:min-h-[44px] ph:order-1 duration-[var(--dur-fast)]"
           aria-label={t.calendar.addEvent}
         >
           <PlusIcon className="w-6 h-6" />
@@ -1168,11 +1204,13 @@ export default function CalendarPage() {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="flex flex-1 overflow-hidden pt:flex-col">
+      <div className="flex flex-1 overflow-hidden ph:flex-col pt:flex-col">
+        {/* Phone: lets the stylesheet drop the side list in the day view (the timeline already is the list). */}
+        {IS_PHONE && <i hidden data-cal-view={view} />}
         {/* ── Single Day Timeline (day view) ── */}
         {view === 'day' && (
           <div
-            className="flex-1 pt:flex-initial flex flex-col overflow-hidden px-6 py-4 bg-bg"
+            className="flex-1 pt:flex-initial flex flex-col overflow-hidden px-6 py-4 ph:flex-[3] ph:px-2 ph:py-2 bg-bg"
             onTouchStart={handleCalTouchStart}
             onTouchEnd={handleCalTouchEnd}
             style={{
@@ -1188,7 +1226,7 @@ export default function CalendarPage() {
               {/* ── All-day row ── */}
               <div
                 className="shrink-0 grid items-start gap-2 px-3 py-2.5 border-b border-bd
-                           max-h-[132px] overflow-y-auto"
+                           max-h-[132px] ph:px-2 ph:py-1.5 overflow-y-auto"
                 style={{ gridTemplateColumns: `${DAY_GUTTER}px 1fr` }}
               >
                 <span className="text-xs font-semibold text-ts pt-3">{t.calendar.allDay}</span>
@@ -1201,7 +1239,7 @@ export default function CalendarPage() {
                           key={ev.id}
                           onClick={() => handleEventTap(ev)}
                           className="min-h-[56px] rounded-2xl px-4 text-sm font-medium text-start
-                                     flex flex-col justify-center gap-0.5 max-w-[320px]
+                                     flex flex-col justify-center gap-0.5 max-w-[320px] ph:max-w-full
                                      hover:brightness-95 active:scale-[0.98]
                                      transition-transform duration-[var(--dur-fast)]"
                           style={{
@@ -1219,8 +1257,8 @@ export default function CalendarPage() {
                 ) : (
                   <button
                     onClick={() => openNewEditor({ date: selectedDate, hour: 9, minute: 0, allDay: true })}
-                    className="min-h-[56px] w-full rounded-2xl border-2 border-dashed border-bd
-                               text-xs text-ts hover:bg-s2 active:scale-[0.99]
+                    className="min-h-[56px] w-full rounded-2xl border-2 border-dashed border-bd ph:min-h-[44px]
+                               text-xs ph:text-sm text-ts hover:bg-s2 active:scale-[0.99]
                                transition-all duration-[var(--dur-fast)]"
                     aria-label={t.calendar.addEvent}
                   >
@@ -1245,6 +1283,7 @@ export default function CalendarPage() {
               {/* ── Scrollable hour timeline ── */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden" {...pullBind}>
                 <div className="relative" style={{ height: `${DAY_GRID_HEIGHT}px` }}>
+                  {IS_PHONE && <PhoneScrollTo hour={phoneFocusHour([selectedDate], dayView.timed, true)} hourHeight={DAY_HOUR_HEIGHT} />}
                   {/* Hour rows: full line + subtle half-hour line + label */}
                   {hourLabels.map((label, i) => (
                     <div
@@ -1325,7 +1364,7 @@ export default function CalendarPage() {
                       style={{ top: '180px', insetInlineStart: `${DAY_GUTTER}px`, insetInlineEnd: 0 }}
                     >
                       <div className="w-[520px] rounded-2xl border-2 border-dashed border-bd bg-surf/70
-                                      p-8 flex flex-col items-center gap-3 text-center">
+                                      p-8 flex flex-col items-center gap-3 ph:w-[92%] ph:p-4 text-center">
                         <span className="text-sm text-ts">{t.calendar.noEventsThisDay}</span>
                         <button
                           onClick={(e) => {
@@ -1350,7 +1389,7 @@ export default function CalendarPage() {
         {/* ── Day Column Grid (week view) ── */}
         {view === 'week' && (
         <div
-          className="flex-1 pt:flex-initial flex flex-col overflow-hidden"
+          className="flex-1 pt:flex-initial flex flex-col ph:flex-[2] overflow-hidden"
           onTouchStart={handleCalTouchStart}
           onTouchEnd={handleCalTouchEnd}
           style={{
@@ -1381,11 +1420,11 @@ export default function CalendarPage() {
                     switchView('day');
                   }}
                   aria-label={`${t.calendar.dayViewLabel} — ${t.topBar.daysLong[date.getDay()]} ${date.getDate()}`}
-                  className={`flex flex-col items-center justify-center py-2.5 px-2 min-h-[56px]
+                  className={`flex flex-col items-center justify-center py-2.5 px-2 min-h-[56px] ph:px-0
                     hover:bg-acc/[0.08] active:scale-[0.98] transition-all duration-[var(--dur-fast)]
                     ${today ? 'bg-acc/10' : 'bg-surf'}`}
                 >
-                  <span className={`text-xs font-semibold ${today ? 'text-acc' : 'text-ts'}`}>
+                  <span className={`text-xs ph:text-sm font-semibold ${today ? 'text-acc' : 'text-ts'}`}>
                     {dayNames[i]}
                   </span>
                   <span
@@ -1447,6 +1486,12 @@ export default function CalendarPage() {
                 height: `${GRID_HEIGHT}px`,
               }}
             >
+              {IS_PHONE && (
+                <PhoneScrollTo
+                  hour={phoneFocusHour(dayColumns, Object.values(timedByDay).flat(), false)}
+                  hourHeight={HOUR_HEIGHT}
+                />
+              )}
               {/* ── Hour Labels (gutter) ── */}
               <div className="relative bg-surf" style={{ borderInlineStart: '2px solid var(--cal-line)' }}>
                 {hourLabels.map((label, i) => (
@@ -1568,7 +1613,7 @@ export default function CalendarPage() {
         {/* ── Month Grid (month view) ── */}
         {view === 'month' && (
           <div
-            className="flex-1 flex flex-col overflow-hidden"
+            className="flex-1 flex flex-col ph:flex-[3] overflow-hidden"
             onTouchStart={handleCalTouchStart}
             onTouchEnd={handleCalTouchEnd}
             {...pullBind}
@@ -1607,9 +1652,9 @@ export default function CalendarPage() {
 
         {/* ── Sidebar: upcoming (week) / selected-day agenda (month) ── */}
         <aside className="w-[280px] shrink-0 border-s border-bd bg-surf flex flex-col overflow-hidden
-                          pt:w-full pt:flex-1 pt:min-h-[300px] pt:border-s-0 pt:border-t">
-          <div className="px-5 py-4 pt:px-6 border-b border-bd shrink-0 flex items-center gap-2 pt:min-h-[80px]">
-            <h2 className="text-sm pt:text-lg font-semibold text-tp flex-1">
+                          ph:w-full ph:flex-[2] ph:min-h-0 ph:border-s-0 ph:border-t pt:w-full pt:flex-1 pt:min-h-[300px] pt:border-s-0 pt:border-t">
+          <div className="px-5 py-4 pt:px-6 border-b border-bd shrink-0 flex items-center gap-2 ph:px-4 ph:py-2 ph:min-h-[52px] pt:min-h-[80px]">
+            <h2 className="text-sm pt:text-lg ph:text-base font-semibold text-tp flex-1">
               {isSingleDayView ? selectedDayLabel : t.calendar.upcoming}
             </h2>
             {isSingleDayView && (

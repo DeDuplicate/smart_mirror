@@ -5,6 +5,8 @@ import { TasksSkeleton } from '../Skeleton.jsx';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import useTasks from '../../hooks/useTasks.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
+import { createContext, useContext } from 'react';
+import { IS_PHONE } from '../../phone.js';
 
 // ─── Column definitions ─────────────────────────────────────────────────────
 
@@ -255,6 +257,34 @@ function DropIndicator() {
   );
 }
 
+// ─── Phone: move a task to another list from its editor ─────────────────────
+// A card can't be dragged across a carousel of 85vw columns (the 3rd one is off screen), so on a
+// phone the editor gets three list chips. TasksPage provides the columns and the move handler.
+
+const PhoneMoveCtx = createContext(null);
+
+function PhoneMoveTo({ task }) {
+  const ctx = useContext(PhoneMoveCtx);
+  if (!ctx || !task) return null;
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-tp mb-2">{t.tasks.taskList}</label>
+      <div className="flex gap-2">
+        {ctx.columnDefs.map((col) => (
+          <button
+            key={col.key}
+            onClick={() => ctx.onMove(task, col.key)}
+            className={`flex-1 h-12 rounded-xl border text-sm font-medium px-1 truncate
+              ${task.status === col.key ? 'border-acc bg-acc/10 text-acc' : 'border-bd bg-s2 text-ts'}`}
+          >
+            {col.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── TaskCard ───────────────────────────────────────────────────────────────
 
 function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
@@ -305,7 +335,7 @@ function TaskCard({ task, index, isDone, onTap, onDragStart, isBeingDragged }) {
         {/* Drag grip handle — INSTANT drag on mousedown/touchstart */}
         <div
           data-no-swipe="true"
-          className="text-tm hover:text-ts mt-0.5 shrink-0 cursor-grab active:cursor-grabbing p-1 -m-1 rounded"
+          className="text-tm hover:text-ts mt-0.5 shrink-0 cursor-grab active:cursor-grabbing p-1 -m-1 ph:p-3 ph:-m-3 ph:touch-none rounded"
           title="Drag to move"
           onMouseDown={startDrag}
           onTouchStart={startDrag}
@@ -469,7 +499,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
 
       {/* Panel — when keyboard open, panel sits directly above keyboard; keyboard=bottom 40%, panel=top of remaining 60% anchored to bottom */}
       <div
-        className="relative bg-surf shadow-modal rounded-t-3xl flex flex-col overflow-hidden"
+        className="relative bg-surf shadow-modal rounded-t-3xl flex flex-col ph:!h-[92%] overflow-hidden"
         style={{
           position: keyboardTarget ? 'absolute' : 'relative',
           bottom: keyboardTarget ? '40%' : '0',
@@ -482,7 +512,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-bd shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-bd ph:px-4 ph:py-2 shrink-0">
           <h2 className="text-lg font-bold text-tp">
             {isNew ? t.tasks.newTask : t.tasks.editTask}
           </h2>
@@ -497,7 +527,9 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-5 ph:px-4 ph:py-4 ph:space-y-5 space-y-6">
+          {IS_PHONE && !isNew && <PhoneMoveTo task={liveTask || task} />}
+
           {/* Title */}
           <div>
             <label className="block text-sm font-semibold text-tp mb-2">{t.tasks.title}</label>
@@ -510,8 +542,18 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
               placeholder={t.tasks.titlePlaceholder}
               className="w-full h-14 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
                          placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30
-                         transition-all duration-[var(--dur-fast)]"
+                         transition-all ph:hidden duration-[var(--dur-fast)]"
             />
+            {IS_PHONE && (
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t.tasks.titlePlaceholder}
+                className="w-full h-14 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
+                           placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+              />
+            )}
           </div>
 
           {/* Description */}
@@ -526,8 +568,18 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
               rows={3}
               className="w-full px-4 py-3 rounded-xl border border-bd bg-s2 text-tp text-sm
                          placeholder:text-tm resize-none focus:outline-none focus:ring-2
-                         focus:ring-acc/30 transition-all duration-[var(--dur-fast)]"
+                         focus:ring-acc/30 transition-all ph:hidden duration-[var(--dur-fast)]"
             />
+            {IS_PHONE && (
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t.tasks.descriptionPlaceholder}
+                rows={3}
+                className="w-full px-4 py-3 rounded-xl border border-bd bg-s2 text-tp text-base
+                           placeholder:text-tm resize-none focus:outline-none focus:ring-2 focus:ring-acc/30"
+              />
+            )}
           </div>
 
           {/* Checklist — tick items off inside the task */}
@@ -554,6 +606,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
                       aria-label={sub.title}
                       className={`
                         w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0
+                        ph:relative ph:after:absolute ph:after:-inset-2 ph:after:content-['']
                         transition-all duration-[var(--dur-fast)] active:scale-90
                         ${sub.done
                           ? 'bg-mint-d border-mint-d text-white'
@@ -573,7 +626,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
                     <button
                       onClick={() => onDeleteSubtask(task.id, sub.id)}
                       aria-label={t.common.delete}
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-tm
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-tm ph:w-11 ph:h-11
                                  hover:text-red-500 hover:bg-red-500/10 active:scale-90
                                  transition-all duration-[var(--dur-fast)] shrink-0"
                     >
@@ -591,13 +644,25 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
                     onFocus={() => setKeyboardTarget('subtask')}
                     placeholder={t.tasks.subtaskPlaceholder}
                     className="flex-1 h-12 px-4 rounded-xl border border-bd bg-s2 text-tp text-sm
-                               placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+                               placeholder:text-tm focus:outline-none focus:ring-2 ph:hidden focus:ring-acc/30"
                   />
+                  {IS_PHONE && (
+                    <input
+                      type="text"
+                      value={subtaskDraft}
+                      onChange={(e) => setSubtaskDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddSubtask(); }}
+                      placeholder={t.tasks.subtaskPlaceholder}
+                      enterKeyHint="done"
+                      className="flex-1 min-w-0 h-12 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
+                                 placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+                    />
+                  )}
                   <button
                     onClick={handleAddSubtask}
                     disabled={!subtaskDraft.trim()}
                     className="flex items-center gap-1.5 px-4 h-12 rounded-xl bg-acc text-white
-                               font-semibold text-sm active:scale-95
+                               font-semibold text-sm active:scale-95 ph:px-3
                                transition-all duration-[var(--dur-fast)]
                                disabled:opacity-40 disabled:pointer-events-none shrink-0"
                   >
@@ -622,7 +687,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
                   }
                 }}
                 className={`
-                  px-4 h-10 rounded-xl text-sm font-medium transition-all duration-[var(--dur-fast)]
+                  px-4 h-10 rounded-xl text-sm font-medium transition-all duration-[var(--dur-fast)] ph:h-11
                   ${hasDueDate
                     ? 'bg-acc text-white'
                     : 'bg-s2 text-ts border border-bd'
@@ -643,14 +708,14 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
           {/* Priority */}
           <div>
             <label className="block text-sm font-semibold text-tp mb-3">{t.tasks.priority}</label>
-            <div className="flex gap-3">
+            <div className="flex ph:gap-2 gap-3">
               {PRIORITIES.map((p) => (
                 <button
                   key={p.value}
                   onClick={() => setPriority(p.value)}
                   className={`
                     flex items-center gap-2 px-4 h-12 rounded-xl border text-sm font-medium
-                    transition-all duration-[var(--dur-fast)] flex-1 justify-center
+                    transition-all duration-[var(--dur-fast)] flex-1 justify-center ph:px-1 ph:gap-1.5
                     ${priority === p.value
                       ? 'border-acc bg-acc/10 text-acc'
                       : 'border-bd bg-s2 text-ts'
@@ -691,11 +756,11 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
         </div>
 
         {/* Action buttons */}
-        <div className="shrink-0 flex items-center gap-3 px-6 py-4 border-t border-bd bg-surf">
+        <div className="shrink-0 flex items-center gap-3 px-6 py-4 border-t border-bd ph:px-3 ph:gap-2 ph:py-3 bg-surf">
           {!isNew && (
             <button
               onClick={handleDelete}
-              className="flex items-center gap-2 px-5 h-14 rounded-xl bg-red-500/10 text-red-500
+              className="flex items-center gap-2 px-5 h-14 rounded-xl bg-red-500/10 text-red-500 ph:px-3
                          font-semibold text-sm hover:bg-red-500/20 active:scale-95
                          transition-all duration-[var(--dur-fast)]"
             >
@@ -706,7 +771,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
           <div className="flex-1" />
           <button
             onClick={onClose}
-            className="px-6 h-14 rounded-xl border border-bd text-ts font-medium text-sm
+            className="px-6 h-14 rounded-xl border border-bd text-ts font-medium text-sm ph:px-4
                        hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]"
           >
             {t.common.cancel}
@@ -714,7 +779,7 @@ function TaskDetailOverlay({ task, isNew, tasks, onSave, onDelete, onClose, onAd
           <button
             onClick={handleSave}
             disabled={!title.trim()}
-            className="px-8 h-14 rounded-xl bg-acc text-white font-semibold text-sm
+            className="px-8 h-14 rounded-xl bg-acc text-white font-semibold text-sm ph:px-6
                        hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]
                        disabled:opacity-40 disabled:pointer-events-none"
           >
@@ -987,6 +1052,21 @@ export default function TasksPage() {
     };
   }, [draggedTask, handleGlobalMove, handleGlobalTouchEnd]);
 
+  // Phone: move a task to another list from its editor (appended to the end of that list)
+  const handleMove = useCallback((task, colKey) => {
+    if (task.status === colKey) return;
+    const updates = [{ id: task.id, status: colKey, position: (columns[colKey] || []).length }];
+    (columns[task.status] || [])
+      .filter((x) => x.id !== task.id)
+      .forEach((x, i) => {
+        if (x.position !== i) updates.push({ id: x.id, status: x.status, position: i });
+      });
+    reorderTasks(updates);
+    addToast('success', t.tasks.taskMoved);
+    closeOverlay();
+  }, [columns, reorderTasks, addToast, closeOverlay]);
+  const phoneMove = { columnDefs, onMove: handleMove };
+
   // ── Loading state ────────────────────────────────────────────────────────
   if (loading) return <TasksSkeleton />;
 
@@ -995,7 +1075,7 @@ export default function TasksPage() {
       {/* Pull-to-refresh indicator */}
       {isPulling && (
         <div
-          className="shrink-0 flex items-center justify-center overflow-hidden transition-all duration-[var(--dur-fast)]"
+          className="shrink-0 flex items-center justify-center overflow-hidden transition-all ph:hidden duration-[var(--dur-fast)]"
           style={{ height: `${pullDistance}px` }}
         >
           <div
@@ -1006,7 +1086,7 @@ export default function TasksPage() {
       )}
 
       {/* Kanban columns */}
-      <div className="flex flex-1 gap-5 p-6 overflow-x-auto pt:snap-x pt:snap-mandatory pt:p-8 pt:gap-6" {...pullBind}>
+      <div className="flex flex-1 gap-5 p-6 overflow-x-auto pt:snap-x pt:snap-mandatory pt:p-8 ph:snap-x ph:snap-mandatory ph:p-3 ph:pb-20 ph:gap-3 ph:scroll-px-3 pt:gap-6" {...pullBind}>
         {columnDefs.map((col) => {
           const items = columns[col.key] || [];
           const isDone = col.key === 'done';
@@ -1026,7 +1106,7 @@ export default function TasksPage() {
               key={col.key}
               ref={(el) => { columnRefs.current[col.key] = el; }}
               className={`
-                flex-1 min-w-[280px] pt:min-w-[300px] pt:snap-start flex flex-col rounded-2xl
+                flex-1 min-w-[280px] pt:min-w-[300px] pt:snap-start flex flex-col rounded-2xl ph:min-w-[85vw] ph:snap-start
                 transition-all duration-[var(--dur-fast)]
                 ${COLUMN_BG[col.key]}
               `}
@@ -1037,7 +1117,7 @@ export default function TasksPage() {
               } : undefined}
             >
               {/* Column header */}
-              <div className="flex items-center gap-3 px-5 py-4 shrink-0">
+              <div className="flex items-center gap-3 px-5 py-4 ph:px-4 ph:py-3 shrink-0">
                 <h3 className="text-base font-semibold text-tp">{col.label}</h3>
                 <span
                   className={`
@@ -1051,7 +1131,7 @@ export default function TasksPage() {
               </div>
 
               {/* Cards area */}
-              <div className="flex-1 overflow-y-auto px-4 pb-4">
+              <div className="flex-1 overflow-y-auto px-4 ph:px-3 ph:pb-3 pb-4">
                 {items.length === 0 && !isDropHere ? (
                   <div className="flex items-center justify-center h-full border-2 border-dashed border-bd/50 rounded-2xl py-12">
                     <span className="text-tm text-sm">{t.empty.noTasks}</span>
@@ -1078,7 +1158,7 @@ export default function TasksPage() {
 
               {/* Clear completed button for done column */}
               {isDone && items.length > 0 && (
-                <div className="shrink-0 px-4 pb-4">
+                <div className="shrink-0 px-4 ph:px-3 ph:pb-3 pb-4">
                   <button
                     onClick={clearCompleted}
                     className="ripple w-full h-12 rounded-xl bg-mint-d/10 text-mint-d font-semibold text-sm
@@ -1142,7 +1222,7 @@ export default function TasksPage() {
       {/* Floating add button */}
       <button
         onClick={openNewTask}
-        className="ripple absolute bottom-6 start-6 w-14 h-14 rounded-full bg-acc text-white
+        className="ripple absolute bottom-6 start-6 ph:bottom-3 ph:start-4 w-14 h-14 rounded-full bg-acc text-white
                    shadow-raised flex items-center justify-center
                    hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
         aria-label={t.tasks.addTask}
@@ -1152,6 +1232,7 @@ export default function TasksPage() {
 
       {/* Task detail overlay */}
       {overlayOpen && (
+        <PhoneMoveCtx.Provider value={phoneMove}>
         <TaskDetailOverlay
           task={overlayTask === 'new' ? null : overlayTask}
           isNew={overlayTask === 'new'}
@@ -1163,6 +1244,7 @@ export default function TasksPage() {
           onToggleSubtask={handleToggleSubtask}
           onDeleteSubtask={handleDeleteSubtask}
         />
+        </PhoneMoveCtx.Provider>
       )}
 
       {/* Inline keyframe for task card entrance + overlay */}

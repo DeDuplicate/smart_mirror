@@ -3,6 +3,7 @@ import t from '../i18n/he.json';
 import useStore from '../store/index.js';
 import OnScreenKeyboard from './OnScreenKeyboard.jsx';
 import { CALENDAR_COLORS, normalizeCalendarColor } from '../hooks/useCalendar.js';
+import { IS_PHONE } from '../phone.js';
 
 const COLOR_KEYS = ['mint', 'lav', 'coral', 'gold'];
 
@@ -116,6 +117,19 @@ function ScrollPicker({ items, value, onChange, label }) {
   );
 }
 
+// Phone: a real input, so the phone's own keyboard is used instead of OnScreenKeyboard
+// (the kiosk inputs above are read-only and only open that keyboard).
+function PhoneField({ multiline, ...props }) {
+  const Tag = multiline ? 'textarea' : 'input';
+  return (
+    <Tag
+      {...props}
+      className="w-full px-4 rounded-xl border border-bd bg-s2 text-tp text-base placeholder:text-tm
+                 focus:outline-none focus:ring-2 focus:ring-acc/30 min-h-[56px] py-3 resize-none"
+    />
+  );
+}
+
 function DatePicker({ value, onChange }) {
   const parsed = value ? new Date(`${value}T00:00:00`) : new Date();
   const [day, setDay] = useState(parsed.getDate());
@@ -145,7 +159,7 @@ function DatePicker({ value, onChange }) {
   }));
 
   return (
-    <div className="flex gap-3">
+    <div className="flex ph:gap-2 gap-3">
       <ScrollPicker items={dayItems} value={clampedDay} onChange={setDay} label={t.tasks.day} />
       <ScrollPicker items={monthItems} value={month} onChange={setMonth} label={t.tasks.month} />
       <ScrollPicker items={yearItems} value={year} onChange={setYear} label={t.tasks.year} />
@@ -303,7 +317,7 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
           transition: 'height 0.25s ease, bottom 0.25s ease',
         }}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-bd shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-bd ph:px-4 ph:py-2 shrink-0">
           <h2 className="text-lg font-bold text-tp">
             {isNew ? t.calendar.newEvent : t.calendar.editEvent}
           </h2>
@@ -317,7 +331,7 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-5 ph:px-4 ph:py-4 ph:space-y-5 space-y-6">
           <div>
             <label className="block text-sm font-semibold text-tp mb-2">{t.calendar.title}</label>
             <input
@@ -327,8 +341,16 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
               onFocus={() => setKeyboardTarget('title')}
               placeholder={t.calendar.titlePlaceholder}
               className="w-full h-14 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
-                         placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+                         placeholder:text-tm focus:outline-none ph:hidden focus:ring-2 focus:ring-acc/30"
             />
+            {IS_PHONE && (
+              <PhoneField
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t.calendar.titlePlaceholder}
+              />
+            )}
           </div>
 
           <div>
@@ -340,8 +362,16 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
               onFocus={() => setKeyboardTarget('location')}
               placeholder={t.calendar.locationPlaceholder}
               className="w-full h-14 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
-                         placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+                         placeholder:text-tm focus:outline-none ph:hidden focus:ring-2 focus:ring-acc/30"
             />
+            {IS_PHONE && (
+              <PhoneField
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder={t.calendar.locationPlaceholder}
+              />
+            )}
           </div>
 
           <div>
@@ -353,8 +383,17 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
               placeholder={t.calendar.descriptionPlaceholder}
               rows={3}
               className="w-full px-4 py-3 rounded-xl border border-bd bg-s2 text-tp text-sm
-                         placeholder:text-tm resize-none focus:outline-none focus:ring-2 focus:ring-acc/30"
+                         placeholder:text-tm resize-none focus:outline-none ph:hidden focus:ring-2 focus:ring-acc/30"
             />
+            {IS_PHONE && (
+              <PhoneField
+                multiline
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t.calendar.descriptionPlaceholder}
+              />
+            )}
           </div>
 
           <button
@@ -425,11 +464,11 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-3 px-6 py-4 border-t border-bd bg-surf">
+        <div className="shrink-0 flex items-center gap-3 px-6 py-4 border-t border-bd ph:gap-2 ph:px-3 ph:py-3 ph:pb-[max(12px,env(safe-area-inset-bottom))] bg-surf">
           {!isNew && onDelete && (
             <button
               onClick={handleDelete}
-              className="flex items-center gap-2 px-5 h-14 rounded-xl bg-red-500/10 text-red-500
+              className="flex items-center gap-2 px-5 ph:px-3 h-14 rounded-xl bg-red-500/10 text-red-500
                          font-semibold text-sm hover:bg-red-500/20 active:scale-95
                          transition-all duration-[var(--dur-fast)]"
             >
@@ -440,7 +479,7 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
           <div className="flex-1" />
           <button
             onClick={onClose}
-            className="px-6 h-14 rounded-xl border border-bd text-ts font-medium text-sm
+            className="px-6 ph:px-4 h-14 rounded-xl border border-bd text-ts font-medium text-sm
                        hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]"
           >
             {t.common.cancel}
@@ -448,7 +487,7 @@ export default function EventEditor({ event, defaults, onSave, onDelete, onClose
           <button
             onClick={handleSave}
             disabled={!title.trim() || saving}
-            className="px-8 h-14 rounded-xl bg-acc text-white font-semibold text-sm
+            className="px-8 ph:px-6 h-14 rounded-xl bg-acc text-white font-semibold text-sm
                        hover:bg-acc/90 active:scale-95 transition-all duration-[var(--dur-fast)]
                        disabled:opacity-40 disabled:pointer-events-none"
           >

@@ -87,10 +87,10 @@ export function CameraOffIcon({ className = 'w-10 h-10' }) {
 
 export function cameraGridVars(n) {
   if (n <= 1) return '[--cols:1] [--rows:1]';
-  if (n === 2) return '[--cols:2] [--rows:1] pt:[--cols:1] pt:[--rows:2]';
-  if (n <= 4) return '[--cols:2] [--rows:2]';
-  if (n <= 6) return '[--cols:3] [--rows:2] pt:[--cols:2] pt:[--rows:3]';
-  return '[--cols:3] pt:[--cols:2]'; // scrolls
+  if (n === 2) return '[--cols:2] ph:[--cols:1] [--rows:1] pt:[--cols:1] pt:[--rows:2]';
+  if (n <= 4) return '[--cols:2] ph:[--cols:1] ph:[--rows:1] [--rows:2]';
+  if (n <= 6) return '[--cols:3] ph:[--cols:1] ph:[--rows:1] [--rows:2] pt:[--cols:2] pt:[--rows:3]';
+  return '[--cols:3] ph:[--cols:1] pt:[--cols:2]'; // scrolls
 }
 
 export function cameraGridStyle(n, gap) {

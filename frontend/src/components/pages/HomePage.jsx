@@ -464,7 +464,7 @@ function RoomAction({ icon, label, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="ripple flex items-center justify-center gap-2.5 min-h-[56px] px-5 rounded-xl flex-1
+      className="ripple flex items-center justify-center gap-2.5 min-h-[56px] px-5 ph:px-3 rounded-xl flex-1
                  bg-s2 border border-bd text-base font-medium text-tp hover:bg-bd
                  active:scale-95 transition-all duration-[var(--dur-fast)]"
     >
@@ -480,7 +480,7 @@ function RoomPanel({ room, onRemote, hasAC, onAC, backlight, callService }) {
   const isLiving = room.slug === 'living_room';
 
   return (
-    <section className="card flex flex-col gap-4 p-5 pt:p-6" aria-label={room.name}>
+    <section className="card ph:p-4 ph:gap-3 flex flex-col gap-4 p-5 pt:p-6" aria-label={room.name}>
       <header className="flex items-center justify-between">
         <h3 className="text-lg pt:text-xl font-semibold text-tp">{room.name}</h3>
         {!room.remoteOnline && (
@@ -496,12 +496,12 @@ function RoomPanel({ room, onRemote, hasAC, onAC, backlight, callService }) {
             const [whole, tenth] = room.temp.toFixed(1).split('.');
             return (
               <>
-                <span className="text-7xl font-medium leading-none text-tp">{whole}</span>
-                <span className="text-4xl leading-none text-ts">.{tenth}</span>
+                <span className="text-7xl ph:text-6xl font-medium leading-none text-tp">{whole}</span>
+                <span className="text-4xl ph:text-3xl leading-none text-ts">.{tenth}</span>
               </>
             );
           })() : (
-            <span className="text-7xl font-medium leading-none text-tm">--</span>
+            <span className="text-7xl ph:text-6xl font-medium leading-none text-tm">--</span>
           )}
           <span className="text-2xl text-ts ms-2">°C</span>
         </div>
@@ -529,7 +529,7 @@ function RoomPanel({ room, onRemote, hasAC, onAC, backlight, callService }) {
       </div>
 
       {isLiving && backlight && (
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-bd">
+        <div className="flex ph:flex-wrap items-center justify-between gap-3 pt-3 border-t border-bd">
           <span className="flex items-center gap-2 text-sm text-ts">
             <BulbIcon className="w-5 h-5 text-amber" />
             {t.home.tableBacklight}
@@ -642,7 +642,7 @@ function DeviceCard({ entity, name, onToggle, onLongPress, offline }) {
         </span>
       </div>
 
-      <span className="mt-auto text-xl font-semibold text-tp leading-tight line-clamp-2">{name}</span>
+      <span className="mt-auto text-xl ph:text-lg ph:break-words font-semibold text-tp leading-tight line-clamp-2">{name}</span>
 
       {brightness !== null && (
         <div className="h-1.5 rounded-full bg-s2 overflow-hidden" role="img" aria-label={`${t.home.brightness} ${brightness}%`}>
@@ -712,7 +712,7 @@ function PopupSlider({ value, min, max, step = 1, label, suffix = '', onChange }
         <div
           ref={trackRef}
           data-no-swipe="true"
-          className="relative w-12 h-48 rounded-full bg-s2 cursor-pointer overflow-hidden"
+          className="relative ph:touch-none w-12 h-48 rounded-full bg-s2 cursor-pointer overflow-hidden"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
         >
@@ -995,7 +995,7 @@ function SceneChip({ config, onActivate }) {
   return (
     <button
       onClick={handleClick}
-      className={`ripple flex items-center gap-2.5 min-h-[56px] px-5 rounded-full
+      className={`ripple flex items-center gap-2.5 min-h-[56px] px-5 ph:px-3 ph:justify-center rounded-full
                   bg-surf border border-bd text-base font-medium text-tp
                   hover:bg-s2 active:scale-95 transition-all duration-[var(--dur-fast)]
                   ${pulsing ? 'animate-scene-pulse' : ''}`}
@@ -1017,7 +1017,7 @@ function EnergyCard({ reading }) {
   const grouped = (n) => Math.round(n).toLocaleString('en-US');
 
   return (
-    <section className="card flex flex-col gap-4 p-5 pt:p-6 h-full" aria-label={t.home.sectionEnergy}>
+    <section className="card flex flex-col gap-4 p-5 pt:p-6 ph:p-4 h-full" aria-label={t.home.sectionEnergy}>
       <header className="flex items-center justify-between">
         <h3 className="text-lg pt:text-xl font-semibold text-tp">{t.home.electricityNow}</h3>
         <span
@@ -1029,7 +1029,7 @@ function EnergyCard({ reading }) {
       </header>
 
       <div className="flex items-baseline gap-2 tabular-nums" dir="ltr" style={MONO}>
-        <span className="text-6xl font-medium leading-none" style={{ color }}>{grouped(reading.watts)}</span>
+        <span className="text-6xl ph:text-5xl font-medium leading-none" style={{ color }}>{grouped(reading.watts)}</span>
         <span className="text-2xl text-ts">W</span>
       </div>
 
@@ -1042,7 +1042,7 @@ function EnergyCard({ reading }) {
         </div>
       </div>
 
-      <dl className="flex items-center gap-6 mt-auto pt-3 border-t border-bd text-sm">
+      <dl className="flex ph:flex-wrap ph:gap-x-5 ph:gap-y-2 items-center gap-6 mt-auto pt-3 border-t border-bd text-sm">
         {reading.volts != null && (
           <div className="flex items-baseline gap-2">
             <dt className="text-ts">{t.home.voltage}</dt>
@@ -1127,21 +1127,21 @@ function CurtainPopup({ entity, anchorRect, onClose, ha }) {
         <div className="flex gap-2 w-full">
           <button
             onClick={() => ha.callService('cover', 'open_cover', { entity_id: entity.entity_id })}
-            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-medium bg-acc2 text-white
+            className="flex-1 px-3 py-2.5 ph:min-h-[48px] rounded-xl text-xs font-medium bg-acc2 text-white
                        hover:bg-acc2/90 active:scale-95 transition-all duration-[var(--dur-fast)]"
           >
             {t.home.openCurtain}
           </button>
           <button
             onClick={() => ha.setCoverPosition(entity.entity_id, 50)}
-            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-medium bg-s2 text-tp
+            className="flex-1 px-3 py-2.5 ph:min-h-[48px] rounded-xl text-xs font-medium bg-s2 text-tp
                        hover:bg-bd active:scale-95 transition-all duration-[var(--dur-fast)]"
           >
             {t.home.halfPosition}
           </button>
           <button
             onClick={() => ha.callService('cover', 'close_cover', { entity_id: entity.entity_id })}
-            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-medium bg-s2 text-tp
+            className="flex-1 px-3 py-2.5 ph:min-h-[48px] rounded-xl text-xs font-medium bg-s2 text-tp
                        hover:bg-bd active:scale-95 transition-all duration-[var(--dur-fast)]"
           >
             {t.home.closeCurtain}
@@ -1201,9 +1201,9 @@ export default function HomePage() {
 
   if (!isConfigured && entities.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-5">
+      <div className="flex ph:px-6 flex-col items-center justify-center h-full gap-5">
         <HomeIllustration />
-        <p className="text-tm text-lg">{t.empty.notConfigured}</p>
+        <p className="text-tm ph:text-center text-lg">{t.empty.notConfigured}</p>
         <button
           onClick={() => setActiveTab(TAB_INDEX.settings)}
           className="ripple flex items-center gap-2 px-6 min-h-[56px] rounded-xl bg-acc text-white
@@ -1272,7 +1272,7 @@ export default function HomePage() {
   // ── Main content ──────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-6 gap-6 pt:p-8 pt:gap-8" dir="rtl" style={{ scrollbarWidth: 'thin' }}>
+    <div className="flex ph:p-4 ph:gap-5 flex-col h-full overflow-y-auto p-6 gap-6 pt:p-8 pt:gap-8" dir="rtl" style={{ scrollbarWidth: 'thin' }}>
       {haStatus === 'degraded' && (
         <ConnectionBanner
           integration={t.connection.degraded}
@@ -1282,13 +1282,13 @@ export default function HomePage() {
       )}
 
       {/* Title, a one-line summary of the house, and any scenes that exist */}
-      <header className="flex items-center justify-between gap-4 shrink-0">
+      <header className="flex ph:flex-col ph:items-stretch ph:gap-3 items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl pt:text-3xl font-bold text-tp">{t.home.title}</h1>
           <p className="text-sm text-ts mt-0.5">{summary}</p>
         </div>
         {scenes.length > 0 && (
-          <div className="flex flex-wrap gap-3 pt:hidden">
+          <div className="flex ph:grid ph:grid-cols-2 ph:gap-2 flex-wrap gap-3 pt:hidden">
             {scenes.map((scene) => (
               <SceneChip key={scene.key} config={scene} onActivate={handleSceneActivate} />
             ))}
@@ -1308,7 +1308,7 @@ export default function HomePage() {
       {rooms.length > 0 && (
         <section aria-label={t.home.sectionRooms}>
           <SectionLabel>{t.home.sectionRooms}</SectionLabel>
-          <div className="grid grid-cols-3 gap-4 pt:grid-cols-1 pt:gap-5">
+          <div className="grid ph:grid-cols-1 ph:gap-4 grid-cols-3 gap-4 pt:grid-cols-1 pt:gap-5">
             {rooms.map((room) => (
               <RoomPanel
                 key={room.slug}
@@ -1324,11 +1324,11 @@ export default function HomePage() {
         </section>
       )}
 
-      <div className="grid grid-cols-3 gap-4 pt:grid-cols-1 pt:gap-8">
-        <section className={`flex flex-col ${reading ? 'col-span-2 pt:col-span-1' : 'col-span-3 pt:col-span-1'}`} aria-label={t.home.sectionDevices}>
+      <div className="grid ph:grid-cols-1 ph:gap-6 grid-cols-3 gap-4 pt:grid-cols-1 pt:gap-8">
+        <section className={`flex flex-col ${reading ? 'col-span-2 ph:col-span-1 pt:col-span-1' : 'col-span-3 ph:col-span-1 pt:col-span-1'}`} aria-label={t.home.sectionDevices}>
           <SectionLabel>{t.home.sectionDevices}</SectionLabel>
           {devices.length > 0 ? (
-            <div className={`grid flex-1 auto-rows-fr gap-4 pt:grid-cols-2 pt:gap-5 ${reading ? 'grid-cols-4' : 'grid-cols-6'}`}>
+            <div className={`grid flex-1 auto-rows-fr gap-4 pt:grid-cols-2 pt:gap-5 ph:grid-cols-2 ph:gap-3 ${reading ? 'grid-cols-4' : 'grid-cols-6'}`}>
               {devices.map((entity) => (
                 <div key={entity.entity_id} data-entity-id={entity.entity_id} className="h-full">
                   <DeviceCard

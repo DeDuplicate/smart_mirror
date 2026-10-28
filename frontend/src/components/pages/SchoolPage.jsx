@@ -56,7 +56,7 @@ function ItemRow({ item, personColor, onToggle }) {
       </div>
       <span
         className={`
-          flex-1 text-start text-base font-medium leading-snug truncate
+          flex-1 text-start text-base font-medium leading-snug ph:whitespace-normal ph:break-words truncate
           transition-all duration-[var(--dur-normal)]
           ${item.checked ? 'line-through text-[var(--ts)]' : 'text-[var(--tp)]'}
         `}
@@ -112,7 +112,7 @@ function SubjectHeader({ subject, personColor, onToggle }) {
       />
       <h3
         className={`
-          flex-1 text-start text-sm font-semibold truncate
+          flex-1 text-start text-sm ph:text-[15px] ph:whitespace-normal font-semibold truncate
           transition-all duration-[var(--dur-normal)]
           ${checked ? 'line-through text-[var(--tm)]' : 'text-[var(--ts)]'}
         `}
@@ -155,7 +155,7 @@ function PersonColumn({ person, avatar, onToggleItem }) {
   return (
     <div
       ref={columnRef}
-      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden flex-[1_1_0%] min-w-[220px] pt:min-w-[460px] pt:snap-start"
+      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden flex-[1_1_0%] ph:flex-none ph:min-w-0 min-w-[220px] pt:min-w-[460px] pt:snap-start"
       
     >
       {celebrating && (
@@ -168,9 +168,9 @@ function PersonColumn({ person, avatar, onToggleItem }) {
       )}
 
       {/* Header */}
-      <div className="flex flex-col items-center gap-2 pt-5 pb-3 px-4">
+      <div className="flex flex-col ph:flex-row ph:gap-3 ph:pt-3 items-center gap-2 pt-5 pb-3 px-4">
         <div
-          className="w-[68px] h-[68px] rounded-full flex items-center justify-center overflow-hidden text-white text-2xl font-bold"
+          className="w-[68px] ph:w-[48px] ph:shrink-0 h-[68px] ph:h-[48px] rounded-full flex items-center justify-center overflow-hidden text-white text-2xl font-bold"
           style={{ backgroundColor: person.color }}
         >
           {avatar ? (
@@ -179,9 +179,9 @@ function PersonColumn({ person, avatar, onToggleItem }) {
             person.name.charAt(0)
           )}
         </div>
-        <span className="text-base font-bold text-[var(--tp)]">{person.name}</span>
+        <span className="text-base ph:text-[18px] font-bold text-[var(--tp)]">{person.name}</span>
         {total > 0 && (
-          <span className={`text-xs font-medium ${allDone ? 'text-[var(--acc2)]' : 'text-[var(--ts)]'}`}>
+          <span className={`text-xs ph:text-[14px] ph:ms-auto font-medium ${allDone ? 'text-[var(--acc2)]' : 'text-[var(--ts)]'}`}>
             {allDone ? `✅ ${progressText}` : progressText}
           </span>
         )}
@@ -196,7 +196,7 @@ function PersonColumn({ person, avatar, onToggleItem }) {
       </div>
 
       {/* Subjects */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3 flex flex-col gap-3">
+      <div className="flex-1 ph:flex-none ph:overflow-visible overflow-y-auto px-3 pb-3 flex flex-col gap-3">
         {person.subjects.length === 0 && (
           <div className="flex items-center justify-center py-8 text-sm text-[var(--tm)]">
             {t.school.noSchoolToday}
@@ -280,7 +280,7 @@ export default function SchoolPage() {
   const nothingScheduled = todayPeople.length === 0 || todayPeople.every((p) => p.subjects.length === 0);
 
   return (
-    <div className="flex flex-col h-full p-4 gap-3">
+    <div className="flex flex-col h-full ph:p-3 p-4 gap-3">
       <div className="flex items-center justify-between px-2">
         <h2 className="text-lg font-bold text-[var(--tp)]">{t.school.title}</h2>
         <span className="text-sm font-medium text-[var(--ts)]">{dayName}</span>
@@ -295,7 +295,7 @@ export default function SchoolPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex gap-4 overflow-x-auto pb-1 pt:snap-x pt:snap-mandatory pt:gap-6" style={{ minHeight: 0 }}>
+        <div className="flex-1 flex ph:flex-col ph:overflow-x-hidden ph:overflow-y-auto ph:overscroll-contain gap-4 overflow-x-auto pb-1 pt:snap-x pt:snap-mandatory pt:gap-6" style={{ minHeight: 0 }}>
           {todayPeople.map((person) => (
             <PersonColumn
               key={person.personId}

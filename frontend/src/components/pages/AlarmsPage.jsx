@@ -4,6 +4,7 @@ import { fetchApi } from '../../hooks/useApi.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import MediaThumb from '../MediaThumb.jsx';
 import t from '../../i18n/he.json';
+import { IS_PHONE } from '../../phone.js';
 
 const DAY_LETTERS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']; // 0=Sunday .. 6=Saturday
 
@@ -24,12 +25,12 @@ function daysLabel(days) {
 
 function AlarmRow({ alarm, onEdit, onToggle, onDelete }) {
   return (
-    <div className={`flex items-center gap-5 rounded-2xl border border-bd px-6 py-4 ${alarm.enabled ? 'bg-s1' : 'bg-s2 opacity-60'}`}>
-      <button onClick={() => onEdit(alarm)} className="flex-1 flex items-center gap-5 text-start min-h-[56px]">
-        <span className="text-4xl font-bold text-tp tabular-nums" dir="ltr">{alarm.time}</span>
+    <div className={`flex items-center gap-5 ph:gap-2 rounded-2xl border border-bd ph:px-3 ph:py-2 px-6 py-4 ${alarm.enabled ? 'bg-s1' : 'bg-s2 opacity-60'}`}>
+      <button onClick={() => onEdit(alarm)} className="flex-1 flex items-center gap-5 ph:flex-col ph:items-stretch ph:gap-0.5 ph:min-w-0 text-start min-h-[56px]">
+        <span className="text-4xl ph:text-3xl ph:self-start font-bold text-tp tabular-nums" dir="ltr">{alarm.time}</span>
         <span className="flex flex-col min-w-0">
-          <span className="text-xl text-tp truncate">{alarm.label || alarm.media_title}</span>
-          <span className="text-base text-ts truncate">
+          <span className="text-xl ph:text-lg text-tp truncate">{alarm.label || alarm.media_title}</span>
+          <span className="text-base ph:text-sm text-ts truncate">
             {daysLabel(alarm.days)} · {alarm.media_type === 'playlist' ? t.alarms.playlists : t.alarms.tracks}: {alarm.media_title}
           </span>
         </span>
@@ -37,15 +38,15 @@ function AlarmRow({ alarm, onEdit, onToggle, onDelete }) {
       <button
         onClick={() => onToggle(alarm)}
         aria-label={t.alarms.enabled}
-        className={`w-16 h-10 rounded-full transition-colors relative shrink-0 border
+        className={`w-16 h-10 ph:h-11 rounded-full transition-colors relative shrink-0 border
           ${alarm.enabled ? 'bg-acc border-transparent' : 'bg-tm/40 border-bd'}`}
       >
-        <span className={`absolute top-1 w-8 h-8 rounded-full bg-white shadow-md transition-all ${alarm.enabled ? 'start-1' : 'start-7'}`} />
+        <span className={`absolute top-1 ph:top-1.5 w-8 h-8 rounded-full bg-white shadow-md transition-all ${alarm.enabled ? 'start-1' : 'start-7'}`} />
       </button>
       <button
         onClick={() => onDelete(alarm)}
         aria-label={t.common.delete}
-        className="ripple min-w-[56px] min-h-[56px] rounded-xl text-ts hover:text-red-400 active:scale-95"
+        className="ripple min-w-[56px] ph:min-w-[44px] min-h-[56px] ph:min-h-[44px] rounded-xl text-ts hover:text-red-400 active:scale-95"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-7 h-7 mx-auto">
           <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6" />
@@ -207,6 +208,7 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
     else setQuery((q) => q.slice(0, -1));
   };
   const focusField = (field) => {
+    if (IS_PHONE) return; // the phone's own keyboard is used, not the on-screen one
     setKeyboardTarget(field);
     setKeyboardOpen(true);
   };
@@ -242,12 +244,12 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
   return (
     // Two fixed columns sized to fit 1080p without scrolling — touch scrolling
     // a form on the kiosk is uncomfortable, so everything stays on screen.
-    <div className="flex flex-col gap-4 rounded-3xl bg-s1 border border-bd p-5 flex-1 min-h-0 overflow-hidden pt:p-8">
+    <div className="flex flex-col gap-4 rounded-3xl bg-s1 border border-bd p-5 flex-1 min-h-0 overflow-hidden ph:fixed ph:inset-0 ph:z-40 ph:rounded-none ph:border-0 ph:p-4 ph:pb-0 ph:overflow-y-auto ph:gap-3 pt:p-8">
       <div className="flex items-center justify-between shrink-0">
         <span className="text-2xl font-bold text-tp">{draft.id ? t.alarms.edit : t.alarms.add}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-5 flex-1 min-h-0 pt:grid-cols-1 pt:gap-8 pt:overflow-y-auto">
+      <div className="grid grid-cols-2 gap-5 flex-1 min-h-0 ph:grid-cols-1 ph:flex-none pt:grid-cols-1 pt:gap-8 pt:overflow-y-auto">
         {/* column 1: time + days + label */}
         <div className="flex flex-col gap-3 min-h-0 pt:shrink-0">
           <div className="flex flex-col gap-1.5 items-center">
@@ -293,7 +295,7 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
         <div className="flex flex-col gap-3 min-h-0 pt:shrink-0">
           <div className="flex flex-col gap-1.5">
             <span className="text-lg text-ts">{t.alarms.speakers}</span>
-            <div className="flex flex-wrap gap-1.5 max-h-28 pt:max-h-48 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5 max-h-28 ph:max-h-52 pt:max-h-48 overflow-y-auto">
               {[{ id: 'local', name: t.alarms.thisScreen }, ...speakers].map((s) => (
                 <button
                   key={s.id}
@@ -307,7 +309,7 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 flex-1 min-h-0 pt:flex-none">
+          <div className="flex flex-col gap-1.5 flex-1 min-h-0 ph:flex-none pt:flex-none">
             <span className="text-lg text-ts">{t.alarms.media}</span>
             <div className="flex gap-2">
               <input
@@ -337,13 +339,13 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
             )}
 
             {searching && <span className="text-lg text-tm">{t.common.loading}</span>}
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5 pt:flex-none pt:max-h-[520px]">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-0.5 ph:flex-none ph:max-h-[320px] pt:flex-none pt:max-h-[520px]">
               {[...results.playlists.map((p) => ({ ...p, type: 'playlist' })),
                 ...results.tracks.map((tr) => ({ ...tr, type: 'track' }))].map((item) => (
                 <button
                   key={`${item.type}:${item.id}`}
                   onClick={() => patch({ media: { type: item.type, id: item.id, title: item.title, artist: item.artist || '', imageUrl: item.imageUrl || '' } })}
-                  className="flex items-center gap-3 rounded-lg px-3 min-h-[52px] text-start hover:bg-s2 active:bg-lav shrink-0"
+                  className="flex items-center gap-3 ph:flex-wrap rounded-lg px-3 ph:py-1.5 min-h-[52px] text-start hover:bg-s2 active:bg-lav shrink-0"
                 >
                   <MediaThumb
                     videoId={item.type === 'track' ? item.id : null}
@@ -351,8 +353,8 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
                     className="w-9 h-9 rounded-lg"
                     iconClassName="w-4 h-4"
                   />
-                  <span className="text-lg text-tp truncate">{item.title}</span>
-                  {item.artist ? <span className="text-base text-ts truncate">{item.artist}</span> : null}
+                  <span className="text-lg ph:flex-1 ph:min-w-0 text-tp truncate">{item.title}</span>
+                  {item.artist ? <span className="text-base ph:text-sm ph:order-last ph:basis-full ph:ps-12 text-ts truncate">{item.artist}</span> : null}
                   <span className="text-sm text-tm ms-auto shrink-0">{item.type === 'playlist' ? t.alarms.playlists : item.duration || ''}</span>
                 </button>
               ))}
@@ -362,11 +364,11 @@ function AlarmEditor({ draft, setDraft, speakers, onSave, onCancel }) {
       </div>
 
       {/* actions */}
-      <div className="flex gap-3 justify-end shrink-0">
-        <button onClick={onCancel} className="ripple px-8 min-h-[56px] rounded-xl bg-s2 border border-bd text-xl text-tp active:scale-95">
+      <div className="flex gap-3 ph:sticky ph:bottom-0 ph:z-10 ph:bg-s1 ph:-mx-4 ph:px-4 ph:pt-3 ph:pb-[max(0.75rem,env(safe-area-inset-bottom))] ph:border-t ph:border-bd justify-end shrink-0">
+        <button onClick={onCancel} className="ripple px-8 ph:flex-1 min-h-[56px] rounded-xl bg-s2 border border-bd text-xl text-tp active:scale-95">
           {t.common.cancel}
         </button>
-        <button onClick={save} className="ripple px-10 min-h-[56px] rounded-xl bg-acc text-white text-xl font-bold active:scale-95">
+        <button onClick={save} className="ripple px-10 ph:flex-[2] min-h-[56px] rounded-xl bg-acc text-white text-xl font-bold active:scale-95">
           {t.common.save}
         </button>
       </div>
@@ -388,6 +390,7 @@ export default function AlarmsPage() {
   const [btSpeakers, setBtSpeakers] = useState([]);
   const [draft, setDraft] = useState(null); // null = list view
   const addToast = useStore((s) => s.addToast);
+  const showConfirm = useStore((s) => s.showConfirm);
 
   const load = useCallback(async () => {
     try {
@@ -455,6 +458,15 @@ export default function AlarmsPage() {
   };
 
   const remove = async (alarm) => {
+    // phone: the bin sits right next to the on/off switch under a thumb, so ask first
+    if (IS_PHONE && !alarm.deleteConfirmed) {
+      showConfirm({
+        title: t.alarms.deleteConfirm,
+        message: `${alarm.time} ${alarm.label || alarm.media_title || ''}`.trim(),
+        onConfirm: () => remove({ ...alarm, deleteConfirmed: true }),
+      });
+      return;
+    }
     try {
       await fetchApi(`/api/alarms/${alarm.id}`, { method: 'DELETE' });
       load();
@@ -481,11 +493,11 @@ export default function AlarmsPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 flex flex-col gap-4" dir="rtl">
+    <div className="h-full overflow-y-auto p-6 ph:p-4 flex flex-col gap-4" dir="rtl">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-tp">{t.alarms.title}</h1>
+        <h1 className="text-3xl ph:text-2xl font-bold text-tp">{t.alarms.title}</h1>
         {!draft && (
-          <button onClick={() => setDraft(emptyDraft())} className="ripple px-8 min-h-[60px] rounded-xl bg-acc text-white text-xl font-bold active:scale-95">
+          <button onClick={() => setDraft(emptyDraft())} className="ripple px-8 ph:px-5 min-h-[60px] ph:min-h-[48px] rounded-xl bg-acc text-white text-xl ph:text-lg font-bold active:scale-95">
             + {t.alarms.add}
           </button>
         )}

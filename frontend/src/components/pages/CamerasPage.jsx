@@ -76,7 +76,7 @@ function GridTile({ camera, event, now, snapSec, paused, onOpen }) {
       type="button"
       onClick={onOpen}
       aria-label={camera.name}
-      className="relative aspect-video rounded-[28px] overflow-hidden text-start shadow-card
+      className="relative aspect-video rounded-[28px] ph:rounded-2xl overflow-hidden text-start shadow-card
                  active:scale-[0.985] transition-transform duration-[var(--dur-fast)]
                  focus-visible:outline focus-visible:outline-2 focus-visible:outline-acc"
     >
@@ -91,7 +91,7 @@ function GridTile({ camera, event, now, snapSec, paused, onOpen }) {
                 <EventBadge event={event} now={now} />
               </div>
             )}
-            <div className="absolute inset-x-0 bottom-0 px-5 pb-4 pt-12 bg-gradient-to-t from-black/55 to-transparent">
+            <div className="absolute inset-x-0 bottom-0 px-5 ph:px-4 pb-4 pt-12 bg-gradient-to-t from-black/55 to-transparent">
               <span className="block text-white text-xl pt:text-2xl font-semibold truncate" style={{ textShadow: TEXT_SHADOW }}>
                 {camera.name}
               </span>
@@ -125,7 +125,7 @@ function CameraViewer({ camera, count, liveVideo, onPrev, onNext, onClose }) {
       ) : (
         <CameraTile cameraId={camera.id} intervalSec={1} quality="main" fit="contain" className="absolute inset-0 !bg-black">
           {(status) => (
-            <div className="absolute bottom-8 start-8 pt:bottom-12">
+            <div className="absolute bottom-8 start-8 ph:bottom-28 ph:start-4 pt:bottom-12">
               <StatusChip status={status} />
             </div>
           )}
@@ -133,12 +133,12 @@ function CameraViewer({ camera, count, liveVideo, onPrev, onNext, onClose }) {
       )}
 
       {/* Header: close + name (start), playback mode (end) */}
-      <div className="absolute top-0 inset-x-0 flex items-center gap-4 px-6 pt-6 pt:px-8 pt:pt-10">
+      <div className="absolute top-0 inset-x-0 flex items-center gap-4 ph:gap-2 px-6 ph:px-3 pt-6 ph:pt-3 pt:px-8 pt:pt-10">
         <button
           type="button"
           onClick={onClose}
           aria-label={t.cameras.close}
-          className="w-16 h-16 rounded-full bg-white/15 text-white flex items-center justify-center shrink-0
+          className="w-16 ph:w-12 h-16 ph:h-12 rounded-full bg-white/15 text-white flex items-center justify-center shrink-0
                      active:scale-90 transition-transform duration-[var(--dur-fast)]"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
@@ -147,16 +147,16 @@ function CameraViewer({ camera, count, liveVideo, onPrev, onNext, onClose }) {
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
-        <h2 className="flex-1 min-w-0 text-white text-3xl font-bold truncate" style={{ textShadow: TEXT_SHADOW }}>
+        <h2 className="flex-1 min-w-0 text-white text-3xl ph:text-xl font-bold truncate" style={{ textShadow: TEXT_SHADOW }}>
           {camera.name}
         </h2>
-        <span className="shrink-0 px-4 h-10 inline-flex items-center rounded-full bg-black/50 text-white/85 text-base font-medium">
+        <span className="shrink-0 px-4 ph:px-3 h-10 ph:h-8 inline-flex items-center rounded-full bg-black/50 text-white/85 text-base ph:text-sm font-medium">
           {useVideo ? t.cameras.liveVideo : t.cameras.snapshotMode}
         </span>
       </div>
 
       {videoFailed && (
-        <div className="absolute top-28 inset-x-0 flex justify-center px-8 pointer-events-none pt:top-36">
+        <div className="absolute top-28 ph:top-20 inset-x-0 flex justify-center px-8 ph:px-4 pointer-events-none pt:top-36">
           <span className="max-w-[900px] px-5 py-3 rounded-2xl bg-black/65 text-white/90 text-base text-center">
             {t.cameras.videoFallback}
           </span>
@@ -170,7 +170,7 @@ function CameraViewer({ camera, count, liveVideo, onPrev, onNext, onClose }) {
             type="button"
             onClick={onPrev}
             aria-label={t.cameras.prev}
-            className="absolute top-1/2 -translate-y-1/2 start-6 w-[72px] h-[72px] rounded-full bg-white/15 text-white
+            className="absolute top-1/2 ph:top-auto ph:bottom-8 -translate-y-1/2 ph:translate-y-0 start-6 w-[72px] ph:w-14 h-[72px] ph:h-14 rounded-full bg-white/15 text-white
                        flex items-center justify-center active:scale-90 transition-transform duration-[var(--dur-fast)]"
           >
             <ChevronIcon dir="right" />
@@ -179,7 +179,7 @@ function CameraViewer({ camera, count, liveVideo, onPrev, onNext, onClose }) {
             type="button"
             onClick={onNext}
             aria-label={t.cameras.next}
-            className="absolute top-1/2 -translate-y-1/2 end-6 w-[72px] h-[72px] rounded-full bg-white/15 text-white
+            className="absolute top-1/2 ph:top-auto ph:bottom-8 -translate-y-1/2 ph:translate-y-0 end-6 w-[72px] ph:w-14 h-[72px] ph:h-14 rounded-full bg-white/15 text-white
                        flex items-center justify-center active:scale-90 transition-transform duration-[var(--dur-fast)]"
           >
             <ChevronIcon dir="left" />
@@ -195,10 +195,10 @@ function CameraViewer({ camera, count, liveVideo, onPrev, onNext, onClose }) {
 
 function CamerasSkeleton() {
   return (
-    <div className="flex flex-col h-full p-6 gap-5 pt:p-8">
+    <div className="flex flex-col h-full p-6 ph:p-3 gap-5 pt:p-8">
       <SkeletonBlock width="220px" height="32px" />
-      <div className="flex-1 min-h-0 [container-type:size]">
-        <div className={`grid h-full place-content-center ${cameraGridVars(4)}`} style={cameraGridStyle(4, GAP)}>
+      <div className="flex-1 min-h-0 ph:overflow-hidden [container-type:size]">
+        <div className={`grid h-full ph:h-auto place-content-center ${cameraGridVars(4)}`} style={cameraGridStyle(4, GAP)}>
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonBlock key={i} height="auto" borderRadius="28px" className="aspect-video" />
           ))}
@@ -211,7 +211,7 @@ function CamerasSkeleton() {
 function CamerasEmpty() {
   const setActiveTab = useStore((s) => s.setActiveTab);
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-5 px-10 text-center">
+    <div className="flex flex-col items-center justify-center h-full gap-5 px-10 ph:px-6 text-center">
       <div className="w-28 h-28 rounded-[32px] bg-lav text-acc flex items-center justify-center mb-2">
         <CctvIcon className="w-14 h-14" />
       </div>
@@ -286,13 +286,13 @@ export default function CamerasPage() {
   const step = (d) => setViewerId(cameras[(viewerIndex + d + n) % n].id);
 
   return (
-    <div className="flex flex-col h-full p-6 gap-5 pt:p-8 pt:gap-6">
-      <div className="flex items-center gap-3 px-1">
+    <div className="flex flex-col h-full p-6 ph:p-3 gap-5 ph:gap-3 pt:p-8 pt:gap-6">
+      <div className="flex ph:flex-wrap items-center gap-3 px-1">
         <h2 className="text-lg pt:text-xl font-bold text-tp">{t.cameras.title}</h2>
         <span className="text-sm font-medium text-ts">{t.cameras.count.replace('{n}', String(n))}</span>
         {engine && !engine.running && (
           <span
-            className="ms-auto inline-flex items-center gap-2 px-3 h-8 rounded-full text-sm font-medium truncate max-w-[60%]"
+            className="ms-auto ph:max-w-full inline-flex items-center gap-2 px-3 h-8 rounded-full text-sm font-medium truncate max-w-[60%]"
             style={{ backgroundColor: 'var(--coral-bg)', color: 'var(--coral-d)' }}
             title={engine.error || ''}
           >
@@ -302,9 +302,9 @@ export default function CamerasPage() {
         )}
       </div>
 
-      <div className={`flex-1 min-h-0 [container-type:size] ${scroll ? 'overflow-y-auto' : ''}`}>
+      <div className={`flex-1 min-h-0 [container-type:size] ph:overflow-y-auto ph:overscroll-contain ${scroll ? 'overflow-y-auto' : ''}`}>
         <div
-          className={`grid ${scroll ? '' : 'h-full place-content-center'} ${cameraGridVars(n)}`}
+          className={`grid ph:h-auto ${scroll ? '' : 'h-full place-content-center'} ${cameraGridVars(n)}`}
           style={cameraGridStyle(n, GAP)}
         >
           {cameras.map((cam) => (

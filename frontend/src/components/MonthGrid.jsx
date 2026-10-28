@@ -6,6 +6,7 @@ import {
   groupEventsByDay,
   toLocalDateKey,
 } from '../hooks/useCalendar.js';
+import { IS_PHONE } from '../phone.js';
 
 const MAX_CHIPS = 3;
 
@@ -31,7 +32,7 @@ function MonthEventChip({ event, onTap }) {
         e.stopPropagation();
         onTap(event);
       }}
-      className="w-full rounded-full px-2 py-0.5 text-[11px] pt:py-1 pt:text-xs font-medium truncate cursor-pointer
+      className="w-full rounded-full px-2 py-0.5 text-[11px] pt:py-1 pt:text-xs font-medium truncate cursor-pointer ph:hidden
                  hover:brightness-95 active:scale-95 transition-all duration-[var(--dur-fast)] text-start"
       style={{
         direction: 'rtl', /* Chip text is RTL inside the LTR grid */
@@ -82,7 +83,7 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
            style={{ borderColor: 'var(--cal-line)' }}>
         {t.topBar.days.map((name, i) => (
           <div key={i} className="bg-surf py-2 pt:py-3 flex items-center justify-center">
-            <span className="text-xs font-semibold text-ts">{name}</span>
+            <span className="text-xs ph:text-sm font-semibold text-ts">{name}</span>
           </div>
         ))}
       </div>
@@ -108,14 +109,14 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
               tabIndex={0}
               onClick={() => onSelectDay(date)}
               onKeyDown={(e) => { if (e.key === 'Enter') onSelectDay(date); }}
-              className={`flex flex-col items-stretch gap-1 p-1.5 pt:p-2 pt:gap-1.5 min-h-0 overflow-hidden cursor-pointer
+              className={`flex flex-col items-stretch gap-1 p-1.5 pt:p-2 pt:gap-1.5 min-h-0 overflow-hidden cursor-pointer ph:items-center ph:p-1
                           active:scale-[0.98] transition-all duration-[var(--dur-fast)]
                           ${today ? 'bg-acc/[0.06]' : 'bg-bg'}
                           ${selected ? 'shadow-[inset_0_0_0_2px_var(--acc)]' : ''}`}
             >
               {/* Day number */}
               <span
-                className={`self-start text-sm font-bold leading-none w-7 h-7 pt:w-9 pt:h-9 pt:text-base flex items-center justify-center
+                className={`self-start text-sm font-bold leading-none w-7 h-7 pt:w-9 pt:h-9 pt:text-base flex items-center justify-center ph:self-center
                   ${today
                     ? 'bg-acc text-white rounded-full'
                     : inMonth
@@ -132,9 +133,23 @@ export default function MonthGrid({ monthDate, events, selectedDate, onSelectDay
 
               {/* Overflow indicator */}
               {overflow > 0 && (
-                <span className="text-[10px] font-bold text-acc ps-1 text-start" dir="rtl">
+                <span className="text-[10px] font-bold text-acc ps-1 ph:hidden text-start" dir="rtl">
                   +{overflow} {t.calendar.moreEvents}
                 </span>
+              )}
+
+              {/* Phone: cells are ~55px wide, so a chip would show five letters. One dot per event
+                  instead; the selected day's list sits under the grid. */}
+              {IS_PHONE && dayEvents.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-1" aria-hidden="true">
+                  {dayEvents.slice(0, 4).map((ev) => (
+                    <span
+                      key={`${key}-${ev.id}`}
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: getColorStyle(ev.color).dot }}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           );

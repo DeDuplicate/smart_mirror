@@ -36,7 +36,7 @@ function RemoteButton({ label, command, onPress, size = 'md', variant = 'default
   // Every remote key is a primary touch target on the IR frame, so each size
   // keeps a >=56x56px hit area regardless of how small its glyph/label is.
   const sizeClasses = {
-    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs pt:w-full pt:min-h-[80px] pt:text-lg',
+    sm: 'min-w-[56px] min-h-[56px] w-14 text-xs ph:w-full ph:text-sm pt:w-full pt:min-h-[80px] pt:text-lg',
     md: 'min-w-[56px] min-h-[56px] w-16 text-sm pt:w-24 pt:min-h-[96px] pt:text-xl',
     lg: 'min-w-[56px] min-h-[56px] w-20 text-base pt:min-h-[88px] pt:text-xl',
   };
@@ -158,12 +158,12 @@ export default function IRRemoteOverlay({ entityId, roomName, scripts, onClose }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 ph:items-end flex items-center justify-center"
       style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-surf border border-bd rounded-2xl shadow-modal p-6 w-[380px] pt:w-[680px] pt:p-10 max-h-[90vh] overflow-y-auto"
+        className="bg-surf border border-bd rounded-2xl shadow-modal ph:w-full ph:max-h-[92dvh] ph:rounded-b-none ph:p-5 ph:pb-[calc(1.25rem+env(safe-area-inset-bottom))] p-6 w-[380px] pt:w-[680px] pt:p-10 max-h-[90vh] overflow-y-auto"
         style={{ animation: 'popupIn 250ms var(--ease) forwards' }}
         dir="rtl"
       >

@@ -185,13 +185,13 @@ export default function ACControlPopup({ visible, room, presets, onClose, callSe
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 ph:items-end flex items-center justify-center bg-black/40"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         ref={popupRef}
-        className="bg-surf border border-bd rounded-2xl shadow-modal w-[440px] pt:w-[760px] max-h-[92vh] overflow-y-auto
-                   p-6 pt:p-10 flex flex-col gap-5 pt:gap-8 animate-popup-in"
+        className="bg-surf border border-bd rounded-2xl shadow-modal w-[440px] pt:w-[760px] max-h-[92vh] overflow-y-auto ph:w-full ph:max-h-[92dvh] ph:rounded-b-none
+                   p-6 ph:p-5 ph:gap-4 ph:pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt:p-10 flex flex-col gap-5 pt:gap-8 animate-popup-in"
         dir="rtl"
         role="dialog"
         aria-label={t.home.acRoomTitle.replace('{room}', room.name)}
@@ -245,8 +245,8 @@ export default function ACControlPopup({ visible, room, presets, onClose, callSe
                   </button>
                 )}
                 <div className="flex items-baseline tabular-nums text-tp" dir="ltr" style={MONO} aria-live="polite">
-                  <span className="text-7xl pt:text-8xl font-medium leading-none">{sel.temp}</span>
-                  <span className="text-3xl pt:text-5xl text-ts ms-1">°C</span>
+                  <span className="text-7xl pt:text-8xl ph:text-6xl font-medium leading-none">{sel.temp}</span>
+                  <span className="text-3xl pt:text-5xl ph:text-2xl text-ts ms-1">°C</span>
                 </div>
                 {canStep && (
                   <button

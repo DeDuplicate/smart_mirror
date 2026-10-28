@@ -73,7 +73,7 @@ function Face({ id, name }) {
 
 function Notice({ children, busy }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[var(--ts)] text-xl text-center px-10">
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[var(--ts)] text-xl text-center ph:px-4 ph:text-lg px-10">
       {busy && <Spinner />}
       <p>{children}</p>
     </div>
@@ -100,7 +100,7 @@ function Tile({ src, label, badge, onClick }) {
   );
 }
 
-const GRID = 'grid grid-cols-7 pt:grid-cols-4 gap-3 content-start';
+const GRID = 'grid grid-cols-7 pt:grid-cols-4 gap-3 ph:grid-cols-3 ph:gap-2 content-start';
 
 // ─── Immich ──────────────────────────────────────────────────────────────────
 
@@ -161,7 +161,7 @@ function ImmichBrowser({ onChoose }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-4">
       {/* People: Immich's own face crops, the quickest way to a kid's picture */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center ph:flex-col ph:items-stretch ph:gap-2 gap-3">
         <div className="flex-1 min-w-0 flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
           <button
             type="button"
@@ -190,7 +190,7 @@ function ImmichBrowser({ onChoose }) {
             value={albumId}
             onChange={(e) => setAlbumId(e.target.value)}
             aria-label={t.avatarPicker.album}
-            className="shrink-0 h-14 min-w-[200px] max-w-[260px] px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-base"
+            className="shrink-0 h-14 min-w-[200px] max-w-[260px] px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] ph:min-w-0 ph:max-w-none ph:w-full text-base"
           >
             <option value="">{t.avatarPicker.allAlbums}</option>
             <option value="favorites">{t.avatarPicker.favorites}</option>
@@ -288,7 +288,7 @@ function FolderBrowser({ onChoose }) {
       {state === 'ready' && data && !empty && (
         <div className="flex-1 min-h-0 overflow-y-auto pe-1" style={{ scrollbarWidth: 'thin' }}>
           {data.folders.length > 0 && (
-            <div className="grid grid-cols-4 pt:grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-4 pt:grid-cols-2 gap-3 ph:grid-cols-2 ph:gap-2 mb-4">
               {data.folders.map((f) => (
                 <button
                   key={f.path}
@@ -384,15 +384,15 @@ function Cropper({ src, onConfirm, onBack }) {
   const zoomBtn = 'w-16 h-16 rounded-2xl bg-[var(--s2)] border border-[var(--bd)] flex items-center justify-center text-[var(--tp)] active:scale-95 transition-transform';
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6">
-      <p className="text-[var(--ts)] text-xl text-center">{t.avatarPicker.cropHint}</p>
+    <div className="flex-1 min-h-0 flex flex-col items-center justify-center ph:gap-3 gap-6">
+      <p className="text-[var(--ts)] text-xl ph:text-base text-center">{t.avatarPicker.cropHint}</p>
       <div
         ref={viewRef}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
-        className="relative rounded-full overflow-hidden bg-black cursor-grab"
+        className="relative rounded-full overflow-hidden bg-black ph:scale-90 ph:-my-4 cursor-grab"
         style={{ width: VIEW, height: VIEW, touchAction: 'none', boxShadow: '0 0 0 6px var(--acc)' }}
         role="img"
         aria-label={t.avatarPicker.cropHint}
@@ -448,7 +448,7 @@ function Picker({ personName, initialTab, immichReady, onPick, onClose }) {
       disabled={disabled}
       onClick={() => openTab(id)}
       aria-pressed={tab === id}
-      className={`min-h-[56px] px-7 rounded-xl text-lg font-semibold active:scale-95 transition-transform disabled:opacity-40
+      className={`min-h-[56px] px-7 ph:flex-1 ph:px-3 ph:text-base rounded-xl text-lg font-semibold active:scale-95 transition-transform disabled:opacity-40
                   ${tab === id ? 'bg-[var(--acc)] text-white' : 'bg-[var(--s2)] text-[var(--tp)] border border-[var(--bd)]'}`}
     >
       {label}
@@ -462,12 +462,12 @@ function Picker({ personName, initialTab, immichReady, onPick, onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label={t.avatarPicker.title.replace('{name}', personName)}
-        className="relative flex flex-col gap-5 w-[1500px] max-w-[96%] h-[900px] max-h-[94%] pt:w-[1000px] p-8 rounded-3xl bg-[var(--surf)] border border-[var(--bd)] shadow-modal overflow-hidden"
+        className="relative flex flex-col gap-5 w-[1500px] max-w-[96%] h-[900px] max-h-[94%] pt:w-[1000px] p-8 rounded-3xl ph:w-full ph:max-w-full ph:h-full ph:max-h-full ph:p-4 ph:gap-3 ph:rounded-none bg-[var(--surf)] border border-[var(--bd)] shadow-modal overflow-hidden"
       >
-        <div className="flex items-center gap-4">
-          <h2 className="flex-1 min-w-0 truncate text-3xl font-bold text-[var(--tp)]">{t.avatarPicker.title.replace('{name}', personName)}</h2>
+        <div className="flex items-center ph:flex-wrap ph:gap-2 gap-4">
+          <h2 className="flex-1 min-w-0 truncate text-3xl font-bold ph:text-xl text-[var(--tp)]">{t.avatarPicker.title.replace('{name}', personName)}</h2>
           {!chosen && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center ph:order-last ph:w-full ph:gap-2 gap-3">
               {tabBtn('immich', t.avatarPicker.tabImmich, !immichReady)}
               {tabBtn('folders', t.avatarPicker.tabFolders, false)}
             </div>

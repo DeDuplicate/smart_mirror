@@ -6,6 +6,7 @@ import { speakerStatus, nowPlayingLine } from '../../hooks/speakerStatus.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
 import useBluetooth from '../../hooks/useBluetooth.js';
 import useStore from '../../store/index.js';
+import { IS_PHONE } from '../../phone.js';
 
 function formatTime(seconds) {
   if (!seconds || seconds < 0) return '0:00';
@@ -175,7 +176,7 @@ function ProgressBar({ progress, duration, onSeek }) {
     <div className="w-full flex flex-col gap-1.5">
       <div
         ref={barRef}
-        className="w-full h-2 bg-s2 rounded-full cursor-pointer overflow-visible relative"
+        className="w-full h-2 bg-s2 ph:bg-bd rounded-full cursor-pointer overflow-visible relative"
         onClick={handleClick}
         dir="rtl"
         data-no-swipe="true"
@@ -191,8 +192,8 @@ function ProgressBar({ progress, duration, onSeek }) {
         />
       </div>
       <div className="flex justify-between" dir="rtl">
-        <span className="font-mono text-xs text-ts">{formatTime(progress)}</span>
-        <span className="font-mono text-xs text-ts">{formatTime(duration)}</span>
+        <span className="font-mono text-xs ph:text-sm text-ts">{formatTime(progress)}</span>
+        <span className="font-mono text-xs ph:text-sm text-ts">{formatTime(duration)}</span>
       </div>
     </div>
   );
@@ -200,9 +201,9 @@ function ProgressBar({ progress, duration, onSeek }) {
 
 function VolumeSlider({ volume, onChange }) {
   return (
-    <div className="w-full flex items-center gap-3 min-h-[56px]" dir="rtl" data-no-swipe="true">
+    <div className="w-full flex items-center gap-3 min-h-[56px] ph:min-h-[44px]" dir="rtl" data-no-swipe="true">
       <SpeakerIcon className="w-5 h-5 text-ts shrink-0" volume={volume} />
-      <div className="flex-1 relative min-h-[56px] flex items-center">
+      <div className="flex-1 relative min-h-[56px] ph:min-h-[44px] flex items-center">
         <input
           data-no-swipe="true"
           type="range"
@@ -242,17 +243,17 @@ function PlaylistRow({ playlist, onOpen, disabled }) {
 function TrackRow({ track, isCurrent, onPlay, onQueue, onRemove, showQueueAction, showRemoveAction }) {
   return (
     <div
-      className={`track-row flex items-center gap-3 w-full px-3 py-2.5 rounded-xl
+      className={`track-row flex items-center gap-3 ph:gap-1 w-full px-3 ph:px-2 py-2.5 ph:py-1.5 rounded-xl
                   transition-all duration-[var(--dur-fast)]
                   ${isCurrent ? 'is-current border-r-[3px] border-r-acc' : ''}`}
     >
       <button
         onClick={onPlay}
-        className="ripple flex items-center gap-3 flex-1 min-h-[56px] min-w-0 text-right active:scale-[0.98]"
+        className="ripple flex items-center gap-3 ph:gap-2 flex-1 min-h-[56px] min-w-0 text-right active:scale-[0.98]"
       >
         <MediaThumb videoId={track.id} imageUrl={track.imageUrl} />
         <div className="flex-1 min-w-0">
-          <p className={`track-title text-sm font-medium truncate ${isCurrent ? 'text-acc' : 'text-tp'}`}>
+          <p className={`track-title text-sm ph:text-[15px] ph:whitespace-normal ph:line-clamp-2 ph:leading-snug font-medium truncate ${isCurrent ? 'text-acc' : 'text-tp'}`}>
             {track.title}
           </p>
           <p className="track-meta text-xs truncate">{track.artist}</p>
@@ -265,7 +266,7 @@ function TrackRow({ track, isCurrent, onPlay, onQueue, onRemove, showQueueAction
         <button
           onClick={onQueue}
           title={t.music.addToQueue}
-          className="ripple w-14 h-14 flex items-center justify-center rounded-xl text-ts hover:text-tp hover:bg-s2"
+          className="ripple w-14 h-14 ph:w-12 ph:h-12 flex items-center justify-center rounded-xl text-ts hover:text-tp hover:bg-s2"
         >
           <PlusIcon />
           <span className="sr-only">{t.music.addToQueue}</span>
@@ -275,7 +276,7 @@ function TrackRow({ track, isCurrent, onPlay, onQueue, onRemove, showQueueAction
         <button
           onClick={onRemove}
           title={t.music.removeFromQueue}
-          className="ripple w-14 h-14 flex items-center justify-center rounded-xl text-ts hover:text-[var(--coral-d)] hover:bg-[var(--coral-bg)]"
+          className="ripple w-14 h-14 ph:w-12 ph:h-12 flex items-center justify-center rounded-xl text-ts hover:text-[var(--coral-d)] hover:bg-[var(--coral-bg)]"
         >
           <TrashIcon />
           <span className="sr-only">{t.music.removeFromQueue}</span>
@@ -461,6 +462,7 @@ function SpeakerIconBtn({ className = 'w-5 h-5' }) {
 
 export default function MusicPage() {
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [searchFocus, setSearchFocus] = useState(false); // phone: its own keyboard, real <input>
   const [panel, setPanel] = useState('recommended');
   const [speakerOpen, setSpeakerOpen] = useState(false);
   // Bluetooth speakers paired in Settings. Playing "on" one is not a separate
@@ -622,12 +624,12 @@ export default function MusicPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 pt-4 pb-2 shrink-0">
+      <div className="px-6 pt-4 pb-2 shrink-0 ph:px-4 ph:pt-3 ph:relative">
         <button
           type="button"
           onClick={() => setKeyboardOpen(true)}
           className="ripple w-full min-h-[56px] px-4 rounded-2xl bg-s2 border border-bd
-                     flex items-center gap-3 text-right"
+                     flex items-center gap-3 text-right ph:hidden"
         >
           <SearchIcon className="w-5 h-5 text-ts shrink-0" />
           <span className={`flex-1 text-base ${searchQuery ? 'text-tp' : 'text-tm'}`}>
@@ -660,6 +662,79 @@ export default function MusicPage() {
             <SpeakerIconBtn />
           </button>
         </button>
+        {IS_PHONE && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              document.activeElement?.blur?.();
+              setPanel('results');
+              search(searchQuery);
+            }}
+            className="flex items-center gap-2"
+          >
+            <div className="flex-1 min-w-0 min-h-[48px] ps-3 pe-1 rounded-2xl bg-s2 border border-bd flex items-center gap-2">
+              <SearchIcon className="w-5 h-5 text-ts shrink-0" />
+              <input
+                type="text"
+                dir="rtl"
+                enterKeyHint="search"
+                autoComplete="off"
+                value={searchQuery || ''}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setSearchFocus(true)}
+                onBlur={() => setSearchFocus(false)}
+                placeholder={t.music.searchPlaceholder}
+                className="flex-1 min-w-0 h-12 bg-transparent text-base text-tp placeholder:text-tm outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setSearchQuery('');
+                    debounceSearch('');
+                    setPanel('recommended');
+                  }}
+                  className="w-11 h-11 flex items-center justify-center rounded-full text-ts shrink-0"
+                >
+                  <CloseIcon />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenSpeakers}
+              title={t.music.chooseSpeaker}
+              className={`w-12 h-12 flex items-center justify-center rounded-xl shrink-0 border border-bd
+                          ${outputId !== 'local' || btActive ? 'text-acc bg-acc/10' : 'text-ts bg-s2'}`}
+            >
+              <SpeakerIconBtn />
+              <span className="sr-only">{t.music.chooseSpeaker}</span>
+            </button>
+          </form>
+        )}
+        {IS_PHONE && searchFocus && suggestions.length > 0 && (
+          <div
+            className="absolute inset-x-4 top-full -mt-1 z-20 max-h-[40dvh] overflow-y-auto rounded-2xl bg-surf border border-bd shadow-raised divide-y divide-bd"
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            {suggestions.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => {
+                  document.activeElement?.blur?.();
+                  setSearchQuery(item);
+                  setPanel('results');
+                  search(item);
+                }}
+                className="ripple w-full min-h-[48px] px-4 text-right text-base text-tp"
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        )}
         {suggestions.length > 0 && keyboardOpen && (
           <div className="flex flex-wrap gap-2 mt-2">
             {suggestions.map((item) => (
@@ -680,10 +755,10 @@ export default function MusicPage() {
         )}
       </div>
 
-      <div className="flex flex-1 overflow-hidden p-6 pt-3 gap-8 pt:flex-col pt:gap-6 pt:px-8">
-        <div className="flex flex-col items-center gap-4 flex-[6] min-w-0 pt:flex-none pt:gap-5">
+      <div className="flex flex-1 overflow-hidden p-6 pt-3 gap-8 pt:flex-col pt:gap-6 pt:px-8 ph:flex-col ph:gap-2 ph:px-4 ph:pt-1 ph:pb-2">
+        <div className="flex flex-col items-center gap-4 flex-[6] min-w-0 pt:flex-none pt:gap-5 ph:flex-none ph:grid ph:grid-cols-[160px_minmax(0,1fr)] ph:gap-x-3 ph:gap-y-2">
           <div
-            className="rounded-3xl overflow-hidden shadow-raised bg-s2 relative w-[400px] h-[400px] pt:w-[560px] pt:h-[560px]"
+            className="rounded-3xl overflow-hidden shadow-raised bg-s2 relative w-[400px] h-[400px] pt:w-[560px] pt:h-[560px] ph:w-40 ph:h-24 ph:rounded-2xl ph:col-start-1 ph:row-start-1"
           >
             {currentTrack?.imageUrl && (
               <img
@@ -700,32 +775,32 @@ export default function MusicPage() {
                 className="absolute inset-0 z-10 flex items-center justify-center"
                 style={{ background: 'linear-gradient(135deg, #6b62e0 0%, #2ab58a 100%)' }}
               >
-                <MusicNoteIcon className="w-24 h-24 text-white/40" />
+                <MusicNoteIcon className="w-24 h-24 ph:w-10 ph:h-10 text-white/40" />
               </div>
             )}
           </div>
 
-          <div className="w-[400px] pt:w-[560px]">
+          <div className="w-[400px] pt:w-[560px] ph:w-full ph:col-span-2 ph:col-start-1 ph:row-start-2">
             <ProgressBar progress={position} duration={duration} onSeek={seek} />
           </div>
 
-          <div className="text-center w-[400px] pt:w-[560px]">
-            <h2 className="text-xl font-semibold text-tp truncate">{track.title}</h2>
-            <p className="text-lg text-ts mt-0.5 truncate">{track.artist}</p>
+          <div className="text-center w-[400px] pt:w-[560px] ph:w-full ph:text-right ph:col-start-2 ph:row-start-1 ph:self-center">
+            <h2 className="text-xl font-semibold text-tp truncate ph:text-base ph:leading-snug ph:whitespace-normal ph:line-clamp-2">{track.title}</h2>
+            <p className="text-lg text-ts mt-0.5 truncate ph:text-sm">{track.artist}</p>
             {outputId !== 'local' && (
-              <p className="text-xs text-acc mt-1 truncate">
+              <p className="text-xs text-acc mt-1 truncate ph:text-sm">
                 {t.music.castingTo}{' '}
                 {speakers.find((s) => s.id === outputId)?.name || outputId}
               </p>
             )}
             {outputId === 'local' && btActive && (
-              <p className="text-xs text-acc mt-1 truncate">
+              <p className="text-xs text-acc mt-1 truncate ph:text-sm">
                 {t.music.castingTo} {btNames.join(', ')}
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-1" dir="ltr">
+          <div className="flex items-center justify-center gap-4 mt-1 ph:justify-between ph:gap-1 ph:mt-0 ph:col-span-2 ph:col-start-1 ph:row-start-3" dir="ltr">
             <ControlButton onClick={toggleShuffle} active={shuffle} label={t.music.shuffle}>
               <ShuffleIcon className="w-5 h-5" />
             </ControlButton>
@@ -752,13 +827,13 @@ export default function MusicPage() {
             </ControlButton>
           </div>
 
-          <div className="w-[360px] mt-1 pt:w-[560px]">
+          <div className="w-[360px] mt-1 pt:w-[560px] ph:w-full ph:mt-0 ph:col-span-2 ph:col-start-1 ph:row-start-4">
             <VolumeSlider volume={volume} onChange={setVolume} />
           </div>
         </div>
 
-        <div className="flex flex-col flex-[4] min-w-0 overflow-hidden pt:min-h-0">
-          <div className="flex items-center gap-2 mb-3 shrink-0">
+        <div className="flex flex-col flex-[4] min-w-0 overflow-hidden pt:min-h-0 ph:flex-1 ph:min-h-0">
+          <div className="flex items-center gap-2 mb-3 shrink-0 ph:mb-2">
             {[
               ['recommended', t.music.recommended],
               ['results', t.music.results],
@@ -767,7 +842,7 @@ export default function MusicPage() {
               <button
                 key={id}
                 onClick={() => setPanel(id)}
-                className={`ripple min-h-[44px] px-4 rounded-full text-sm font-medium
+                className={`ripple min-h-[44px] px-4 ph:px-2 ph:flex-1 rounded-full text-sm font-medium
                             ${panel === id ? 'bg-acc text-white' : 'bg-s2 text-ts'}`}
               >
                 {label}
@@ -775,7 +850,7 @@ export default function MusicPage() {
               </button>
             ))}
           </div>
-          <div className="flex-1 overflow-y-auto flex flex-col gap-1 pe-1
+          <div className="flex-1 overflow-y-auto flex flex-col gap-1 pe-1 ph:pe-0 ph:pb-2 ph:overscroll-contain
                           scrollbar-thin scrollbar-thumb-bd scrollbar-track-transparent">
             {panel === 'results' && (
               (playlists.length || results.length) ? (
@@ -901,7 +976,7 @@ export default function MusicPage() {
       {speakerOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setSpeakerOpen(false)} />
-          <div className="relative w-full max-w-[640px] pt:max-w-full max-h-[78%] bg-surf border border-bd rounded-t-3xl p-5 overflow-hidden flex flex-col">
+          <div className="relative w-full max-w-[640px] pt:max-w-full max-h-[78%] bg-surf border border-bd rounded-t-3xl p-5 ph:p-4 ph:pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden flex flex-col">
             <div className="w-12 h-1.5 rounded-full bg-bd mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-tp mb-4 text-right">{t.music.chooseSpeaker}</h3>
             <div className="overflow-y-auto flex-1 -mx-1 px-1">

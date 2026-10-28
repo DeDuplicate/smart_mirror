@@ -4,7 +4,7 @@ import { CctvIcon } from './CameraTile.jsx';
 
 // ─── Tab Definitions ────────────────────────────────────────────────────────
 
-const TABS = [
+export const TABS = [
   {
     label: t.tabs.calendar,
     icon: (

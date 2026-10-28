@@ -9,6 +9,7 @@ import CelebrationAnimation from '../CelebrationAnimation.jsx';
 import PhotoPickerPopup from '../PhotoPickerPopup.jsx';
 import StarIcon from '../StarIcon.jsx';
 import { insertionPoint, moveNextTo } from '../../hooks/choreOrder.js';
+import { IS_PHONE } from '../../phone.js';
 
 // ─── Recurrence config ─────────────────────────────────────────────────────
 
@@ -199,7 +200,7 @@ function PersonAvatar({ personId, name, color, progress, photo, onPhotoChange, o
   }, [personId, onPhotoChange, addToast]);
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 68, height: 68 }}>
+    <div className="relative flex items-center ph:row-span-3 justify-center" style={{ width: 68, height: 68 }}>
       <ProgressRing progress={progress} color={color} />
       <button
         type="button"
@@ -438,13 +439,13 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
         data-clap-target
         aria-pressed={isComplete}
         aria-label={`${task.title}${isComplete ? ` — ${t.tasks.done}` : ''}${overdue ? ` — ${t.tasks.overdue}` : ''}`}
-        className="flex-1 min-w-0 flex items-center gap-3 ps-1 py-3 rounded-xl"
+        className="flex-1 min-w-0 flex items-center gap-3 ps-1 py-3 ph:gap-2 rounded-xl"
       >
         {/* Checkbox — purely decorative: state is announced by the button label */}
         <div
           aria-hidden="true"
           className={`
-            relative flex-shrink-0 w-[44px] h-[44px] rounded-full
+            relative flex-shrink-0 w-[44px] h-[44px] rounded-full ph:w-10 ph:h-10
             flex items-center justify-center
             border-2 transition-all duration-[var(--dur-normal)]
             ${isComplete
@@ -485,7 +486,7 @@ function TaskCard({ task, personColor, onToggle, onDelete, onClap, onDragStart, 
         type="button"
         onClick={handleDelete}
         aria-label={t.tasks.deleteChore.replace('{title}', task.title)}
-        className="group flex-shrink-0 min-w-[56px] min-h-[56px] flex items-center justify-center"
+        className="group flex-shrink-0 min-w-[56px] min-h-[56px] flex items-center ph:min-w-[44px] justify-center"
       >
         {/* No /opacity modifier on a var() colour: Tailwind cannot split a var()
             into channels, so `bg-[var(--coral-bg)]/30` emits no rule at all. The
@@ -512,7 +513,7 @@ function StarRow({ stars, pop }) {
   const { week, goal, reward } = stars;
   const label = t.stars.weekProgress.replace('{n}', String(week)).replace('{goal}', String(goal));
   return (
-    <div className="flex flex-col items-center gap-1.5" role="img" aria-label={label}>
+    <div className="flex flex-col items-center ph:items-start gap-1.5" role="img" aria-label={label}>
       <div className="flex items-center gap-1">
         {Array.from({ length: goal }, (_, i) => (
           <StarIcon
@@ -527,7 +528,7 @@ function StarRow({ stars, pop }) {
           {t.stars.rewardBadge}
         </span>
       ) : (
-        <span className="text-xs font-medium text-[var(--ts)]">{label}</span>
+        <span className="text-xs ph:text-sm font-medium text-[var(--ts)]">{label}</span>
       )}
     </div>
   );
@@ -726,7 +727,7 @@ function PersonColumn({
   return (
     <div
       ref={columnRef}
-      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden flex-[1_1_0%] min-w-[220px] pt:min-w-[460px] pt:snap-start"
+      className="relative flex flex-col rounded-2xl border border-[var(--bd)] bg-[var(--surf)] overflow-hidden flex-[1_1_0%] min-w-[220px] pt:min-w-[460px] ph:flex-none ph:w-[90vw] ph:snap-start ph:snap-always pt:snap-start"
       
     >
       {/* Clap burst overlay — full column */}
@@ -743,7 +744,7 @@ function PersonColumn({
       )}
 
       {/* Header */}
-      <div className="flex flex-col items-center gap-2 pt-5 pb-3 px-4">
+      <div className="flex flex-col items-center gap-2 pt-5 pb-3 ph:grid ph:grid-cols-[68px_1fr] ph:gap-x-4 ph:gap-y-1 ph:justify-items-start ph:pt-4 ph:pb-2 px-4">
         <PersonAvatar
           personId={person.id}
           name={person.name}
@@ -753,11 +754,11 @@ function PersonColumn({
           onPhotoChange={onPhotoChange}
           onPhotoRemove={onPhotoRemove}
         />
-        <span className="text-base font-bold text-[var(--tp)]" style={{ fontWeight: 700 }}>
+        <span className="text-base font-bold ph:text-lg text-[var(--tp)]" style={{ fontWeight: 700 }}>
           {person.name}
         </span>
         <span
-          className={`text-xs font-medium ${
+          className={`text-xs ph:text-sm font-medium ${
             allDone ? 'text-[var(--acc2)]' : 'text-[var(--ts)]'
           }`}
         >
@@ -778,7 +779,7 @@ function PersonColumn({
       </div>
 
       {/* Task list */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 pt-2 pb-2 flex flex-col gap-2">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-3 pt-2 pb-2 flex flex-col ph:overscroll-y-contain gap-2">
         {sortedTasks.map((task) => (
           <TaskCard
             key={task.id}
@@ -897,6 +898,123 @@ function AddTaskSheet({ personId, personName, personColor, onAdd, onClose }) {
       setSaving(false);
     }
   }, [title, emoji, recurrence, personId, onAdd, onClose, addToast, saving]);
+
+  // Phone: same state and save as above, but the phone's own keyboard instead of
+  // OnScreenKeyboard, and a sheet hanging from the top so that keyboard never
+  // covers the title field or the Save button.
+  if (IS_PHONE) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex flex-col" role="dialog" aria-modal="true" aria-labelledby="new-chore-heading">
+        <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <div className="relative flex flex-col max-h-full overflow-hidden bg-surf shadow-modal rounded-b-3xl">
+          <div className="flex items-center justify-between ps-4 pe-2 py-1 border-b border-bd shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: personColor }} aria-hidden="true" />
+              <h2 id="new-chore-heading" className="text-lg font-bold text-tp truncate">
+                {t.tasks.newChoreFor.replace('{name}', personName)}
+              </h2>
+            </div>
+            <button onClick={onClose} aria-label={t.common.cancel}
+              className="flex items-center justify-center w-12 h-12 rounded-full text-ts active:scale-95 shrink-0">
+              <CloseIcon />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+            <div>
+              <label htmlFor="new-chore-title" className="block text-sm font-semibold text-tp mb-2">{t.tasks.title}</label>
+              <input
+                ref={inputRef}
+                id="new-chore-title"
+                type="text"
+                enterKeyHint="done"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSave(); }}
+                placeholder={t.tasks.titlePlaceholder}
+                className="w-full h-12 px-4 rounded-xl border border-bd bg-s2 text-tp text-base
+                           placeholder:text-tm focus:outline-none focus:ring-2 focus:ring-acc/30"
+                dir="rtl"
+              />
+            </div>
+
+            <div>
+              <span className="block text-sm font-semibold text-tp mb-2">{t.tasks.recurrenceLabel}</span>
+              <div className="flex gap-2">
+                {RECURRENCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setRecurrence(option.value)}
+                    aria-pressed={recurrence === option.value}
+                    className={`flex-1 h-12 px-2 rounded-xl border text-sm font-medium
+                      ${recurrence === option.value ? 'border-acc bg-acc/10 text-acc' : 'border-bd bg-s2 text-ts'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-sm font-semibold text-tp mb-2">{t.tasks.choreEmoji}</span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker((v) => !v)}
+                  aria-label={t.tasks.chooseEmoji}
+                  aria-expanded={showEmojiPicker}
+                  className="w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-3xl shrink-0 active:scale-95"
+                  style={{
+                    borderColor: emoji ? personColor : 'var(--bd)',
+                    backgroundColor: emoji ? `${personColor}15` : 'var(--s2)',
+                  }}
+                >
+                  {emoji || '➕'}
+                </button>
+                {emoji && (
+                  <button type="button" onClick={() => setEmoji('')}
+                    className="min-w-[44px] h-12 px-4 rounded-xl text-sm text-tm active:scale-95">
+                    {t.tasks.removeEmoji}
+                  </button>
+                )}
+              </div>
+              {showEmojiPicker && (
+                <div className="grid grid-cols-6 gap-1.5 p-3 mt-3 rounded-xl bg-s2 border border-bd max-h-[216px] overflow-y-auto">
+                  {CHORE_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                      aria-label={`${t.tasks.chooseEmoji} ${e}`}
+                      aria-pressed={emoji === e}
+                      className={`h-12 rounded-xl flex items-center justify-center text-xl active:scale-95
+                        ${emoji === e ? 'bg-acc/20 ring-2 ring-acc' : ''}`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t border-bd bg-surf">
+            <button onClick={onClose} className="flex-1 h-12 rounded-xl border border-bd text-ts font-medium text-sm active:scale-95">
+              {t.common.cancel}
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!title.trim() || saving}
+              className="flex-1 h-12 rounded-xl bg-acc text-white font-semibold text-sm active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              {saving ? t.common.loading : t.common.save}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.getElementById('root') || document.body
+    );
+  }
 
   // Same shell as the Tasks and Calendar editors: a full-width panel resting on
   // the keyboard, a header with a close button, a scrolling body and sticky
@@ -1168,16 +1286,16 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="flex flex-col h-full p-4 gap-3">
+    <div className="flex flex-col h-full p-4 ph:px-0 ph:py-3 ph:gap-2 gap-3">
       {/* Top bar with hide completed toggle */}
-      <div className="flex items-center justify-between px-2">
+      <div className="flex items-center justify-between ph:px-4 px-2">
         <h2 className="text-lg font-bold text-[var(--tp)]">
           {t.tabs.tasks}
         </h2>
         <button
           onClick={toggleHideCompleted}
           className={`
-            flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium
+            flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-medium ph:min-h-[44px]
             border transition-all duration-[var(--dur-fast)]
             active:scale-95
             ${hideCompleted
@@ -1193,7 +1311,7 @@ export default function TasksPage() {
 
       {/* Person columns */}
       <div
-        className="flex-1 flex gap-4 overflow-x-auto pb-1 pt:snap-x pt:snap-mandatory pt:gap-6"
+        className="flex-1 flex gap-4 overflow-x-auto pb-1 pt:snap-x pt:snap-mandatory ph:snap-x ph:snap-mandatory ph:gap-2.5 ph:px-3 ph:scroll-px-3 ph:overscroll-x-contain pt:gap-6"
         style={{ minHeight: 0 }}
       >
         {peopleWithPhotos.map((person) => (

@@ -4,6 +4,8 @@ import { NewsSkeleton } from '../Skeleton.jsx';
 import ConnectionBanner from '../ConnectionBanner.jsx';
 import useNews from '../../hooks/useNews.js';
 import usePullToRefresh from '../../hooks/usePullToRefresh.js';
+import { SkeletonBlock } from '../Skeleton.jsx';
+import { IS_PHONE } from '../../phone.js';
 
 // ─── Reading model ──────────────────────────────────────────────────────────
 // This screen is a 1920x1080 wall panel read from 2-4 m away, operated by a
@@ -194,12 +196,12 @@ function ReadNode({ unread, className = 'w-3 h-3' }) {
 const STORY_VARIANTS = {
   lead: {
     shell: 'flex-col pt:flex-1 pt:min-h-0',
-    plate: 'flex-1 min-h-0 w-full',
+    plate: 'flex-1 ph:flex-none ph:h-[180px] min-h-0 w-full',
     plateLabel: 'text-[34px]',
     // The body takes its natural height so the banner absorbs every spare
     // pixel — a hero photo earns the leftover space, dead air does not.
-    body: 'shrink-0 p-7 pt:p-6 gap-3',
-    title: 'text-[40px] pt:text-[34px] leading-[1.15] line-clamp-2',
+    body: 'shrink-0 p-7 ph:p-4 pt:p-6 gap-3',
+    title: 'text-[40px] ph:text-[24px] ph:line-clamp-3 pt:text-[34px] leading-[1.15] line-clamp-2',
     meta: 'text-[16px]',
     chipSize: 'lg',
   },
@@ -278,7 +280,7 @@ function StoryCard({ article, unread, variant, onClick }) {
         </h2>
 
         {isLead && article.description && (
-          <p className="text-[20px] leading-[1.55] text-ts line-clamp-2 max-w-[860px]">
+          <p className="text-[20px] ph:text-[16px] leading-[1.55] text-ts line-clamp-2 max-w-[860px]">
             {article.description}
           </p>
         )}
@@ -313,14 +315,14 @@ function TimelineRow({ article, unread, onClick }) {
           activate();
         }
       }}
-      className="shrink-0 flex items-center gap-4 min-h-[92px] p-3 rounded-xl bg-surf
+      className="shrink-0 flex items-center gap-4 ph:gap-3 min-h-[92px] p-3 rounded-xl bg-surf
                  border border-bd cursor-pointer select-none shadow-card
                  hover:shadow-raised active:scale-[0.98]
                  transition-all duration-[var(--dur-fast)]"
     >
       <span
         dir="ltr"
-        className="w-[62px] shrink-0 text-center font-mono tabular-nums text-[17px] text-ts"
+        className="w-[62px] ph:w-[46px] shrink-0 text-center font-mono tabular-nums text-[17px] ph:text-[14px] text-ts"
       >
         {formatStamp(article.publishedAt)}
       </span>
@@ -329,7 +331,7 @@ function TimelineRow({ article, unread, onClick }) {
 
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <h3
-          className={`text-[19px] leading-[1.35] line-clamp-2
+          className={`text-[19px] ph:text-[17px] leading-[1.35] line-clamp-2 ph:line-clamp-3
                       ${unread ? 'font-bold text-tp' : 'font-medium text-ts'}`}
         >
           {unread && <span className="sr-only">{t.news.unreadAria}. </span>}
@@ -363,7 +365,7 @@ function ArticleFigure({ src, caption }) {
         onError={() => setFailed(true)}
       />
       {caption && (
-        <figcaption className="text-[17px] leading-[1.5] text-ts">{caption}</figcaption>
+        <figcaption className="text-[17px] ph:text-[15px] leading-[1.5] text-ts">{caption}</figcaption>
       )}
     </figure>
   );
@@ -374,14 +376,14 @@ function ArticleFigure({ src, caption }) {
 // the room. (Design Guideline — Layout > Guides and safe areas: "restrict the
 // width of text for optimal readability.")
 function ArticleBody({ blocks, fallbackText, skipImageSrc }) {
-  const paragraph = 'text-[22px] leading-[1.8] text-tp whitespace-pre-line';
+  const paragraph = 'text-[22px] ph:text-[18px] ph:leading-[1.75] ph:break-words leading-[1.8] text-tp whitespace-pre-line';
 
   if (!Array.isArray(blocks) || blocks.length === 0) {
     return <p className={paragraph}>{fallbackText}</p>;
   }
 
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col ph:gap-5 gap-7">
       {blocks.map((block, i) => {
         if (block.type === 'image') {
           if (skipImageSrc && block.src === skipImageSrc) return null;
@@ -405,7 +407,7 @@ function ArticleBodySkeleton() {
       aria-busy="true"
       aria-label={t.news.overlay.loading}
     >
-      <div className="skeleton h-[300px] w-full rounded-3xl" />
+      <div className="skeleton h-[300px] ph:h-[180px] w-full rounded-3xl" />
       {[['100%', '96%', '88%', '62%'], ['100%', '92%', '70%']].map((group, g) => (
         <div key={g} className="flex flex-col gap-3">
           {group.map((w, i) => (
@@ -423,10 +425,10 @@ function ArticleBodySkeleton() {
 // carried out and help them understand why.")
 function ExtractionNotice({ onRetry }) {
   return (
-    <div className="flex items-start gap-4 rounded-2xl bg-s2 border border-bd p-6">
+    <div className="flex items-start ph:p-4 gap-4 rounded-2xl bg-s2 border border-bd p-6">
       <AlertIcon className="w-6 h-6 mt-1 shrink-0 text-ts" />
       <div className="flex-1 flex flex-col items-start gap-5">
-        <p className="text-[19px] leading-[1.6] text-tp">{t.news.overlay.unavailable}</p>
+        <p className="text-[19px] ph:text-[16px] leading-[1.6] text-tp">{t.news.overlay.unavailable}</p>
         <button
           onClick={onRetry}
           className="ripple min-h-[56px] px-7 rounded-xl bg-acc text-white text-[19px] font-bold
@@ -476,7 +478,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
   const heroImage = heroFailed ? null : fullArticle?.image || article.image || null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-12 pt:p-6">
+    <div className="fixed inset-0 z-50 ph:p-0 flex items-center justify-center p-12 pt:p-6">
       <div
         className="absolute inset-0 bg-black/50 transition-opacity"
         style={{ opacity: visible ? 1 : 0, transitionDuration: 'var(--dur-normal)' }}
@@ -487,8 +489,8 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
         role="dialog"
         aria-modal="true"
         aria-labelledby={ARTICLE_TITLE_ID}
-        className="relative w-full max-w-[1240px] pt:max-w-full h-full flex flex-col overflow-hidden
-                   rounded-2xl bg-surf text-tp shadow-modal transition-[opacity,transform]"
+        className="relative w-full max-w-[1240px] pt:max-w-full ph:max-w-full h-full flex flex-col overflow-hidden
+                   rounded-2xl ph:rounded-none bg-surf text-tp shadow-modal transition-[opacity,transform]"
         style={{
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(32px)',
@@ -498,7 +500,20 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
       >
         {/* Masthead — stays put while the article scrolls, so the source and
             the way out are always available. */}
-        <header className="shrink-0 flex items-center gap-4 px-8 py-4 border-b border-bd">
+        <header className="shrink-0 flex ph:gap-2 ph:px-3 ph:py-2 items-center gap-4 px-8 py-4 border-b border-bd">
+          {IS_PHONE && (
+            <button
+              onClick={handleClose}
+              className="shrink-0 inline-flex items-center gap-1 h-11 ps-2 pe-4 rounded-full bg-s2
+                         text-[16px] font-semibold text-tp active:scale-95"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+                strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+              {t.common.back}
+            </button>
+          )}
           <CategoryChip category={article.category} size="lg" />
           <span className="text-[17px] font-semibold text-tp truncate">{article.source}</span>
           <MetaRule />
@@ -508,7 +523,7 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
           <button
             onClick={handleClose}
             aria-label={t.news.overlay.close}
-            className="ms-auto w-[56px] h-[56px] shrink-0 flex items-center justify-center
+            className="ms-auto w-[56px] h-[56px] shrink-0 flex items-center justify-center ph:hidden
                        rounded-full bg-s2 text-tp hover:bg-bd active:scale-95
                        transition-all duration-[var(--dur-fast)]"
           >
@@ -516,24 +531,24 @@ function ArticleOverlay({ article, fullArticle, fullArticleLoading, onClose, onR
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-          <div className="mx-auto w-full max-w-[920px] px-8 py-10 flex flex-col gap-8">
+        <div className="flex-1 ph:overscroll-contain overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+          <div className="mx-auto w-full max-w-[920px] ph:px-4 ph:py-5 ph:gap-5 px-8 py-10 flex flex-col gap-8">
             <h1
               id={ARTICLE_TITLE_ID}
-              className="text-[38px] leading-[1.2] font-bold text-tp"
+              className="text-[38px] ph:text-[26px] ph:break-words leading-[1.2] font-bold text-tp"
             >
               {article.title}
             </h1>
 
             {article.description && (
-              <p className="text-[23px] leading-[1.6] text-ts">{article.description}</p>
+              <p className="text-[23px] ph:text-[18px] leading-[1.6] text-ts">{article.description}</p>
             )}
 
             {heroImage && (
               <img
                 src={heroImage}
                 alt=""
-                className="w-full rounded-3xl bg-s2"
+                className="w-full rounded-3xl ph:rounded-xl bg-s2"
                 onError={() => setHeroFailed(true)}
               />
             )}
@@ -608,6 +623,16 @@ export default function NewsPage() {
   }, [fetchFullArticle, selectedArticle]);
 
   // ─── Loading state ─────────────────────────────────────────────────────
+  if (IS_PHONE && loading) {
+    return (
+      <div className="flex flex-col h-full p-3 gap-3">
+        <SkeletonBlock height="300px" borderRadius="16px" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <SkeletonBlock key={i} height="84px" borderRadius="12px" />
+        ))}
+      </div>
+    );
+  }
   if (loading) return <NewsSkeleton />;
 
   // ─── Empty state ───────────────────────────────────────────────────────
@@ -623,11 +648,11 @@ export default function NewsPage() {
         )}
         <div className="flex-1 flex items-center justify-center p-6">
           <div
-            className="flex flex-col items-center gap-6 max-w-[720px] px-16 py-14
+            className="flex flex-col items-center gap-6 max-w-[720px] px-16 ph:px-6 ph:py-8 py-14
                        rounded-2xl bg-surf border border-bd shadow-card"
           >
-            <NewspaperIcon className="w-28 h-28 text-tm" />
-            <p className="text-[26px] font-bold text-tp text-center">{t.empty.noNews}</p>
+            <NewspaperIcon className="w-28 h-28 ph:w-20 ph:h-20 text-tm" />
+            <p className="text-[26px] ph:text-[22px] font-bold text-tp text-center">{t.empty.noNews}</p>
             <p className="text-[19px] leading-[1.6] text-ts text-center">
               {t.news.emptyHint}
             </p>
@@ -653,6 +678,74 @@ export default function NewsPage() {
   const lead = articles[0];
   const seconds = articles.slice(1, 3);
   const rail = articles.slice(3, 3 + RAIL_LIMIT);
+
+  // Phone: one scrolling column, the lead story on top and every other headline as a row.
+  // Tapping one opens the reader over the whole screen (ArticleOverlay) with a back button.
+  if (IS_PHONE) {
+    return (
+      <>
+        <div className="flex flex-col h-full">
+          {error && (
+            <ConnectionBanner
+              integration={t.news.banner.title}
+              message={t.news.banner.degraded}
+              onAction={refresh}
+            />
+          )}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-3"
+            {...pullBind}
+          >
+            {isPulling && (
+              <div className="shrink-0 flex items-center justify-center" style={{ height: `${pullDistance}px` }}>
+                <div
+                  className={`w-6 h-6 border-2 border-acc border-t-transparent rounded-full
+                    ${pullDistance > 24 ? 'pull-refresh-spinner' : ''}`}
+                />
+              </div>
+            )}
+            <div className="shrink-0 flex flex-col">
+              <StoryCard
+                article={lead}
+                unread={!isRead(lead.id)}
+                variant="lead"
+                onClick={handleArticleClick}
+              />
+            </div>
+            <div className="shrink-0 flex items-center gap-3 ps-1">
+              <h2 className="text-[18px] font-bold text-tp">{t.news.headlines}</h2>
+              <button
+                onClick={refresh}
+                aria-label={t.news.refresh}
+                className="ms-auto w-11 h-11 shrink-0 flex items-center justify-center rounded-full
+                           text-tp active:scale-95"
+              >
+                <RefreshIcon />
+              </button>
+            </div>
+            {[...seconds, ...rail].map((article) => (
+              <TimelineRow
+                key={article.id}
+                article={article}
+                unread={!isRead(article.id)}
+                onClick={handleArticleClick}
+              />
+            ))}
+          </div>
+        </div>
+
+        {selectedArticle && (
+          <ArticleOverlay
+            article={selectedArticle}
+            fullArticle={fullArticle}
+            fullArticleLoading={fullArticleLoading}
+            onClose={handleOverlayClose}
+            onRetry={handleRetryFullArticle}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>
