@@ -242,7 +242,7 @@ export default function BluetoothPopup({ visible, onClose, anchorRef }) {
   return (
     <div
       ref={popupRef}
-      className="absolute top-full mt-3 z-50"
+      className="anchored-popup absolute top-full mt-3 z-50"
       style={{
         left: '50%',
         transform: 'translateX(-50%)',

@@ -14,6 +14,7 @@ import {
 import { fetchApi } from '../../hooks/useApi.js';
 import useSchool from '../../hooks/useSchool.js';
 import OnScreenKeyboard from '../OnScreenKeyboard.jsx';
+import { IS_PHONE } from '../../phone.js';
 import StarIcon from '../StarIcon.jsx';
 import WifiPopup from '../WifiPopup.jsx';
 import BluetoothPopup from '../BluetoothPopup.jsx';
@@ -159,8 +160,8 @@ function UploadIcon({ className = 'w-4 h-4' }) {
 /** Section card wrapper */
 function Section({ title, children }) {
   return (
-    <div className="bg-surf border border-bd rounded-2xl p-6 mb-4 pt:rounded-3xl pt:p-8 pt:mb-6">
-      <h2 className="text-xl font-semibold text-tp mb-4 pt:text-2xl pt:mb-5">{title}</h2>
+    <div className="bg-surf border border-bd rounded-2xl p-6 mb-4 pt:rounded-3xl pt:p-8 pt:mb-6 ph:rounded-2xl ph:p-4 ph:mb-3">
+      <h2 className="text-xl font-semibold text-tp mb-4 pt:text-2xl pt:mb-5 ph:text-lg ph:mb-3">{title}</h2>
       {children}
     </div>
   );
@@ -170,6 +171,7 @@ function Section({ title, children }) {
  * OnScreenKeyboard (the kiosk has no physical one): it fires on focus and tap,
  * and the caller renders the keyboard and routes its keys into `value`. */
 function InputRow({ label, type = 'text', placeholder = '', value, onChange, className = '', dir = 'auto', onKeyboard }) {
+  if (IS_PHONE) onKeyboard = undefined;   // the phone's own keyboard, not the kiosk's
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       {label && <label className="text-sm font-medium text-ts">{label}</label>}
@@ -717,7 +719,7 @@ function IcsCalendarSection() {
                        placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
             dir="ltr"
           />
-          <div className="flex gap-3">
+          <div className="flex gap-3 ph:flex-col">
             <input
               type="text"
               value={newName}
@@ -728,7 +730,7 @@ function IcsCalendarSection() {
               dir="rtl"
             />
             {/* Color picker as colored buttons */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 ph:flex-wrap ph:shrink">
               {ICS_COLOR_OPTIONS.map((c) => (
                 <button
                   key={c.value}
@@ -1911,12 +1913,12 @@ function EditableList({ list, onChange, placeholder, emptyLabel, removeLabel, re
         <input
           ref={inputRef}
           type="text"
-          inputMode="none"
+          inputMode={IS_PHONE ? undefined : 'none'}
           value={draft}
           list={datalistId}
           onChange={(e) => setDraft(e.target.value)}
-          onFocus={() => setShowKeyboard(true)}
-          onClick={() => setShowKeyboard(true)}
+          onFocus={() => !IS_PHONE && setShowKeyboard(true)}
+          onClick={() => !IS_PHONE && setShowKeyboard(true)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder={placeholder}
           className="flex-1 min-h-[56px] px-4 rounded-xl bg-[var(--s2)] border border-[var(--bd)] text-[var(--tp)] text-base placeholder:text-[var(--tm)] focus:outline-none focus:border-[var(--acc)]"
@@ -3833,10 +3835,10 @@ function StarsSection() {
 export default function SettingsPage() {
   return (
     <div
-      className="h-full overflow-y-auto px-8 py-6 pt:px-6 pt:py-8"
+      className="h-full overflow-y-auto px-8 py-6 pt:px-6 pt:py-8 ph:px-3 ph:py-4"
       style={{ scrollbarWidth: 'thin' }}
     >
-      <h1 className="text-3xl font-bold text-tp mb-6 pt:text-4xl pt:mb-8 pt:px-2">{t.tabs.settings}</h1>
+      <h1 className="text-3xl font-bold text-tp mb-6 pt:text-4xl pt:mb-8 pt:px-2 ph:text-2xl ph:mb-4 ph:px-1">{t.tabs.settings}</h1>
 
       {/* Two fixed columns, balanced by hand; single column in portrait.
           Heights measured at 1920x1080 (px): the right column is Profile 290,
@@ -3849,7 +3851,7 @@ export default function SettingsPage() {
           screen empty. Re-measure after adding a big section: a CSS multi-column
           layout would balance itself, but it reflows sections between columns
           whenever one grows, which moves buttons under a finger. */}
-      <div className="grid grid-cols-2 gap-x-6 items-start max-w-[1600px] mx-auto pt:grid-cols-1 pt:max-w-none">
+      <div className="grid grid-cols-2 gap-x-6 items-start max-w-[1600px] mx-auto pt:grid-cols-1 pt:max-w-none ph:grid-cols-1">
         {/* Column A (right in RTL — rendered first): you, the screen, devices */}
         <div>
           <ProfileSection />

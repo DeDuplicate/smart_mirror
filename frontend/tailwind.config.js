@@ -130,5 +130,7 @@ export default {
     // `pt:` = portrait canvas (1080x1920). Keyed on <html data-orientation>,
     // not the media query, so it follows the Settings choice in any browser.
     ({ addVariant }) => addVariant('pt', '[data-orientation="portrait"] &'),
+    // `ph:` = phone page (<html data-phone>, see src/phone.js): a real-size, single-column layout.
+    ({ addVariant }) => addVariant('ph', '[data-phone] &'),
   ],
 };

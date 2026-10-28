@@ -83,6 +83,14 @@ All in **Settings → Display**:
 - **Interface size** — 50–150% zoom, applied live. Use it to make everything larger on a 4K panel, or to fit more on a small one.
 - The canvas scales uniformly and fills any aspect ratio (16:9, 16:10, ultrawide, 4:3) instead of stretching.
 
+### :iphone: Set it up from your phone
+
+Open the mirror's address in a phone browser (`http://smartmirror.local:3000`, or its IP) and you get **Settings** as a normal single-column page at real size, not the 1920x1080 canvas shrunk down. Any window narrower than 720 px is treated as a phone; the kiosk (at least 1080 px wide in either orientation) never is, so its layout is untouched. Add `?phone` to force it on a desktop, or `?kiosk` to force the full screen.
+
+- It is only Settings, plus the dialogs it opens. None of the kiosk's own behaviour runs on the phone (no alarms or reminders ringing, no screensaver, no sleep schedule, no celebrations), so opening it never makes the mirror or your phone make noise.
+- Text fields use the phone's own keyboard instead of the on-screen one, and the Wi-Fi and Bluetooth popups open as a sheet along the bottom.
+- Anything on the local network that can reach the mirror can use it (the same as any other browser on the LAN today), so keep it off the open internet.
+
 ### :video_camera: Security Cameras
 
 Connect DVRs, NVRs and IP cameras in **Settings → Cameras**. The Cameras tab appears automatically once at least one camera is enabled.

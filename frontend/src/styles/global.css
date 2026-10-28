@@ -1051,3 +1051,38 @@ html[data-cursor="hidden"] * {
 .star-pop {
   animation: starPop 700ms var(--ease-out) both;
 }
+
+/* Phone (see src/phone.js): no 1920x1080 canvas and no scaling, #root is just the screen. */
+html[data-phone] #root {
+  width: 100%;
+  height: 100dvh;
+  transform: none;
+}
+
+html[data-phone] body {
+  overflow-x: hidden;
+}
+
+/* The Wi-Fi / Bluetooth popups hang under their button, which is fine on the kiosk but runs off a
+   phone's edge: there they become a sheet along the bottom (a tap outside still closes them). */
+html[data-phone] .anchored-popup {
+  position: fixed;
+  top: auto !important;
+  left: 12px !important;
+  right: 12px;
+  bottom: 12px;
+  margin: 0 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
+html[data-phone] .anchored-popup > div:not(.absolute) {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+  max-height: 70dvh;
+}
+
+html[data-phone] .anchored-popup > .absolute {
+  display: none;
+}
