@@ -21,6 +21,12 @@ export default defineConfig({
       },
     },
   },
+  // `vite preview` is what the Pi serves on :3000. It refuses any hostname it was not told
+  // about (IP addresses are always fine), which 403'd http://smartmirror.local:3000 from a
+  // phone. `.local` covers the mDNS name without opening it to arbitrary hostnames (DNS rebinding).
+  preview: {
+    allowedHosts: ['.local'],
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,
