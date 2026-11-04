@@ -14,6 +14,22 @@ $ErrorActionPreference = 'Continue'
 # still hold the old one, so read it fresh.
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 
+# Programs that install-legacy.ps1 keeps in ProgramData\SmartMirror (its own Node 22, Chromium) are only used
+# when that folder is owned by an administrator or SYSTEM and is not a link: any user can create folders in
+# ProgramData, and one could plant a program there for another user's logon to run.
+function Test-AdminOwned([string]$Path) {
+  try {
+    if ((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
+    $owner = (New-Object IO.DirectoryInfo $Path).GetAccessControl().GetOwner([Security.Principal.SecurityIdentifier]).Value
+    return ($owner -eq 'S-1-5-18' -or $owner -eq 'S-1-5-32-544')
+  } catch { return $false }
+}
+$Shared = Join-Path $env:ProgramData 'SmartMirror'
+$SharedOk = (Test-Path -LiteralPath $Shared) -and (Test-AdminOwned $Shared)
+# Its Node 22 (kept beside a newer system Node the app cannot use) must win over the PC's; it is also the one
+# the dependencies were installed with, and native modules only load under the Node they were built for.
+if ($SharedOk -and (Test-Path (Join-Path $Shared 'node\node.exe'))) { $env:Path = (Join-Path $Shared 'node') + ';' + $env:Path }
+
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $FrontendPort = if ($env:SM_FRONTEND_PORT) { [int]$env:SM_FRONTEND_PORT } else { 3000 }
 $BackendPort = if ($env:SM_BACKEND_PORT) { [int]$env:SM_BACKEND_PORT } else { 3001 }
@@ -83,10 +99,18 @@ if ($env:SM_NO_KIOSK) { exit 0 }
 
 # ---------------------------------------------------------------------------------------------
 # Fullscreen kiosk browser, relaunched if it is closed (the same watchdog as scripts\start-kiosk.sh).
-# Edge ships with Windows 10 and 11, so it is preferred; Chrome works too. The browser gets its own
-# profile folder so it never joins (or disturbs) a normal browsing window.
+# The Chromium that install-legacy.ps1 unpacks (newest version folder) is preferred: it is far lighter
+# than Edge, which runs dozens of background processes. Edge ships with Windows 10 and 11 and Chrome
+# works too, so either is the fallback. The browser gets its own profile folder so it never joins (or
+# disturbs) a normal browsing window.
 # ---------------------------------------------------------------------------------------------
+$chromium = $null
+if ($SharedOk) {
+  $chromium = Get-ChildItem (Join-Path $Shared 'chromium') -Directory -ErrorAction SilentlyContinue |
+    Sort-Object CreationTime -Descending | ForEach-Object { Join-Path $_.FullName 'chrome.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
 $candidates = @(
+  $chromium,
   "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
   "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
   "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
@@ -94,7 +118,7 @@ $candidates = @(
   "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
 )
 $browser = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if (-not $browser) { Write-Log 'kiosk' 'no Edge or Chrome found, install one of them'; exit 1 }
+if (-not $browser) { Write-Log 'kiosk' 'no Chromium, Edge or Chrome found, install one of them'; exit 1 }
 
 $profileDir = Join-Path $Root 'browser-profile'
 $flags = @(

@@ -15,7 +15,8 @@ param(
   [switch]$NoAutostart,         # do not create the logon task
   [switch]$NoPowerSettings,     # leave the screen/sleep timeouts alone
   [switch]$NoFirewall,          # do not open ports 3000-3001
-  [switch]$NoStart              # install only, do not start it now
+  [switch]$NoStart,             # install only, do not start it now
+  [string]$NodeDir = ''         # a folder with its own Node 22 to use instead of the PC's (install-legacy.ps1 passes it)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,9 +33,13 @@ function Test-Admin { ([Security.Principal.WindowsPrincipal][Security.Principal.
 function Exec([string]$File, [string[]]$Arguments) {
   $saved = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
+  # A program that never starts (for example a script Windows refuses to run) leaves the PREVIOUS
+  # program's exit code behind, which used to look like success.
+  $global:LASTEXITCODE = $null
   & $File @Arguments
   $code = $LASTEXITCODE
   $ErrorActionPreference = $saved
+  if ($null -eq $code) { throw "$File could not be started" }
   if ($code -ne 0) { throw "$File $($Arguments -join ' ') failed with exit code $code" }
 }
 
@@ -81,7 +86,7 @@ if (-not $SkipPrerequisites) {
     throw 'winget was not found. Install "App Installer" from the Microsoft Store, or install Node.js 22 and Git yourself and run this again with -SkipPrerequisites.'
   }
   $nodeOk = $false
-  if (Have 'node') { $nodeOk = ([int](((node --version) -replace '^v', '').Split('.')[0])) -ge 20 }
+  if (Have 'node') { $major = [int](((node --version) -replace '^v', '').Split('.')[0]); $nodeOk = ($major -eq 20 -or $major -eq 22) }
   if (-not $nodeOk) { Say 'Installing Node.js 22...'; Winget-Install 'OpenJS.NodeJS.22' }
   if (-not (Have 'git')) { Say 'Installing Git...'; Winget-Install 'Git.Git' }
   # Only needed for casting music to speakers and camera snapshots, so a failure here is not fatal.
@@ -89,7 +94,15 @@ if (-not $SkipPrerequisites) {
   if (-not (Have 'yt-dlp')) { Say 'Installing yt-dlp...'; try { Winget-Install 'yt-dlp.yt-dlp' } catch { Write-Warning "yt-dlp was not installed: $_" } }
 }
 Refresh-Path
+if ($NodeDir) { $env:Path = "$NodeDir;$env:Path" }
 if (-not (Have 'node')) { throw 'Node.js is not available. Open a new PowerShell window and run this again.' }
+# The SQLite module has ready-made binaries for Node 20 and 22 only. Anything else makes npm try to compile it
+# (needs Visual Studio's C++ tools) and fail after minutes, so stop here with a clear reason instead.
+$nodeMajor = [int](((node --version) -replace '^v', '').Split('.')[0])
+if ($nodeMajor -ne 20 -and $nodeMajor -ne 22) {
+  throw "This PC has Node.js $nodeMajor, but Smart Mirror needs Node.js 20 or 22 (its database module has no ready-made build for other versions). Run install-legacy.ps1 instead: it keeps its own Node.js 22 and leaves yours alone.`n  irm https://raw.githubusercontent.com/DeDuplicate/smart_mirror/main/scripts/windows/install-legacy.ps1 | iex"
+}
+Say "Using Node.js $(node --version) from $((Get-Command node).Source)"
 if (-not (Have 'git')) { throw 'Git is not available. Open a new PowerShell window and run this again.' }
 
 # ---------------------------------------------------------------------------------------------
@@ -126,14 +139,19 @@ if (-not ((& git config --global --get-all safe.directory) -contains $gitPath)) 
 
 Say 'Installing dependencies (a few minutes the first time)...'
 foreach ($part in 'backend', 'frontend') {
-  # Same arguments as the in-app updater, so both always leave node_modules in the same state.
-  Exec 'npm' @('install', '--include=dev', '--no-audit', '--no-fund', '--prefix', (Join-Path $InstallDir $part))
+  # Same arguments, and the same working folder, as the in-app updater, so both always leave node_modules
+  # and the lock files in the same state. (npm 10 with --prefix also adds the package.json of whatever
+  # folder this was started from as a dependency, which then blocks every in-app update.)
+  # npm.cmd, not npm: PowerShell would pick npm.ps1, which Windows blocks while script running is off
+  # (the default on Windows 10 and Windows Server).
+  Push-Location (Join-Path $InstallDir $part)
+  try { Exec 'npm.cmd' @('install', '--include=dev', '--no-audit', '--no-fund') } finally { Pop-Location }
 }
 # The built frontend is committed to the repo, so nothing needs building. Only if it is missing:
 if (-not (Test-Path (Join-Path $InstallDir 'frontend\dist\index.html'))) {
   Say 'Building the frontend...'
   Push-Location (Join-Path $InstallDir 'frontend')
-  try { Exec 'npx' @('vite', 'build') } finally { Pop-Location }
+  try { Exec 'npx.cmd' @('vite', 'build') } finally { Pop-Location }
 }
 
 # Settings file. STREAM_HOST is the address speakers use to fetch music from this PC; with several

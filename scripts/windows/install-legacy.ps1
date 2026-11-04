@@ -3,9 +3,11 @@
 #
 #   irm https://raw.githubusercontent.com/DeDuplicate/smart_mirror/main/scripts/windows/install-legacy.ps1 | iex
 #
-# It downloads Node.js 22 and Git straight from their publishers (and Google Chrome only if the PC has
-# neither Edge nor Chrome), checks every download against a checksum or digital signature, puts FFmpeg
-# and yt-dlp in C:\ProgramData\SmartMirror\bin (on the machine PATH, yt-dlp updated weekly), and then runs
+# It downloads Git straight from its publisher, Node.js 22 when the PC has no Node 20 or 22 (kept in its own
+# folder, an existing newer Node is left alone), plus Chromium as the kiosk browser (much lighter than Edge;
+# Edge or Chrome is used instead if that download fails), checks every download against a checksum or digital
+# signature, puts FFmpeg and yt-dlp in C:\ProgramData\SmartMirror\bin (on the machine PATH, yt-dlp updated
+# weekly), Node in ...\SmartMirror\node and Chromium in ...\SmartMirror\chromium, and then runs
 # the normal installer, install.ps1, for everything else: the app itself, the firewall, no sleeping, and
 # the fullscreen kiosk at logon. Safe to run again.
 # ASCII only so it survives any download encoding; Windows PowerShell 5.1 safe.
@@ -28,6 +30,8 @@ $RawBase = "https://raw.githubusercontent.com/DeDuplicate/smart_mirror/$Branch/s
 $SharedDir = Join-Path $env:ProgramData 'SmartMirror'
 $Tmp = Join-Path $SharedDir ('tmp-' + [guid]::NewGuid().ToString('N'))   # fresh every run, never reused
 $ToolsBin = Join-Path $SharedDir 'bin'
+$ChromiumDir = Join-Path $SharedDir 'chromium'
+$NodeDir = Join-Path $SharedDir 'node'
 # Older Windows PowerShell may not offer TLS 1.2 by default, and every site below requires it.
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
@@ -70,19 +74,38 @@ function Get-File([string]$Url, [string]$Name, [string]$Sha256, [switch]$Signed)
   return $path
 }
 
-# Node 22 is pinned on purpose: it is what the app is tested with, and the SQLite module ships a
-# ready-made binary for it (a newer Node could need a C++ compiler instead).
-function Get-NodeMsi {
+# The app's SQLite module (better-sqlite3) ships ready-made binaries for Node 20 and 22 only. On any other
+# version (Node 24 or 26, say) it tries to compile itself with a C++ toolchain and fails, so those are
+# not usable. Node 22 is also what the app is tested with.
+function Get-NodeMajor {
+  if (-not (Have 'node')) { return 0 }
+  return [int](((node --version) -replace '^v', '').Split('.')[0])
+}
+
+# Node 22 as a plain unpacked copy in its own folder, for a PC that has no Node or a different one. Nothing
+# is installed or uninstalled: whatever Node the PC already has stays as it is, and install.ps1 and start.ps1
+# put this copy first on PATH for the app only. Checked against the SHA-256 on nodejs.org and node.exe's
+# digital signature.
+function Install-NodeZip([string]$Dir) {
   # Assigned to a variable first: PowerShell pipes a JSON array out of Invoke-RestMethod as ONE object,
   # so filtering the call directly would treat the whole version list as a single release.
   $index = Invoke-RestMethod 'https://nodejs.org/dist/index.json'
-  $release = $index | Where-Object { $_.version -like 'v22.*' -and ($_.files -contains 'win-x64-msi') } | Select-Object -First 1
-  if (-not $release) { throw 'Could not find a Node.js 22 installer on nodejs.org.' }
-  $name = "node-$($release.version)-x64.msi"
+  $release = $index | Where-Object { $_.version -like 'v22.*' -and ($_.files -contains 'win-x64-zip') } | Select-Object -First 1
+  if (-not $release) { throw 'Could not find a Node.js 22 download on nodejs.org.' }
+  $name = "node-$($release.version)-win-x64.zip"
   $sums = (Get-Text "https://nodejs.org/dist/$($release.version)/SHASUMS256.txt") -split "`n"
   $line = $sums | Where-Object { $_ -match ('\s' + [regex]::Escape($name) + '\s*$') } | Select-Object -First 1
   if (-not $line) { throw "nodejs.org lists no SHA-256 for $name." }
-  return (Get-File "https://nodejs.org/dist/$($release.version)/$name" $name (($line.Trim() -split '\s+')[0]) -Signed)
+  if (Test-Path -LiteralPath $Dir) { throw "$Dir exists but holds no node.exe. Delete it (as an administrator) and run this again." }
+  $zip = Get-File "https://nodejs.org/dist/$($release.version)/$name" $name (($line.Trim() -split '\s+')[0])
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $unpacked = Join-Path $Tmp 'node'
+  [IO.Compression.ZipFile]::ExtractToDirectory($zip, $unpacked)
+  $inner = Get-ChildItem $unpacked -Directory | Select-Object -First 1
+  if (-not $inner -or -not (Test-Path (Join-Path $inner.FullName 'node.exe')) -or -not (Test-Path (Join-Path $inner.FullName 'npm.cmd'))) { throw 'node.exe or npm.cmd is not in the Node.js download.' }
+  $signature = Get-AuthenticodeSignature -FilePath (Join-Path $inner.FullName 'node.exe')
+  if ($signature.Status -ne 'Valid') { throw "node.exe has no valid digital signature ($($signature.Status)). Not using it." }
+  Move-Item $inner.FullName $Dir
 }
 
 function Get-GitInstaller {
@@ -189,6 +212,35 @@ function Install-Tools([string]$Bin) {
   }
 }
 
+# The kiosk browser: Chromium (the ungoogled-chromium build, which runs no Google services in the
+# background; start.ps1 prefers it to Edge, which is far heavier). Each version gets its own folder, so a
+# newer one never overwrites the copy that is running. It does not update itself: running this installer
+# again fetches the newest version.
+function Install-Chromium([string]$Dir) {
+  $release = Invoke-RestMethod 'https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest' -Headers @{ 'User-Agent' = 'smart-mirror-installer' }
+  $asset = $release.assets | Where-Object { $_.name -match '_windows_x64\.zip$' } | Select-Object -First 1
+  if (-not $asset -or $asset.digest -notlike 'sha256:*') { throw 'No Chromium download with a published SHA-256 was found.' }
+  if ($release.tag_name -notmatch '^[0-9][0-9A-Za-z._-]*$') { throw "Unexpected Chromium version name '$($release.tag_name)'." }
+  if (Test-Path -LiteralPath $Dir) {
+    if (-not (Test-Trusted $Dir)) { throw "$Dir was not created by an administrator. Delete it and run this again." }
+  } else {
+    New-Item -ItemType Directory -Path $Dir | Out-Null
+  }
+  $target = Join-Path $Dir $release.tag_name
+  if (Test-Path -LiteralPath (Join-Path $target 'chrome.exe')) { return }   # this version is already here
+  Say 'Installing Chromium (about 200 MB)...'
+  $zip = Get-File $asset.browser_download_url 'chromium.zip' $asset.digest.Substring(7)
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $unpacked = Join-Path $Tmp 'chromium'
+  [IO.Compression.ZipFile]::ExtractToDirectory($zip, $unpacked)
+  $inner = Get-ChildItem $unpacked -Directory | Select-Object -First 1
+  if (-not $inner -or -not (Test-Path (Join-Path $inner.FullName 'chrome.exe'))) { throw 'chrome.exe is not in the Chromium download.' }
+  Move-Item $inner.FullName $target
+  # Keep the newest two: install.ps1 restarts the kiosk right after this, onto the new one, so at most
+  # the previous version could still be running.
+  Get-ChildItem $Dir -Directory | Sort-Object CreationTime -Descending | Select-Object -Skip 2 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 # Append a folder to the machine PATH without disturbing what is there. The raw value is read and
 # written back as an expandable string so entries like %SystemRoot%\system32 stay as they are.
 function Add-MachinePath([string]$Dir, [string]$Key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment') {
@@ -232,9 +284,15 @@ if (-not $SkipPrerequisites) {
   if (-not [Environment]::Is64BitOperatingSystem) { throw 'Smart Mirror needs 64-bit Windows.' }
   Lock-Folder $SharedDir   # before the first download: everything below is saved inside it
 
-  $nodeOk = $false
-  if (Have 'node') { $nodeOk = ([int](((node --version) -replace '^v', '').Split('.')[0])) -ge 20 }
-  if (-not $nodeOk) { Say 'Installing Node.js 22...'; Install-Msi (Get-NodeMsi); Refresh-Path }
+  # Use the PC's own Node when it is 20 or 22. Otherwise (none, or a newer one the app's database module
+  # cannot use) keep a private Node 22 in ProgramData\SmartMirror\node and leave the PC's Node alone.
+  if (-not (Test-Path -LiteralPath (Join-Path $NodeDir 'node.exe'))) {
+    $major = Get-NodeMajor
+    if ($major -ne 20 -and $major -ne 22) {
+      if ($major -eq 0) { Say 'Node.js was not found; unpacking Node.js 22 for Smart Mirror...' } else { Say "This PC has Node.js $major, which Smart Mirror cannot use; unpacking its own Node.js 22 (the PC's copy is left alone)..." }
+      Install-NodeZip $NodeDir
+    }
+  }
 
   if (-not (Have 'git')) {
     Say 'Installing Git...'
@@ -243,7 +301,12 @@ if (-not $SkipPrerequisites) {
     Refresh-Path
   }
 
-  if (-not (Find-Browser)) { Say 'Neither Edge nor Chrome was found; installing Google Chrome for the kiosk...'; Install-Msi (Get-ChromeMsi) }
+  try {
+    Install-Chromium $ChromiumDir
+  } catch {
+    Write-Warning "Chromium was not installed ($_), so the kiosk will use Edge or Chrome."
+    if (-not (Find-Browser)) { Say 'No other browser was found; installing Google Chrome for the kiosk...'; Install-Msi (Get-ChromeMsi) }
+  }
 
   try {
     Install-Tools $ToolsBin
@@ -263,6 +326,11 @@ Refresh-Path
 $sibling = if ($PSScriptRoot) { Join-Path $PSScriptRoot 'install.ps1' } else { '' }
 $installer = if ($sibling -and (Test-Path $sibling)) { [IO.File]::ReadAllText($sibling) } else { Get-Text "$RawBase/install.ps1" }
 $passOn = @{ SkipPrerequisites = $true; InstallDir = $InstallDir; Repo = $Repo; Branch = $Branch }
+if (Test-Path -LiteralPath (Join-Path $NodeDir 'node.exe')) {
+  # Only a copy an administrator put there is put first on PATH of the elevated installer.
+  if (-not (Test-Trusted $NodeDir)) { throw "$NodeDir was not created by an administrator. Delete it (as an administrator) and run this again." }
+  $passOn.NodeDir = $NodeDir
+}
 if ($NoAutostart) { $passOn.NoAutostart = $true }
 if ($NoPowerSettings) { $passOn.NoPowerSettings = $true }
 if ($NoFirewall) { $passOn.NoFirewall = $true }
