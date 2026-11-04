@@ -214,6 +214,12 @@ irm https://raw.githubusercontent.com/DeDuplicate/smart_mirror/main/scripts/wind
 
 It is a short script you can [read first](scripts/windows/install.ps1). It installs Node.js, Git, FFmpeg and yt-dlp with `winget`, downloads the app to `C:\SmartMirror`, installs its dependencies, opens ports 3000 and 3001 **to your home network only** (a phone can then use it, and speakers can fetch music), stops the screen and the PC from sleeping, and starts the app in a **fullscreen kiosk browser** (Edge, or Chrome) every time that user logs in.
 
+**Stopped with `winget was not found`?** That is an older Windows 10 (or an LTSC or freshly set up PC) without the Windows package manager. Use the installer for PCs without winget instead. It downloads Node.js 22 and Git straight from their publishers (each checked against a checksum or digital signature), adds Chrome only if the PC has neither Edge nor Chrome, puts FFmpeg and yt-dlp in `C:\ProgramData\SmartMirror\bin` (yt-dlp is updated weekly by a scheduled task), and then runs the normal installer for everything else:
+
+```powershell
+irm https://raw.githubusercontent.com/DeDuplicate/smart_mirror/main/scripts/windows/install-legacy.ps1 | iex
+```
+
 - **Start after a restart with nobody there:** turn on automatic sign-in (Win+R, `netplwiz`, untick *Users must enter a user name and password*). Without it the PC waits at the sign-in screen.
 - **Update:** Settings, *Check for updates*, in the app, the same button as on the Pi. Running the installer again works too and keeps your data.
 - **Bring your data from a Pi:** Settings, *Backup* on the Pi, then *Restore* on the PC.
