@@ -147,10 +147,11 @@ const WARM_POLL_MS = 3000;
  * POST /api/music/prewarm/:id answers `ready` or `warming` and de-duplicates
  * concurrent conversions server-side, so polling it is cheap and safe.
  */
-async function waitUntilWarm(id, onWaiting) {
+async function waitUntilWarm(id, onWaiting, shouldStop) {
   const deadline = Date.now() + WARM_TIMEOUT_MS;
   let announced = false;
-  while (Date.now() < deadline) {
+  // shouldStop lets a caller whose user has moved on stop polling (and drop its notice) right away.
+  while (Date.now() < deadline && !shouldStop?.()) {
     let status;
     try {
       status = (await fetchApi(`/api/music/prewarm/${id}`, { method: 'POST' }))?.status;
@@ -467,9 +468,26 @@ export default function useMusic() {
     if (idx < list.length - 1) playIndexRef.current(idx + 1, list);
   }, [addToast, t.music.playbackError]);
 
+  // Phone only (see useYoutubePlayer): YouTube refused to embed this track, so hand back the
+  // mirror's own audio stream for it. Same-origin path, so it goes through the proxy the phone
+  // already reaches, whatever port the backend advertises.
+  const resolveAudioStream = useCallback(async (id, isCurrent) => {
+    let toast = null;
+    try {
+      const warm = await waitUntilWarm(id, () => { toast = addToast('info', t.music.preparingForPhone, 90000); }, () => !isCurrent());
+      if (!warm) throw new Error('track did not finish converting in time');
+      const data = await fetchApi(`/api/music/cast-url/${id}`);
+      const u = new URL(data?.url);
+      return `${u.pathname}${u.search}`;
+    } finally {
+      if (toast != null) removeToast(toast);
+    }
+  }, [addToast, removeToast]);
+
   const player = useYoutubePlayer({
     onEnded: handleEnded,
     onError: handleError,
+    onEmbedBlocked: resolveAudioStream,
     initialVolume: volume,
   });
   const playerRef = useRef(player);
@@ -1028,6 +1046,7 @@ export default function useMusic() {
     outputId,
     speakers,
     playerReady: player.ready,
+    audioFallback: player.audioFallback,
     playerContainerRef: player.containerRef,
     resume: player.play,
     pause: player.pause,

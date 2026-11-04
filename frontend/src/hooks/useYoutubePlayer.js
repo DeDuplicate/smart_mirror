@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { IS_PHONE } from '../phone.js';
 
 let apiPromise = null;
+
+// YouTube refuses to embed label-owned music (error 150, also 101 and 153) in a page that was
+// opened by IP address, like http://192.168.1.186:3000 from a phone. The same video plays from
+// localhost (the mirror) and from a hostname such as smartmirror.local. On the phone those
+// tracks fall back to the mirror's own audio stream, played in a plain <audio> element.
+const EMBED_BLOCKED = new Set([101, 150, 153]);
+// 1 sample of silence. Playing it inside the tap that starts a song "unlocks" the element, so
+// iOS lets it start the real stream later, after the Pi has finished converting the track.
+const SILENCE = 'data:audio/wav;base64,UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA';
 
 function disableCaptions(player) {
   if (!player) return;
@@ -53,19 +63,68 @@ function loadYouTubeApi() {
   return apiPromise;
 }
 
-export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 } = {}) {
+export default function useYoutubePlayer({ onEnded, onError, onEmbedBlocked, initialVolume = 70 } = {}) {
   const playerRef = useRef(null);
   const containerNodeRef = useRef(null);
   const volumeRef = useRef(Math.round(initialVolume));
   const onEndedRef = useRef(onEnded);
   const onErrorRef = useRef(onError);
+  const onEmbedBlockedRef = useRef(onEmbedBlocked);
+  const audioRef = useRef(null);
+  const audioModeRef = useRef(false);
+  const videoIdRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  // True from the moment YouTube refuses a track until the next one loads, so the page can hide
+  // the iframe (it shows "This video is unavailable") while the mirror's audio plays instead.
+  const [audioFallback, setAudioFallback] = useState(false);
 
   useEffect(() => { onEndedRef.current = onEnded; }, [onEnded]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { onEmbedBlockedRef.current = onEmbedBlocked; }, [onEmbedBlocked]);
+
+  const getAudio = useCallback(() => {
+    if (audioRef.current) return audioRef.current;
+    const a = new Audio();
+    a.preload = 'auto';
+    const live = (fn) => () => { if (audioModeRef.current) fn(a); };
+    a.addEventListener('play', live(() => setPlaying(true)));
+    a.addEventListener('pause', live(() => setPlaying(false)));
+    a.addEventListener('durationchange', live(() => setDuration(a.duration || 0)));
+    a.addEventListener('ended', live(() => { setPlaying(false); onEndedRef.current?.(); }));
+    a.addEventListener('error', live(() => { setPlaying(false); onErrorRef.current?.('audio'); }));
+    audioRef.current = a;
+    return a;
+  }, []);
+
+  const playAudio = useCallback(async (id) => {
+    setAudioFallback(true);
+    let url;
+    try {
+      // Waits for the Pi to convert the track; gives up quietly once the user has picked another one.
+      url = await onEmbedBlockedRef.current(id, () => videoIdRef.current === id);
+    } catch (err) {
+      if (videoIdRef.current !== id) return; // abandoned: nothing to report, and the next track owns the state now
+      setAudioFallback(false);
+      throw err;
+    }
+    if (videoIdRef.current !== id) return; // the user picked something else meanwhile
+    const a = getAudio();
+    audioModeRef.current = true;
+    setPosition(0);
+    setDuration(0);
+    a.src = url;
+    a.volume = Math.min(1, Math.max(0, volumeRef.current / 100));
+    try {
+      await a.play();
+    } catch (err) {
+      audioModeRef.current = false;
+      setAudioFallback(false);
+      throw err;
+    }
+  }, [getAudio]);
 
   // Persistent host lives in MusicProvider. Never reparent the iframe —
   // moving it (or shrinking it to 2px) makes YouTube pause.
@@ -133,6 +192,11 @@ export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 
             },
             onError: (event) => {
               setPlaying(false);
+              const id = videoIdRef.current;
+              if (IS_PHONE && EMBED_BLOCKED.has(event.data) && id && onEmbedBlockedRef.current) {
+                playAudio(id).catch(() => onErrorRef.current?.(event.data));
+                return;
+              }
               onErrorRef.current?.(event.data);
             },
           },
@@ -148,13 +212,20 @@ export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 
       window.clearTimeout(volumeTimer);
       try { playerRef.current?.destroy?.(); } catch { /* ignore */ }
       playerRef.current = null;
+      audioModeRef.current = false;
+      audioRef.current?.pause();
       setReady(false);
       setPlaying(false);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
+      if (audioModeRef.current && audioRef.current) {
+        setPosition(audioRef.current.currentTime || 0);
+        return;
+      }
       const player = playerRef.current;
       if (!player?.getCurrentTime) return;
       try {
@@ -169,6 +240,17 @@ export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 
   const load = useCallback((videoId, autoplay = true) => {
     const player = playerRef.current;
     if (!player || !videoId) return;
+    videoIdRef.current = videoId;
+    setAudioFallback(false);
+    if (audioModeRef.current) {
+      audioModeRef.current = false;
+      audioRef.current?.pause();
+    }
+    if (IS_PHONE && autoplay && !audioRef.current) {
+      const a = getAudio();
+      a.src = SILENCE;
+      a.play().catch(() => {});
+    }
     try {
       if (autoplay && player.loadVideoById) player.loadVideoById(videoId);
       else if (player.cueVideoById) player.cueVideoById(videoId);
@@ -178,17 +260,24 @@ export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 
     } catch (err) {
       console.error('[music] load failed:', err);
     }
-  }, []);
+  }, [getAudio]);
 
   const play = useCallback(() => {
+    if (audioModeRef.current) { audioRef.current?.play().catch(() => {}); return; }
     try { playerRef.current?.playVideo?.(); } catch { /* ignore */ }
   }, []);
 
   const pause = useCallback(() => {
+    if (audioModeRef.current) { audioRef.current?.pause(); return; }
     try { playerRef.current?.pauseVideo?.(); } catch { /* ignore */ }
   }, []);
 
   const seek = useCallback((seconds) => {
+    if (audioModeRef.current && audioRef.current) {
+      audioRef.current.currentTime = seconds;
+      setPosition(seconds);
+      return;
+    }
     try {
       playerRef.current?.seekTo?.(seconds, true);
       setPosition(seconds);
@@ -198,6 +287,7 @@ export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 
   const setVolume = useCallback((value) => {
     volumeRef.current = Math.round(value);
     applyVolume(playerRef.current, volumeRef.current);
+    if (audioRef.current) audioRef.current.volume = Math.min(1, Math.max(0, volumeRef.current / 100));
   }, []);
 
   return {
@@ -206,6 +296,7 @@ export default function useYoutubePlayer({ onEnded, onError, initialVolume = 70 
     playing,
     position,
     duration,
+    audioFallback,
     load,
     play,
     pause,

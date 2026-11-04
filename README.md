@@ -90,6 +90,7 @@ Open the mirror's address in a phone browser (`http://smartmirror.local:3000`, o
 - **Same functions, phone layout.** Chores and Tasks become swipeable columns, the calendar opens on the day view, News shows the headlines first and opens an article full-screen, and the AC, remote, shopping list and Wi-Fi/Bluetooth popups open as sheets along the bottom.
 - **It never makes the mirror, or the phone, ring.** None of the kiosk's own behaviour runs there (alarms and reminders ringing, the screensaver, the sleep schedule, touch calibration). Music is the one page that plays: on a phone it plays on the phone, or casts to a speaker like it does on the mirror.
 - Text fields use the phone's own keyboard instead of the on-screen one.
+- **Open it as `http://smartmirror.local:3000` for music.** YouTube refuses to play some songs (mostly label music videos) in a page opened by IP address, such as `http://192.168.1.186:3000`, and says "This video is unavailable". By name they play normally. If your phone cannot open the `.local` name, the IP still works: those songs play from the mirror's own audio instead, and the first play of each one takes a while (up to a minute on a Pi 2) while the mirror converts it.
 - Anything on the local network that can reach the mirror can use it (the same as any other browser on the LAN today), so keep it off the open internet.
 
 ### :video_camera: Security Cameras

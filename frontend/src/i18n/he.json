@@ -621,7 +621,8 @@
     },
     "unavailableCount": "לא זמינים ({n})",
     "unknownDevices": "מכשירים נוספים",
-    "preparingTrack": "מכין את השיר להשמעה ברמקול…"
+    "preparingTrack": "מכין את השיר להשמעה ברמקול…",
+    "preparingForPhone": "מכין את השיר להשמעה בטלפון…"
   },
   "news": {
     "featured": "כתבה ראשית",

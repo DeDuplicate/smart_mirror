@@ -67,7 +67,9 @@ export function MusicProvider({ children }) {
     unregisterDock,
   }), [music, registerDock, unregisterDock]);
 
-  const visible = dock && !dock.hidden;
+  // On the phone, a track YouTube refuses to embed plays from the mirror's audio stream instead;
+  // park the iframe off-screen then so its "video unavailable" box does not cover the cover art.
+  const visible = dock && !dock.hidden && !music.audioFallback;
   const style = visible
     ? {
         position: 'absolute',
