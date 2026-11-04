@@ -204,6 +204,23 @@ Open **http://localhost:3000** in your browser.
 
 This script installs all dependencies, builds the frontend, configures PM2, and sets up Chromium kiosk mode.
 
+### Windows PC (fullscreen kiosk)
+
+Any Windows 10 or 11 PC can be the mirror. In an **administrator PowerShell** (right-click Start, then *Terminal (Admin)*), paste one line:
+
+```powershell
+irm https://raw.githubusercontent.com/DeDuplicate/smart_mirror/main/scripts/windows/install.ps1 | iex
+```
+
+It is a short script you can [read first](scripts/windows/install.ps1). It installs Node.js, Git, FFmpeg and yt-dlp with `winget`, downloads the app to `C:\SmartMirror`, installs its dependencies, opens ports 3000 and 3001 **to your home network only** (a phone can then use it, and speakers can fetch music), stops the screen and the PC from sleeping, and starts the app in a **fullscreen kiosk browser** (Edge, or Chrome) every time that user logs in.
+
+- **Start after a restart with nobody there:** turn on automatic sign-in (Win+R, `netplwiz`, untick *Users must enter a user name and password*). Without it the PC waits at the sign-in screen.
+- **Update:** Settings, *Check for updates*, in the app, the same button as on the Pi. Running the installer again works too and keeps your data.
+- **Bring your data from a Pi:** Settings, *Backup* on the Pi, then *Restore* on the PC.
+- **Leave the kiosk:** Alt+F4 closes the browser but it comes back in a few seconds. To stop it until the next sign-in run `powershell -File C:\SmartMirror\scripts\windows\stop.ps1`; to remove it add `-Uninstall` (and `-RemoveFiles` to delete the folder and its data).
+- **Logs:** `C:\SmartMirror\logs`.
+- Wi-Fi, Bluetooth, brightness, touch calibration and screen rotation are Raspberry Pi features and do nothing on Windows; rotate the display in Windows settings instead.
+
 ### Build a Flashable OS Image (Kiosk Appliance)
 
 Turn the whole thing into a dedicated OS: a flashable Raspberry Pi image that boots straight into the Smart Mirror — no desktop, no manual setup.

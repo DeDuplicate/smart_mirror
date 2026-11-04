@@ -730,6 +730,19 @@ async function rollbackTo(commit, logger, io) {
  * caller must have answered the client before invoking restart().
  */
 async function detectSupervisor() {
+  // Windows kiosk install: scripts/windows/start.ps1 relaunches the backend whenever it exits and
+  // sets this variable, so a clean exit IS the restart. Emitting SIGTERM runs the same graceful
+  // shutdown systemd would trigger (HTTP server closed, SQLite closed) before the process ends.
+  if (process.env.SMART_MIRROR_SUPERVISED === 'loop') {
+    return {
+      kind: 'loop',
+      restart: async () => {
+        process.emit('SIGTERM');
+        return { ok: true };
+      },
+    };
+  }
+
   const pm2 = await run('pm2', ['describe', PM2_APP_NAME], 15000, { shell: IS_WINDOWS });
   if (pm2.ok) {
     return { kind: 'pm2', restart: () => run('pm2', ['restart', PM2_APP_NAME], 15000) };

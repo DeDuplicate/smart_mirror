@@ -40,6 +40,9 @@ node scripts/generate-icons.js
 # Fresh Pi setup
 ./scripts/setup.sh
 
+# Windows PC kiosk (administrator PowerShell; scripts/windows/: install.ps1, start.ps1, stop.ps1)
+irm https://raw.githubusercontent.com/DeDuplicate/smart_mirror/main/scripts/windows/install.ps1 | iex
+
 # Kiosk mode
 ./scripts/start-kiosk.sh
 ```
